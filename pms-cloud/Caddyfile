@@ -1,0 +1,26 @@
+# For IP-only access (no domain yet), use HTTP on port 80
+# When you get a domain, replace :80 with your domain name e.g. api.yourdomain.com
+# Caddy will auto-provision HTTPS via Let's Encrypt
+
+:80 {
+    # API routes → Node.js backend
+    handle /v1/* {
+        reverse_proxy api:3000
+    }
+    handle /admin/* {
+        reverse_proxy api:3000
+    }
+    handle /auth/* {
+        reverse_proxy api:3000
+    }
+    handle /health {
+        reverse_proxy api:3000
+    }
+
+    # PWA static files (SPA fallback)
+    handle {
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }
+}

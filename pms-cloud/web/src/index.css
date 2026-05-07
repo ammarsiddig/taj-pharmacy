@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Tajawal', system-ui, sans-serif;
+
+  --color-ivory-app:     #F4FBFB;
+  --color-ivory-surface: #FFFFFF;
+  --color-ivory-muted:   #F4FBFB;
+  --color-ivory-border:  #D3E8E9;
+  --color-surface-secondary: #EAF6F6;
+
+  /* Primary = Pharmacy Action (#0FA3A6) — buttons, CTAs, active states */
+  --color-primary-50:  #EFFAFA;
+  --color-primary-100: #CDECED;
+  --color-primary-200: #A3DCDD;
+  --color-primary-300: #72C8CA;
+  --color-primary-400: #40B5B7;
+  --color-primary-500: #0FA3A6;
+  --color-primary-600: #0D8B8D;
+  --color-primary-700: #0A7073;
+  --color-primary-800: #075355;
+  --color-primary-900: #043A3B;
+  --color-primary-950: #022627;
+
+  /* Brand = Core Navigation (#1C5F6F) — sidebar, structural UI */
+  --color-brand-50:  #EAF5F7;
+  --color-brand-100: #C4E3EB;
+  --color-brand-200: #96CDD8;
+  --color-brand-300: #60B3C4;
+  --color-brand-400: #3A99B1;
+  --color-brand-500: #2E7F95;
+  --color-brand-600: #1C5F6F;
+  --color-brand-700: #164E5B;
+  --color-brand-800: #103D47;
+  --color-brand-900: #0A2B32;
+  --color-brand-950: #061B20;
+
+  --color-ink-main:        #0D2023;
+  --color-ink-muted:       #3D6567;
+  --color-ink-placeholder: #7AADB0;
+
+  --color-status-danger:     #DC2626;
+  --color-status-danger-bg:  #FEF2F2;
+  --color-status-warning:    #D97706;
+  --color-status-warning-bg: #FFFBEB;
+  --color-status-success:    #059669;
+  --color-status-success-bg: #F0FDF4;
+
+  --shadow-soft:  0 4px 6px -1px rgb(13 32 35 / 0.08), 0 2px 4px -2px rgb(13 32 35 / 0.06);
+  --shadow-card:  0 10px 25px -16px rgb(13 32 35 / 0.22), 0 4px 10px -6px rgb(13 32 35 / 0.08);
+  --shadow-float: 0 20px 45px -24px rgb(13 32 35 / 0.28), 0 12px 20px -16px rgb(13 32 35 / 0.14);
+}
+
+/* ── EXPLICIT ROOT VARS (guarantee TAJ teal theme, no Tailwind processing needed) ── */
+:root {
+  --color-ivory-app:     #F4FBFB;
+  --color-ivory-surface: #FFFFFF;
+  --color-ivory-muted:   #F4FBFB;
+  --color-ivory-border:  #D3E8E9;
+  --color-surface-secondary: #EAF6F6;
+  --color-primary-50:  #EFFAFA;
+  --color-primary-100: #CDECED;
+  --color-primary-200: #A3DCDD;
+  --color-primary-300: #72C8CA;
+  --color-primary-400: #40B5B7;
+  --color-primary-500: #0FA3A6;
+  --color-primary-600: #0D8B8D;
+  --color-primary-700: #0A7073;
+  --color-primary-800: #075355;
+  --color-primary-900: #043A3B;
+  --color-primary-950: #022627;
+  --color-brand-50:  #EAF5F7;
+  --color-brand-100: #C4E3EB;
+  --color-brand-200: #96CDD8;
+  --color-brand-300: #60B3C4;
+  --color-brand-400: #3A99B1;
+  --color-brand-500: #2E7F95;
+  --color-brand-600: #1C5F6F;
+  --color-brand-700: #164E5B;
+  --color-brand-800: #103D47;
+  --color-brand-900: #0A2B32;
+  --color-brand-950: #061B20;
+  --color-ink-main:        #0D2023;
+  --color-ink-muted:       #3D6567;
+  --color-ink-placeholder: #7AADB0;
+  --color-status-danger:     #DC2626;
+  --color-status-danger-bg:  #FEF2F2;
+  --color-status-warning:    #D97706;
+  --color-status-warning-bg: #FFFBEB;
+  --color-status-success:    #059669;
+  --color-status-success-bg: #F0FDF4;
+  --shadow-soft:  0 4px 6px -1px rgb(13 32 35 / 0.08), 0 2px 4px -2px rgb(13 32 35 / 0.06);
+  --shadow-card:  0 10px 25px -16px rgb(13 32 35 / 0.22), 0 4px 10px -6px rgb(13 32 35 / 0.08);
+  --shadow-float: 0 20px 45px -24px rgb(13 32 35 / 0.28), 0 12px 20px -16px rgb(13 32 35 / 0.14);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Tajawal', system-ui, sans-serif;
+  background: var(--color-ivory-app);
+  color: var(--color-ink-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Utility classes ── */
+.app-card {
+  background: var(--color-ivory-surface);
+  border: 1px solid var(--color-ivory-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.app-panel {
+  background: var(--color-ivory-surface);
+  border: 1px solid var(--color-ivory-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* ── Bottom nav safe area ── */
+.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-ivory-border); border-radius: 4px; }
+
+/* ── Focus ── */
+*:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+/* ── Tabular numbers ── */
+.tabular-nums { font-variant-numeric: tabular-nums; }

@@ -1,0 +1,158 @@
+# PMS Pharmacy v4 — Windsurf Rules
+# Merged from: ECC token-slimming principles, cursor-designer UX rules, DDD architecture standards
+# Stack: Tauri + Rust + React + SQLite | Theme: Forest & Ivory | RTL Arabic + English numerals
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 0 — MANDATORY: Agent Handoff Documentation
+# ────────────────────────────────────────────────────────────────
+
+- **READ FIRST**: At the start of EVERY session, read `docs/AGENT-HANDOFF.md`. It is the single source of truth.
+- **WRITE LAST**: At the END of every session, UPDATE `docs/AGENT-HANDOFF.md` with:
+  - What you built (flip ⬜ to ✅, add new entries)
+  - What broke or was discovered (add to "Known Tech Debt")
+  - What the next agent should do (update "NEXT" section)
+- **NEVER** create other plan/context files (no WORKING-CONTEXT.md, no AI_HANDOFF_PLAN.md, no progress.txt, etc.)
+- This project uses MULTIPLE AI agents. If you don't document your work, the next agent will redo or break it.
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 1 — ECC: Context Persistence & Token Efficiency
+# ────────────────────────────────────────────────────────────────
+
+- Before any implementation, re-read the active TODO list and the last completed task to avoid duplicate work.
+- Do NOT re-read files you already read in the same session unless the content may have changed.
+- Keep responses concise. Avoid verbose explanations unless the user explicitly asks for them.
+- After completing a milestone, propose a logical stopping point before continuing to the next feature.
+- Never speculatively implement features not in the current TODO item.
+- Prefer targeted edits (multi_edit / edit tools) over full file rewrites.
+- When exploring unfamiliar code, use code_search first, then grep_search. Do not read entire files blindly.
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 2 — ARCHITECTURE: Domain-Driven Design (Vext-inspired)
+# ────────────────────────────────────────────────────────────────
+
+- Rust src-tauri/src/commands/ contains ONLY thin Tauri command handlers.
+  - Commands must: validate input, call a domain function or DB query, return Result<T, String>.
+  - Business logic (calculations, rules, aggregations) must NOT live inside #[tauri::command] functions.
+  - If business logic exceeds ~20 lines inside a command, extract it to a private fn in the same file or a dedicated module.
+
+- Rust src-tauri/src/db/ is the ONLY layer allowed to write raw SQL.
+  - No SQL strings are allowed in commands/ files beyond parameterised queries directly on `conn`.
+  - migrations.rs uses ensure_column() for additive migrations only — never DROP or ALTER TYPE.
+
+- Frontend src/api/index.ts is the ONLY layer that calls Tauri `invoke()`.
+  - React components must never call `invoke()` directly.
+  - React components must never import from `@tauri-apps/api` directly.
+
+- Frontend src/pages/ contains page-level orchestration only.
+  - Reusable UI pieces belong in src/components/.
+  - Data-fetching hooks belong in src/hooks/.
+  - All Tauri/API calls go through src/api/index.ts.
+
+- Types live exclusively in src/types/index.ts.
+  - Do not define inline interfaces inside component files for shared data shapes.
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 3 — DESIGN: Forest & Ivory Theme Guard (cursor-designer)
+# ────────────────────────────────────────────────────────────────
+
+## Theme Palette (enforce, do not deviate)
+- Primary surface:   bg-ivory-50 / bg-ivory-100
+- Primary brand:     bg-forest-600 / text-forest-600 / border-forest-600
+- Danger:            text-status-danger / bg-red-50
+- Success:           text-status-success / bg-forest-50
+- Text main:         text-ink-main
+- Text muted:        text-ink-muted
+- Border:            border-ivory-border
+
+## Layout & Density Rules (RTL-first)
+- ALL layout classes that have directional meaning MUST use Tailwind logical properties:
+  - Use `ms-*` / `me-*` instead of `ml-*` / `mr-*`
+  - Use `ps-*` / `pe-*` instead of `pl-*` / `pr-*`
+  - Use `rounded-s-*` / `rounded-e-*` instead of `rounded-l-*` / `rounded-r-*`
+  - Exception: icon positioning with `absolute left-*`/`right-*` inside RTL-aware wrappers is acceptable.
+- All panels use `app-panel` CSS class for consistent shadow/border radius.
+- Form inputs use the `inp` CSS class from the page-level const — do not duplicate input styles inline.
+- Icon size for form field decorators: size={16}. For action buttons: size={18}. For page headers: size={20}.
+
+## Component Patterns
+- Destructive actions always require a confirmation step (modal or inline confirm button).
+- Empty states must include: an icon, a title, and a call-to-action button.
+- Loading states use the existing `<Button disabled>` with `t('common.loading')` — no custom spinners.
+- Toast messages use the existing `<Toast>` component — no browser `alert()`.
+- All user-visible strings must have a key in src/i18n/ar.json. No hardcoded Arabic or English strings in JSX.
+
+## Accessibility
+- Interactive elements that are not `<button>` or `<a>` must have `role` and `tabIndex` attributes.
+- Form labels must always be associated with their input via `htmlFor` / `id` or wrapping `<label>`.
+
+## POS Touch Targets
+- All interactive elements in POS/thermal-printer workflows must have a minimum height of 44px.
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 4 — SUDANESE MARKET: Monetary Display Standards
+# ────────────────────────────────────────────────────────────────
+
+- ALL monetary values are stored as integers (fils/piastres × 100). Display by dividing by 100.
+- Use api.formatMoney() for ALL monetary display — never format money inline.
+- Monetary display MUST use Western/Latin digits (0-9), NOT Arabic-Indic digits (٠-٩).
+- Currency symbol is SDG (Sudanese Pound). Display as suffix, not prefix: e.g. "125.50 SDG".
+- Decimal separator: period (.). Thousands separator: comma (,). Example: "1,250.00 SDG".
+- Never hardcode "SDG" in JSX — use `t('common.currency')` or derive from tenant settings.
+- Negative balances (debts, deficits) display in red (text-status-danger) with a minus prefix.
+- Profit/positive values display in green (text-status-success).
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 5 — SAFETY CONSTRAINTS
+# ────────────────────────────────────────────────────────────────
+
+- Never delete database columns or tables. Use ensure_column() for schema changes only.
+- Never modify license validation logic in license_guard.rs.
+- Never bypass feature flag checks (FLAG_* constants) in command functions.
+- Never store plaintext passwords. The existing bcrypt flow must remain intact.
+- The cloud sync enqueue calls after mutations (cloud_sync::enqueue_owner_refresh_request) must remain in all create/update/delete commands.
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 6 — CODE QUALITY (ECC common + TypeScript rules)
+# ────────────────────────────────────────────────────────────────
+
+## File & Function Limits
+- Max file length: 800 lines. If a file exceeds this, split it into focused modules — do not ask, just split.
+- Max function length: 50 lines. Extract helpers with clear names.
+- Max nesting depth: 4 levels. Use early returns to flatten logic.
+
+## Code Hygiene
+- No commented-out dead code. Remove it entirely.
+- No magic numbers. Use named constants (e.g. `const MAX_RETRY = 3`).
+- No `console.log` in production code. Use proper error/logging paths.
+- Prefer immutable updates (spread operator, Object.assign) over in-place mutation of objects and arrays.
+
+## Error Handling
+- Every catch block must either re-throw, log with context, or return a meaningful error. No empty catches.
+- Never silently swallow errors. If an error is intentionally ignored, add a comment explaining why.
+- Error messages shown to users must never leak stack traces, SQL, or internal paths.
+
+## TypeScript Strictness
+- No `any` type. Use `unknown` + type narrowing. If `any` is truly unavoidable, add a `// REASON:` comment.
+- Exported functions must have explicit parameter and return types. Let TS infer locals only.
+- Use `interface` for object shapes that may be extended. Use `type` for unions, intersections, and utility types.
+
+## Git Commits
+- Commit format: `<type>: <description>` — types: feat, fix, refactor, docs, test, chore, perf.
+
+# ────────────────────────────────────────────────────────────────
+# LAYER 7 — REACT DISCIPLINE (ECC frontend patterns)
+# ────────────────────────────────────────────────────────────────
+
+## Component Typing
+- Define component props with a named interface (e.g. `ProductCardProps`). Never use inline object types for props.
+- Do not use `React.FC`. Use plain function components with typed props destructuring.
+
+## Performance
+- Use `useMemo` for expensive computations derived from props/state.
+- Use `useCallback` for functions passed as props to child components.
+- Use `React.memo` for pure components that receive complex or frequently-changing parent props.
+- Use `React.lazy` + `Suspense` for heavy page-level components (charts, reports).
+
+## Composition
+- Prefer `children` and slot patterns over deep prop-drilling configurations.
+- Extract repeated UI patterns into shared components in src/components/ — do not duplicate JSX across pages.

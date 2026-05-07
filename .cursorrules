@@ -1,0 +1,27 @@
+# PMS Pharmacy v4 — AI Agent Rules (Universal)
+# Read by: Cursor, Copilot, and any AI agent that checks project root.
+# Windsurf agents: see .windsurfrules (which also includes these rules).
+# This project uses MULTIPLE AI agents (Windsurf, Cursor, Copilot, etc.)
+
+## MANDATORY: Agent Handoff Documentation
+
+- **READ FIRST**: At the start of EVERY session, read `docs/AGENT-HANDOFF.md`. It is the single source of truth for the entire project.
+- **WRITE LAST**: At the END of every session, UPDATE `docs/AGENT-HANDOFF.md` with:
+  - What you built (flip ⬜ to ✅, add new entries)
+  - What broke or was discovered (add to "Known Tech Debt" section)
+  - What the next agent should do (update "NEXT" section)
+- **NEVER** create other plan/context files (no WORKING-CONTEXT.md, no AI_HANDOFF_PLAN.md, no progress.txt, etc.)
+- If you don't document your work, the next agent will redo or break it.
+
+## Key Rules (see docs/AGENT-HANDOFF.md for full details)
+
+- Stack: Tauri 2 + Rust + React + TypeScript + Tailwind CSS + SQLite (desktop), Node.js + PostgreSQL (cloud)
+- DB migrations: additive only — never DROP columns/tables. Use `ensure_column()`.
+- Never modify `license_guard.rs`. Never bypass `FLAG_*` checks.
+- Money: stored as integer piasters (×100), displayed via `api.formatMoney()`.
+- RTL-first: use `ms-*/me-*` not `ml-*/mr-*`.
+- `src/api/index.ts` is the ONLY layer that calls Tauri `invoke()`.
+- All types in `src/types/index.ts`. All i18n keys in both `ar.json` + `en.json`.
+- Theme: Forest & Ivory palette — `bg-forest-600`, `text-ink-main`, `app-panel`, `app-card`.
+- Max file: 800 lines. Max function: 50 lines. No `any` in TypeScript. No `console.log` in production.
+- Cloud PWA (`pms-cloud/web/`) has NO i18n library — Arabic strings are inline.
