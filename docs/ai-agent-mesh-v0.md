@@ -55,6 +55,21 @@ Manual setup steps:
 
 Do not store the OpenRouter key in repo files, workflow JSON, `.ai/`, `.env`, docs, screenshots, reports, or Git history. Do not activate the OpenRouter node, publish the workflow, or enable GitHub triggers until a human explicitly approves the next step.
 
+## Gemini Manual Setup
+
+Gemini integration is prepared as a disabled architecture-review placeholder in `workflows/taj-agent-mesh-commit-qa-v0.json`. Keep the workflow inactive and keep the Gemini HTTP Request node deactivated until manual approval.
+
+Manual setup steps:
+
+1. Create a Gemini API key manually in your Google AI Studio or Google Cloud account.
+2. In n8n, open Credentials.
+3. Create a credential named exactly `Gemini API`.
+4. Use an HTTP Header Auth credential unless the node is later replaced with a native Gemini credential type.
+5. Store the key only inside the n8n credential.
+6. Save the credential in n8n only.
+
+Do not store the Gemini key in repo files, workflow JSON, `.ai/`, `.env`, docs, screenshots, reports, or Git history. Do not activate the Gemini node, publish the workflow, or enable GitHub triggers until a human explicitly approves the next step.
+
 ## Model Routing
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.

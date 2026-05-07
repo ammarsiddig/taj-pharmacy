@@ -183,10 +183,10 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "PLACEHOLDER_GEMINI_HTTP_HEADER_AUTH",
-          "name": "Gemini API Placeholder"
+          "name": "Gemini API"
         }
       },
-      "notes": "Create this credential manually in n8n. Do not store the API key in workflow JSON."
+      "notes": "Gemini architecture review placeholder only; intentionally disabled. Create an n8n credential named \"Gemini API\" manually and keep the key only in n8n credentials. Keep disabled until manual approval. Do not store the API key in workflow JSON."
     },
     {
       "parameters": {
