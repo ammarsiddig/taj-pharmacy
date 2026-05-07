@@ -1,0 +1,376 @@
+{
+  "name": "TAJ Agent Mesh - Commit QA v0",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "repositoryFullName",
+              "name": "repositoryFullName",
+              "type": "string",
+              "value": "your-user/pms-pharmacy-v4"
+            },
+            {
+              "id": "branch",
+              "name": "branch",
+              "type": "string",
+              "value": "infra/ai-agent-mesh-v0"
+            },
+            {
+              "id": "commitSha",
+              "name": "commitSha",
+              "type": "string",
+              "value": "test-commit"
+            },
+            {
+              "id": "commitMessage",
+              "name": "commitMessage",
+              "type": "string",
+              "value": "fix inventory expiry deduction logic"
+            },
+            {
+              "id": "changedFiles",
+              "name": "changedFiles",
+              "type": "array",
+              "value": "={{ [\"src-tauri/src/commands/inventory.rs\", \"src/db/migrations/042_stock_batches.sql\"] }}"
+            },
+            {
+              "id": "usageState",
+              "name": "usageState",
+              "type": "object",
+              "value": "={{ { windsurf: { dailyRemainingPercent: 100, weeklyRemainingPercent: 38 } } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "example-payload",
+      "name": "Set Example GitHub Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const changedFiles = $json.changedFiles || [];\nconst commitMessage = ($json.commitMessage || \"\").toLowerCase();\nconst joined = changedFiles.join(\" \").toLowerCase();\n\nconst hasRust =\n  joined.includes(\"src-tauri\") ||\n  changedFiles.some(f => f.endsWith(\".rs\"));\n\nconst hasDb =\n  joined.includes(\"migration\") ||\n  joined.includes(\"schema\") ||\n  changedFiles.some(f => f.endsWith(\".sql\"));\n\nconst hasUi = changedFiles.some(f =>\n  f.endsWith(\".tsx\") ||\n  f.endsWith(\".jsx\") ||\n  f.endsWith(\".ts\") ||\n  f.endsWith(\".js\")\n);\n\nconst hasSecurity =\n  joined.includes(\"auth\") ||\n  joined.includes(\"permission\") ||\n  joined.includes(\"token\") ||\n  joined.includes(\"secret\") ||\n  joined.includes(\"session\");\n\nconst hasPharmacyLogic =\n  joined.includes(\"inventory\") ||\n  joined.includes(\"stock\") ||\n  joined.includes(\"expiry\") ||\n  joined.includes(\"prescription\") ||\n  joined.includes(\"invoice\") ||\n  joined.includes(\"payment\") ||\n  joined.includes(\"sync\");\n\nconst docsOnly =\n  changedFiles.length > 0 &&\n  changedFiles.every(f =>\n    f.endsWith(\".md\") ||\n    f.startsWith(\"docs/\") ||\n    f.startsWith(\".ai/\")\n  );\n\nlet risk = \"low\";\nconst domains = [];\n\nif (docsOnly) {\n  risk = \"low\";\n  domains.push(\"docs\");\n}\n\nif (hasUi && !hasRust && !hasDb && !hasSecurity && !hasPharmacyLogic) {\n  risk = \"medium\";\n  domains.push(\"ui\");\n}\n\nif (hasRust) domains.push(\"rust\");\nif (hasDb) domains.push(\"database\");\nif (hasPharmacyLogic) domains.push(\"pharmacy_logic\");\n\nif (hasRust || hasDb || hasPharmacyLogic) {\n  risk = \"high\";\n}\n\nif (hasSecurity) {\n  risk = \"critical\";\n  domains.push(\"security\");\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      taskClassification: {\n        risk,\n        domains,\n        changedFiles,\n        commitMessage\n      }\n    }\n  }\n];"
+      },
+      "id": "classify-change",
+      "name": "Classify Change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const usage = $json.usageState || {\n  windsurf: {\n    dailyRemainingPercent: 100,\n    weeklyRemainingPercent: 38\n  }\n};\n\nconst windsurf = usage.windsurf || {};\nconst weekly = Number(windsurf.weeklyRemainingPercent ?? 100);\nconst daily = Number(windsurf.dailyRemainingPercent ?? 100);\n\nlet quotaMode = \"fast\";\n\nif (weekly < 20 || daily < 15) {\n  quotaMode = \"emergency\";\n} else if (weekly < 40 || daily < 30) {\n  quotaMode = \"conservation\";\n} else if (weekly < 70) {\n  quotaMode = \"normal\";\n}\n\nconst classification = $json.taskClassification || {};\nconst risk = classification.risk || \"low\";\nconst domains = classification.domains || [];\n\nconst isLogicHeavy =\n  domains.includes(\"rust\") ||\n  domains.includes(\"database\") ||\n  domains.includes(\"pharmacy_logic\");\n\nconst isCritical =\n  risk === \"critical\" ||\n  domains.includes(\"security\");\n\nlet route = {\n  quotaMode,\n  primaryAgent: \"windsurf-cascade\",\n  primaryModel: \"sonnet-4.6\",\n  fallbackAgent: \"github-copilot\",\n  reviewAgent: null,\n  architectureAgent: null,\n  allowAutoEdit: true,\n  requiresHumanApproval: false\n};\n\nif (risk === \"low\") {\n  route.primaryAgent = \"github-copilot\";\n  route.primaryModel = \"fast-available-copilot-model\";\n  route.allowAutoEdit = true;\n}\n\nif (risk === \"medium\") {\n  route.primaryAgent = quotaMode === \"emergency\" ? \"github-copilot\" : \"windsurf-cascade\";\n  route.primaryModel = quotaMode === \"emergency\" ? \"copilot-strong-available-model\" : \"sonnet-4.6\";\n  route.allowAutoEdit = quotaMode !== \"emergency\";\n}\n\nif (risk === \"high\" || isLogicHeavy) {\n  route.primaryAgent = \"openrouter-deepseek-review\";\n  route.primaryModel = \"deepseek/deepseek-v4\";\n  route.reviewAgent = \"deepseek\";\n  route.architectureAgent = \"gemini-ultra\";\n  route.allowAutoEdit = false;\n  route.requiresHumanApproval = true;\n}\n\nif (isCritical) {\n  route.primaryAgent = \"gpt-5.5-security-review\";\n  route.primaryModel = \"openai/gpt-5.5\";\n  route.reviewAgent = \"gpt-5.5\";\n  route.architectureAgent = \"gemini-ultra\";\n  route.allowAutoEdit = false;\n  route.requiresHumanApproval = true;\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      quotaRoute: route\n    }\n  }\n];"
+      },
+      "id": "quota-router",
+      "name": "Quota Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "critical-risk",
+              "leftValue": "={{ $json.taskClassification.risk }}",
+              "rightValue": "critical",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "high-risk",
+              "leftValue": "={{ $json.taskClassification.risk }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "is-critical-or-high-risk",
+      "name": "Is Critical or High Risk?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: $json.quotaRoute.primaryModel,\n  temperature: 0.2,\n  max_tokens: 900,\n  messages: [\n    {\n      role: \"system\",\n      content: [\n        \"You are the DeepSeek logic reviewer for TAJ Pharmacy v4.\",\n        \"Review only. Do not produce patches that overwrite files.\",\n        \"Focus on Rust, SQL, inventory, expiry, prescription, payment, sync, auth risk.\",\n        \"Return concise markdown with sections:\",\n        \"Summary\",\n        \"Risks\",\n        \"Required Fixes\",\n        \"Suggested Tests\",\n        \"Merge Recommendation\"\n      ].join(\"\\n\")\n    },\n    {\n      role: \"user\",\n      content: JSON.stringify({\n        repositoryFullName: $json.repositoryFullName,\n        branch: $json.branch,\n        commitSha: $json.commitSha,\n        commitMessage: $json.commitMessage,\n        changedFiles: $json.changedFiles,\n        taskClassification: $json.taskClassification,\n        quotaRoute: $json.quotaRoute,\n        diffIncluded: false\n      }, null, 2)\n    }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "openrouter-review",
+      "name": "OpenRouter Review Placeholder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        -140
+      ],
+      "disabled": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER_OPENROUTER_HTTP_HEADER_AUTH",
+          "name": "OpenRouter API"
+        }
+      },
+      "notes": "Prepared for a real OpenRouter review call, but intentionally disabled. Use the n8n HTTP Header Auth credential named \"OpenRouter API\" only; Authorization: Bearer <key> must stay in n8n credentials and never in this JSON. Keep disabled until manual approval. This v0 call sends metadata only, not a real diff."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-ultra:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [{ parts: [{ text: \"Architecture review only: \" + JSON.stringify($json.taskClassification) }] }] } }}",
+        "options": {}
+      },
+      "id": "gemini-architecture-review",
+      "name": "Gemini Architecture Review Placeholder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        40
+      ],
+      "disabled": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER_GEMINI_HTTP_HEADER_AUTH",
+          "name": "Gemini API"
+        }
+      },
+      "notes": "Gemini architecture review placeholder only; intentionally disabled. Create an n8n credential named \"Gemini API\" manually and keep the key only in n8n credentials. Keep disabled until manual approval. Do not store the API key in workflow JSON."
+    },
+    {
+      "parameters": {
+        "jsCode": "const classification = $json.taskClassification || {};\nconst route = $json.quotaRoute || {};\nconst files = classification.changedFiles || [];\n\nconst markdown = [\n  \"# TAJ Agent Mesh - Commit QA v0\",\n  \"\",\n  `Repository: ${$json.repositoryFullName || \"unknown\"}`,\n  `Branch: ${$json.branch || \"unknown\"}`,\n  `Commit: ${$json.commitSha || \"manual-test\"}`,\n  \"\",\n  \"## Classification\",\n  \"\",\n  `Risk: ${classification.risk || \"unknown\"}`,\n  `Domains: ${(classification.domains || []).join(\", \") || \"none\"}`,\n  \"\",\n  \"## Route\",\n  \"\",\n  `Quota mode: ${route.quotaMode || \"unknown\"}`,\n  `Primary agent: ${route.primaryAgent || \"unknown\"}`,\n  `Primary model: ${route.primaryModel || \"unknown\"}`,\n  `Allow auto edit: ${route.allowAutoEdit === true ? \"yes\" : \"no\"}`,\n  `Requires human approval: ${route.requiresHumanApproval === true ? \"yes\" : \"no\"}`,\n  \"\",\n  \"## Changed Files\",\n  \"\",\n  ...files.map(file => `- ${file}`),\n  \"\",\n  \"## v0 Policy\",\n  \"\",\n  \"Review-only output. No automatic edits, commits, merges, or deployments.\"\n].join(\"\\n\");\n\nreturn [\n  {\n    json: {\n      ...$json,\n      reviewMarkdown: markdown\n    }\n  }\n];"
+      },
+      "id": "build-review-markdown",
+      "name": "Build Review Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "output-placeholder",
+      "name": "Output or GitHub Comment Placeholder",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        760,
+        0
+      ],
+      "notes": "For v0, inspect reviewMarkdown manually. GitHub PR commenting is v1 and is not active in this workflow. Later replace this placeholder with a disabled GitHub comment node using the n8n credential named \"GitHub API\" only after manual approval."
+    },
+    {
+      "parameters": {
+        "content": "GitHub integration is v1, not active in v0. Future disabled nodes may use GitHub Trigger events: push, pull_request.opened, pull_request.synchronize, and PR comments with n8n credential \"GitHub API\". Do not enable without manual approval.",
+        "height": 120,
+        "width": 360
+      },
+      "id": "github-trigger-note",
+      "name": "GitHub Trigger Placeholder Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Credentials are configured manually in n8n: OpenRouter API, Gemini API, GitHub API. Do not commit keys.",
+        "height": 120,
+        "width": 320
+      },
+      "id": "credentials-note",
+      "name": "Credential Safety Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        150,
+        -340
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Example GitHub Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Example GitHub Payload": {
+      "main": [
+        [
+          {
+            "node": "Classify Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Change": {
+      "main": [
+        [
+          {
+            "node": "Quota Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quota Router": {
+      "main": [
+        [
+          {
+            "node": "Is Critical or High Risk?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Critical or High Risk?": {
+      "main": [
+        [
+          {
+            "node": "OpenRouter Review Placeholder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gemini Architecture Review Placeholder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Review Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Review Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Review Placeholder": {
+      "main": [
+        [
+          {
+            "node": "Build Review Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Architecture Review Placeholder": {
+      "main": [
+        [
+          {
+            "node": "Build Review Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Markdown": {
+      "main": [
+        [
+          {
+            "node": "Output or GitHub Comment Placeholder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "taj-agent-mesh-commit-qa-v0-local",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Local-first review-only workflow. Manual test trigger now; GitHub trigger later."
+  },
+  "id": "taj-agent-mesh-commit-qa-v0",
+  "tags": [
+    {
+      "name": "ai-agent-mesh"
+    },
+    {
+      "name": "review-only"
+    },
+    {
+      "name": "v0"
+    }
+  ]
+}
