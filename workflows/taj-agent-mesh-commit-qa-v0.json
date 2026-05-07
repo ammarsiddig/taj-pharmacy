@@ -140,7 +140,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { model: $json.quotaRoute.primaryModel, messages: [{ role: \"system\", content: \"Review only. Do not edit files.\" }, { role: \"user\", content: JSON.stringify($json.taskClassification) }] } }}",
+        "jsonBody": "={{ {\n  model: $json.quotaRoute.primaryModel,\n  temperature: 0.2,\n  max_tokens: 900,\n  messages: [\n    {\n      role: \"system\",\n      content: [\n        \"You are the DeepSeek logic reviewer for TAJ Pharmacy v4.\",\n        \"Review only. Do not produce patches that overwrite files.\",\n        \"Focus on Rust, SQL, inventory, expiry, prescription, payment, sync, auth risk.\",\n        \"Return concise markdown with sections:\",\n        \"Summary\",\n        \"Risks\",\n        \"Required Fixes\",\n        \"Suggested Tests\",\n        \"Merge Recommendation\"\n      ].join(\"\\n\")\n    },\n    {\n      role: \"user\",\n      content: JSON.stringify({\n        repositoryFullName: $json.repositoryFullName,\n        branch: $json.branch,\n        commitSha: $json.commitSha,\n        commitMessage: $json.commitMessage,\n        changedFiles: $json.changedFiles,\n        taskClassification: $json.taskClassification,\n        quotaRoute: $json.quotaRoute,\n        diffIncluded: false\n      }, null, 2)\n    }\n  ]\n} }}",
         "options": {}
       },
       "id": "openrouter-review",
@@ -158,7 +158,7 @@
           "name": "OpenRouter API"
         }
       },
-      "notes": "Create an n8n HTTP Header Auth credential named \"OpenRouter API\" manually. Use Authorization: Bearer <key> in the credential only. Keep this node disabled until manual approval. Do not store the API key in workflow JSON."
+      "notes": "Prepared for a real OpenRouter review call, but intentionally disabled. Use the n8n HTTP Header Auth credential named \"OpenRouter API\" only; Authorization: Bearer <key> must stay in n8n credentials and never in this JSON. Keep disabled until manual approval. This v0 call sends metadata only, not a real diff."
     },
     {
       "parameters": {
