@@ -90,6 +90,28 @@ Manual setup steps:
 
 Do not store the GitHub token in repo files, workflow JSON, `.ai/`, `.env`, docs, screenshots, reports, or Git history. Do not enable GitHub triggers, PR comments, workflow publishing, or workflow activation until a human explicitly approves the next step.
 
+## v0.1 OpenRouter Review Test Plan
+
+This is a local-only manual test. Keep the workflow unpublished and inactive.
+
+Manual test steps:
+
+1. Keep the GitHub trigger disabled or absent.
+2. Temporarily enable only the `OpenRouter Review Placeholder` node for manual testing.
+3. Keep the `Gemini Architecture Review Placeholder` node disabled.
+4. Use the existing fake payload in `Set Example GitHub Payload`.
+5. Execute the workflow manually from n8n.
+6. Confirm OpenRouter returns a concise markdown review.
+7. Disable the OpenRouter node again after the test.
+
+Safety limits:
+
+- Do not commit API keys.
+- Do not include real diffs yet.
+- Do not allow auto-edit.
+- Do not publish or activate the workflow.
+- Do not enable GitHub trigger or comment nodes.
+
 ## Model Routing
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.
