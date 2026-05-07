@@ -186,7 +186,7 @@ declare module '@n8n-as-code/transformer' {
 
     /**
      * Marks a class as an n8n workflow.
-     * 
+     *
      * @example
      * ```ts
      * @workflow({ id: 'abc123', name: 'My Workflow', active: false })
@@ -198,7 +198,7 @@ declare module '@n8n-as-code/transformer' {
     /**
      * Marks a class property as an n8n node.
      * The property value is used as node parameters.
-     * 
+     *
      * @example
      * ```ts
      * @node({ name: 'HTTP Request', type: 'n8n-nodes-base.httpRequest', version: 4.2, position: [300, 200] })
@@ -211,7 +211,7 @@ declare module '@n8n-as-code/transformer' {
      * Marks a method as the routing/connections definition.
      * Inside this method, use `.out().to()` for regular connections
      * and `.uses()` for AI/LangChain sub-node connections.
-     * 
+     *
      * @example
      * ```ts
      * @links()
