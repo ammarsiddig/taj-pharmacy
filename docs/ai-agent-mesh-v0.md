@@ -117,6 +117,57 @@ Safety limits:
 - Do not publish or activate the workflow.
 - Do not enable GitHub trigger or comment nodes.
 
+## v0.2 Manual n8n Review Workflow
+
+This section documents the safe manual testing process for the n8n review workflow.
+
+### Core Rules
+
+- Do not use n8n-as-code sync for testing.
+- Do not import over an existing workflow.
+- If a workflow becomes duplicated/messy, archive it and recreate/import clean.
+- Browser n8n is the manual testing surface.
+- Local JSON is backup/documentation.
+- Main workflow stays inactive/unpublished.
+- External API nodes stay disabled by default.
+- No auto-edit and no auto-commit.
+
+### Manual Review Steps
+
+To run a review manually:
+
+1. Open **TAJ Agent Mesh - Commit QA v0** in n8n.
+2. Confirm there is only one node chain (no duplicates).
+3. Re-select **OpenRouter API** credential in the node if needed (credential shows placeholder ID in JSON).
+4. Enable only **OpenRouter Review Placeholder** node (keep Gemini disabled).
+5. Execute the workflow manually with the fake payload.
+6. Confirm `choices[0].message.content` exists in the response.
+7. Disable **OpenRouter Review Placeholder** node again after testing.
+
+### Version Boundaries
+
+- **Gemini** remains disabled until v0.3.
+- **GitHub trigger** remains absent/disabled until v1.
+- **Auto-edit** and **auto-commit** are never enabled in v0.x.
+
+## Troubleshooting
+
+### Credentials not found
+**Symptom:** OpenRouter node fails with credential error.
+**Fix:** Manually re-select the **OpenRouter API** credential in the node dropdown. The JSON stores a placeholder ID that n8n may not resolve until manually re-selected.
+
+### Duplicate nodes
+**Symptom:** Workflow shows multiple node chains or broken connections.
+**Fix:** Archive the browser workflow (rename to "ARCHIVED-..."), then import clean from `workflows/taj-agent-mesh-commit-qa-v0.json`. Do not sync or import over the existing messy workflow.
+
+### Invalid model ID
+**Symptom:** OpenRouter returns model not found error.
+**Fix:** Use `deepseek/deepseek-v4-pro` (for quality) or `deepseek/deepseek-v4-flash` (for speed). Check OpenRouter documentation for current valid model IDs.
+
+### Workflow accidentally published
+**Symptom:** Workflow shows as active/published in n8n.
+**Fix:** Unpublish/deactivate immediately. v0 workflows must stay inactive. Check the workflow settings and set `active: false`.
+
 ## Model Routing
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.
