@@ -168,6 +168,96 @@ To run a review manually:
 **Symptom:** Workflow shows as active/published in n8n.
 **Fix:** Unpublish/deactivate immediately. v0 workflows must stay inactive. Check the workflow settings and set `active: false`.
 
+## v0.3 Gemini Architecture Review Smoke Test
+
+This section documents the safe manual test for Gemini architecture review capability.
+
+### Purpose
+
+Test Gemini Ultra for architecture impact review only — no file editing, no patch generation, no commits, no GitHub calls.
+
+### Safety Rules
+
+- Use a **tiny standalone manual n8n workflow** first.
+- Do not modify the main **TAJ Agent Mesh** workflow yet.
+- Do not publish or activate the test workflow.
+- Do not use n8n-as-code sync.
+- Do not import over an existing workflow.
+- Gemini must not edit files, generate patches, commit, or call GitHub.
+
+### Manual Test Setup
+
+1. In n8n, create a new workflow (do not import over existing).
+2. Add a **Manual Trigger** node.
+3. Add a **Set** node with this fake payload:
+   ```json
+   {
+     "project": "TAJ Pharmacy v4",
+     "change": "FEFO stock policy design review",
+     "files": ["inventory.rs", "stock_batches.sql", "POS.tsx"],
+     "question": "Identify architecture impact, risks, and required guardrails"
+   }
+   ```
+4. Add an **HTTP Request** node:
+   - Method: POST
+   - URL: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
+   - Credential: Select existing **Gemini API** credential
+   - Body:
+     ```json
+     {
+       "contents": [{
+         "parts": [{
+           "text": "Architecture review: {{ $json.project }}\nChange: {{ $json.change }}\nFiles: {{ $json.files.join(', ') }}\n\n{{ $json.question }}"
+         }]
+       }]
+     }
+     ```
+5. Keep the workflow **inactive/unpublished**.
+
+### Execution Steps
+
+1. Open the standalone test workflow.
+2. Confirm only one node chain exists.
+3. Re-select **Gemini API** credential if needed.
+4. Execute manually.
+5. Confirm response contains `candidates[0].content.parts[0].text`.
+6. Verify output is a markdown architecture review (not code patches).
+7. Document result in `.ai/reports/gemini-smoke-test-v0-3.md`.
+
+### Expected Output
+
+Markdown architecture review covering:
+- Cross-system impact (desktop + cloud + sync)
+- Database migration risks
+- API contract changes
+- Testing gaps
+- Rollback considerations
+
+### Success Criteria
+
+- Gemini responds without errors.
+- Response is review-only (no code generation).
+- No file modifications triggered.
+- Credential stays in n8n only.
+
+### Troubleshooting
+
+#### Gemini credential error
+**Symptom:** 401/403 authentication error.
+**Fix:** Reselect **Gemini API** credential manually in the node.
+
+#### 400 bad request
+**Symptom:** Malformed request error.
+**Fix:** Check URL format and body JSON structure. Verify model name is `gemini-1.5-flash` or `gemini-1.5-pro`.
+
+#### No output
+**Symptom:** Empty response or no visible result.
+**Fix:** Check response path — look for `candidates[0].content.parts[0].text`.
+
+#### Workflow messy/duplicated
+**Symptom:** Multiple node chains or broken workflow.
+**Fix:** Archive and recreate. Never sync or import over an existing workflow.
+
 ## Model Routing
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.
