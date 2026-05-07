@@ -70,6 +70,26 @@ Manual setup steps:
 
 Do not store the Gemini key in repo files, workflow JSON, `.ai/`, `.env`, docs, screenshots, reports, or Git history. Do not activate the Gemini node, publish the workflow, or enable GitHub triggers until a human explicitly approves the next step.
 
+## GitHub Manual Setup
+
+GitHub trigger and PR commenting are v1 features. They are not active in the v0 workflow. Keep GitHub trigger/comment nodes absent or disabled until manual approval.
+
+Manual setup steps:
+
+1. Create a GitHub fine-grained personal access token manually.
+2. Restrict repository access to only this repo.
+3. Grant only the future permissions needed:
+   - Contents: read
+   - Pull requests: read/write
+   - Issues: read/write
+   - Metadata: read
+4. In n8n, open Credentials.
+5. Create a credential named exactly `GitHub API`.
+6. Store the token only inside the n8n credential.
+7. Save the credential in n8n only.
+
+Do not store the GitHub token in repo files, workflow JSON, `.ai/`, `.env`, docs, screenshots, reports, or Git history. Do not enable GitHub triggers, PR comments, workflow publishing, or workflow activation until a human explicitly approves the next step.
+
 ## Model Routing
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.

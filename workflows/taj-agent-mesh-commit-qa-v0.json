@@ -211,13 +211,13 @@
         760,
         0
       ],
-      "notes": "For v0, inspect reviewMarkdown manually. Later replace with a GitHub PR comment node using manually configured credentials."
+      "notes": "For v0, inspect reviewMarkdown manually. GitHub PR commenting is v1 and is not active in this workflow. Later replace this placeholder with a disabled GitHub comment node using the n8n credential named \"GitHub API\" only after manual approval."
     },
     {
       "parameters": {
-        "content": "Later GitHub Trigger events: push, pull_request.opened, pull_request.synchronize. Keep v0 review-only.",
+        "content": "GitHub integration is v1, not active in v0. Future disabled nodes may use GitHub Trigger events: push, pull_request.opened, pull_request.synchronize, and PR comments with n8n credential \"GitHub API\". Do not enable without manual approval.",
         "height": 120,
-        "width": 300
+        "width": 360
       },
       "id": "github-trigger-note",
       "name": "GitHub Trigger Placeholder Note",
