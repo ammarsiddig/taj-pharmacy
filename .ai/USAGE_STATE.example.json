@@ -1,0 +1,21 @@
+{
+  "windsurf": {
+    "dailyRemainingPercent": 100,
+    "weeklyRemainingPercent": 38,
+    "quotaMode": "conservation"
+  },
+  "openrouter": {
+    "status": "unknown",
+    "creditsRemaining": null,
+    "lastCheckedAt": null
+  },
+  "githubCopilot": {
+    "status": "available",
+    "model": "default"
+  },
+  "gemini": {
+    "status": "unknown",
+    "model": "gemini-ultra"
+  },
+  "lastUpdatedAt": "2026-05-07T00:00:00Z"
+}

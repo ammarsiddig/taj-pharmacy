@@ -1,0 +1,18 @@
+[
+  {
+    "id": "lock-20260507-commit-qa-v0",
+    "owner": "windsurf-cascade",
+    "model": "gpt-5.5-high",
+    "task": "Create AI Agent Mesh v0 scaffold",
+    "files": [
+      ".ai/MEMORY.md",
+      ".ai/MODEL_ROUTER.yaml",
+      "docs/ai-agent-mesh-v0.md"
+    ],
+    "status": "active",
+    "quotaMode": "conservation",
+    "allowFallbackEdit": false,
+    "createdAt": "2026-05-07T00:00:00Z",
+    "expiresAt": "2026-05-07T04:00:00Z"
+  }
+]

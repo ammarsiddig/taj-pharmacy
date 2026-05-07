@@ -1,0 +1,100 @@
+version: 0
+defaultQuotaMode: conservation
+assumptions:
+  windsurfWeeklyRemainingPercent: 38
+  v0Policy: review-only
+
+quotaModes:
+  fast:
+    condition: "weekly >= 70 and daily >= 30"
+    policy: "Use best available coding model for implementation and review."
+  normal:
+    condition: "weekly >= 40 and weekly < 70"
+    policy: "Use Windsurf for implementation, route heavier review to specialist models."
+  conservation:
+    condition: "weekly >= 20 and weekly < 40"
+    policy: "Use Windsurf only for scaffold and focused edits; route long review externally."
+  emergency:
+    condition: "weekly < 20 or daily < 15"
+    policy: "Use Windsurf only for urgent coordination; prefer Copilot or external review."
+
+agents:
+  windsurfCascade:
+    role: "Primary implementation agent for scoped file edits."
+    preferredWork:
+      - project scaffold
+      - focused TypeScript or React edits
+      - n8n workflow structure
+    avoid:
+      - long architecture reviews in conservation mode
+      - live production actions
+
+  githubCopilot:
+    role: "Fast inline helper for tests and small cleanup."
+    preferredWork:
+      - tests
+      - small UI edits
+      - simple refactors
+    avoid:
+      - pharmacy business logic authority
+      - database migration decisions
+
+  rooDeepSeek:
+    role: "Rust, database, and pharmacy logic reviewer."
+    preferredWork:
+      - Rust command review
+      - SQL and migration review
+      - inventory, expiry, prescription, payment, and sync logic review
+    output: "Review notes only unless explicitly assigned edits."
+
+  geminiUltra:
+    role: "Architecture impact and daily summary reviewer."
+    preferredWork:
+      - cross-system architecture review
+      - daily reports
+      - risk summaries
+    output: "Architecture notes and impact reports."
+
+  gpt55Opus:
+    role: "High-risk integration and security reviewer."
+    preferredWork:
+      - auth and permission changes
+      - secrets and token handling
+      - sync and payment integration
+      - final review before merge
+    output: "Review notes and approval blockers."
+
+routingRules:
+  docsOnly:
+    risk: low
+    primary: githubCopilot
+    review: null
+    allowAutoEdit: true
+
+  reactUiOnly:
+    risk: medium
+    primary: windsurfCascade
+    fallback: githubCopilot
+    review: null
+    allowAutoEdit: true
+
+  rustDatabasePharmacyLogic:
+    risk: high
+    primary: rooDeepSeek
+    architecture: geminiUltra
+    allowAutoEdit: false
+    requiresHumanApproval: true
+
+  authPermissionsSecretsTokens:
+    risk: critical
+    primary: gpt55Opus
+    architecture: geminiUltra
+    allowAutoEdit: false
+    requiresHumanApproval: true
+
+  n8nWorkflowScaffold:
+    risk: medium
+    primary: windsurfCascade
+    review: gpt55Opus
+    allowAutoEdit: false
+    requiresHumanApproval: true
