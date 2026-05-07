@@ -200,7 +200,8 @@ Test Gemini Ultra for architecture impact review only — no file editing, no pa
    ```
 4. Add an **HTTP Request** node:
    - Method: POST
-   - URL: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
+   - URL: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
+   - Note: `gemini-2.5-flash` tested and working. `gemini-1.5-flash` may be unavailable. `gemini-3.5-flash-preview` may return 503 (high demand). Verify availability with `GET /v1beta/models` if needed.
    - Credential: Select existing **Gemini API** credential
    - Body:
      ```json
@@ -246,13 +247,13 @@ Markdown architecture review covering:
 **Symptom:** 401/403 authentication error.
 **Fix:** Reselect **Gemini API** credential manually in the node.
 
-#### 400 bad request
-**Symptom:** Malformed request error.
-**Fix:** Check URL format and body JSON structure. Verify model name is `gemini-1.5-flash` or `gemini-1.5-pro`.
+#### 400 bad request / 503 unavailable
+**Symptom:** Malformed request or model unavailable/high demand.
+**Fix:** Check URL format and body JSON structure. Verify model name. Working model: `gemini-2.5-flash`. `gemini-3.5-flash-preview` or `gemini-3.0-pro` can be tested later for higher-quality architecture review. Use `GET /v1beta/models` to check availability.
 
 #### No output
 **Symptom:** Empty response or no visible result.
-**Fix:** Check response path — look for `candidates[0].content.parts[0].text`.
+**Fix:** Check response path — confirmed working output: `candidates[0].content.parts[0].text`.
 
 #### Workflow messy/duplicated
 **Symptom:** Multiple node chains or broken workflow.
