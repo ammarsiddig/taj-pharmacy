@@ -41,6 +41,8 @@ agents:
 
   rooDeepSeek:
     role: "Rust, database, and pharmacy logic reviewer."
+    primaryModel: "deepseek/deepseek-v4-pro"
+    fallbackModel: "deepseek/deepseek-v4-flash"
     preferredWork:
       - Rust command review
       - SQL and migration review
@@ -81,6 +83,8 @@ routingRules:
   rustDatabasePharmacyLogic:
     risk: high
     primary: rooDeepSeek
+    primaryModel: "deepseek/deepseek-v4-pro"
+    fallbackModel: "deepseek/deepseek-v4-flash"
     architecture: geminiUltra
     allowAutoEdit: false
     requiresHumanApproval: true

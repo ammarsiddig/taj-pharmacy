@@ -43,6 +43,11 @@ For v0, n8n must not change application files.
 
 OpenRouter integration is prepared as a disabled placeholder in `workflows/taj-agent-mesh-commit-qa-v0.json`. Keep the workflow inactive and keep the OpenRouter HTTP Request node deactivated until manual approval.
 
+Valid OpenRouter DeepSeek model IDs:
+
+- `deepseek/deepseek-v4-pro` for review quality
+- `deepseek/deepseek-v4-flash` for faster or cheaper review
+
 Manual setup steps:
 
 1. Create an OpenRouter API key manually in your OpenRouter account.
