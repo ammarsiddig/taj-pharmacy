@@ -155,10 +155,10 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "PLACEHOLDER_OPENROUTER_HTTP_HEADER_AUTH",
-          "name": "OpenRouter API Placeholder"
+          "name": "OpenRouter API"
         }
       },
-      "notes": "Create this credential manually in n8n. Do not store the API key in workflow JSON."
+      "notes": "Create an n8n HTTP Header Auth credential named \"OpenRouter API\" manually. Use Authorization: Bearer <key> in the credential only. Keep this node disabled until manual approval. Do not store the API key in workflow JSON."
     },
     {
       "parameters": {

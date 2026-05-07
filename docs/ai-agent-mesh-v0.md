@@ -39,6 +39,22 @@ n8n coordinates workflow steps:
 
 For v0, n8n must not change application files.
 
+## OpenRouter Manual Setup
+
+OpenRouter integration is prepared as a disabled placeholder in `workflows/taj-agent-mesh-commit-qa-v0.json`. Keep the workflow inactive and keep the OpenRouter HTTP Request node deactivated until manual approval.
+
+Manual setup steps:
+
+1. Create an OpenRouter API key manually in your OpenRouter account.
+2. In n8n, open Credentials.
+3. Create a credential named exactly `OpenRouter API`.
+4. Use an HTTP Header Auth credential.
+5. Set the header name to `Authorization`.
+6. Set the header value to `Bearer <your-openrouter-api-key>`.
+7. Save the credential in n8n only.
+
+Do not store the OpenRouter key in repo files, workflow JSON, `.ai/`, `.env`, docs, screenshots, reports, or Git history. Do not activate the OpenRouter node, publish the workflow, or enable GitHub triggers until a human explicitly approves the next step.
+
 ## Model Routing
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.
