@@ -14,6 +14,10 @@ This v0 document remains the manual n8n and review-runbook scaffold. If this fil
 
 Docs-only PR gate added to reduce AI credit usage. Docs-only and rule-only PRs that pass deterministic local checks do not need OpenRouter, Gemini, GPT-5.5, or Copilot review.
 
+## v0.7-v0.9 Operational Mesh Contract
+
+The operational contract is defined in `docs/ai-agent-mesh-operational-contract.md`. It covers the manager input/output contract, manual n8n manager workflow design, and first real task run protocol for making the AI Development Team Mesh operational.
+
 ## Local-First Development
 
 Work starts in the local repository on a dedicated branch:

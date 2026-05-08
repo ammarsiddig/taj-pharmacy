@@ -210,6 +210,10 @@ If all criteria pass, create the PR and merge manually without AI safety review.
 - v0.8 PR comment draft generation only.
 - v1 approved GitHub trigger and PR comment workflow.
 
+## L. Operational Contract
+
+The daily operating process for v0.7-v0.9 is defined in `docs/ai-agent-mesh-operational-contract.md`. It specifies the DeepSeek Manager input/output contract, agent task packet formats, agent report contract, manual n8n manager workflow design, first real task protocol, human approval gates, and stop conditions.
+
 ## Rule Conflict Audit
 
 | File or area | Status | Notes |
