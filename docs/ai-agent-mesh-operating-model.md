@@ -204,4 +204,3 @@ Short form:
 | `workflows/taj-agent-mesh-commit-qa-v0.json` | Aligned | Workflow is inactive/manual v0 scaffold. No JSON change needed. |
 | `plans/gemini-review-agent-system.md` | Duplicate / legacy design note | Historical Gemini/shared-memory review note. Superseded by this operating model for current mesh authority. |
 | Content search hits in package, app, and cloud files | Aligned / irrelevant | Search terms matched package metadata and application strings such as user-agent or unrelated terms. No rule conflict found and no app source was modified. |
-
