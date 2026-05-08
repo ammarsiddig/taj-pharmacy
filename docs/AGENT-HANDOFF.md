@@ -1330,3 +1330,31 @@ Date: 2026-05-08
 - v0.8: draft-only GitHub PR comment generation, with no automatic posting until approved.
 
 *Last updated: 2026-05-08*
+
+---
+
+### DONE this session - AI Mesh v0.6 Docs-Only PR Gate
+
+Date: 2026-05-08
+
+#### What changed
+- Added a docs-only/rule-only PR gate to `docs/ai-agent-mesh-operating-model.md`.
+- Documented that docs-only/rule-only PRs do not require OpenRouter, Gemini, GPT-5.5, or Copilot review when deterministic local checks pass.
+- Added the v0.6 note to `docs/ai-agent-mesh-v0.md`.
+- Added the short repo-wide rule to `AGENTS.md`.
+- Updated `.ai/MODEL_ROUTER.yaml` so `docsOnly` uses deterministic checks and does not require AI review.
+
+#### Safety boundaries observed
+- Documentation/rule update only.
+- No app source files or workflow JSON were edited.
+- No n8n-as-code sync, workflow import, workflow activation, publish, push, or production action was run.
+
+#### Verification
+- `git diff --check` passed.
+- Tracked `.env`, `.db`, and `.sqlite` scan returned no matches.
+
+#### NEXT
+- Use the docs-only PR gate for future documentation/rule-only PRs that pass deterministic local checks.
+- Escalate to DeepSeek Manager or human review when changed files include app source, workflow JSON, secrets, database, auth, sync, payment, prescription, inventory, release, or architecture-risk changes.
+
+*Last updated: 2026-05-08*

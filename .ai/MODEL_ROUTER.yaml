@@ -92,8 +92,9 @@ routingRules:
   docsOnly:
     risk: low
     primary: windsurfCascade
-    manager: openRouterDeepSeek
     review: null
+    requiresAiReview: false
+    deterministicGate: true
     allowAutoEdit: true
 
   reactUiOnly:

@@ -50,6 +50,7 @@ Exception: the approved AI Agent Mesh scaffold may use `.ai/`, `docs/ai-agent-me
 - Use GPT-5.5 / Opus for high-risk security, payment, auth, sync, and integration review.
 - Do not expose secrets, API keys, tokens, credentials, or private customer data.
 - High-risk pharmacy, inventory, prescription, payment, auth, sync, or database changes require review before merge.
+- Do not require AI review for docs-only/rule-only PRs that pass local deterministic checks.
 - v0 AI outputs are review-only unless a human explicitly approves implementation.
 
 ## Quick Reference
