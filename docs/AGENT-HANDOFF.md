@@ -1333,6 +1333,37 @@ Date: 2026-05-08
 
 ---
 
+### DONE this session - AI Mesh v0.7-v0.9 Operational Contract
+
+Date: 2026-05-08
+
+#### What changed
+- Created `docs/ai-agent-mesh-operational-contract.md`.
+- Defined the v0.7 DeepSeek Manager input and output contracts.
+- Defined task packet formats for Cascade, Gemini, Copilot, and future GPT-5.5.
+- Defined the agent report contract used after implementation or review work.
+- Documented the v0.8 manual n8n Manager Router workflow design as documentation only.
+- Documented the v0.9 first real task run protocol using Manual POS Regression Planning.
+- Added human approval gates and stop conditions.
+- Linked the operational contract from `docs/ai-agent-mesh-operating-model.md` and `docs/ai-agent-mesh-v0.md`.
+- Updated `.ai/MEMORY.md` with the current v0.7-v0.9 checkpoint.
+
+#### Safety boundaries observed
+- Documentation/rule update only.
+- No API keys, tokens, credentials, `.env`, database files, app source files, existing workflow JSON, n8n import, n8n sync, workflow activation, workflow publish, push, merge, or production action.
+
+#### Verification
+- `git diff --check` passed.
+- Tracked `.env`, `.db`, and `.sqlite` scan returned no matches.
+
+#### NEXT
+- Run the first real mesh task: Manual POS Regression Planning.
+- Keep the future `TAJ Agent Mesh - Manager Router v0.8` workflow inactive, unpublished, manual-only, and credential-free in JSON until Ammar explicitly approves implementation.
+
+*Last updated: 2026-05-08*
+
+---
+
 ### DONE this session - AI Mesh v0.6 Docs-Only PR Gate
 
 Date: 2026-05-08

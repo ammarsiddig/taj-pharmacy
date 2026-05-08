@@ -4,7 +4,7 @@
 TAJ Pharmacy v4 is a Tauri 2 desktop pharmacy system with React, TypeScript, Rust, SQLite, and a Node/PostgreSQL cloud owner dashboard.
 
 ## Current Phase
-AI Agent Mesh v0.5 operating model. Goal: define the unified AI Development Team Mesh where OpenRouter DeepSeek acts as head architect / manager, routes implementation and review work, and keeps all merge, workflow activation, and production actions behind human approval.
+AI Agent Mesh v0.7-v0.9 operational contract. Goal: make the unified AI Development Team Mesh operational by standardizing the DeepSeek Manager input/output contract, agent task packets, agent reports, manual n8n manager workflow design, and first real task run protocol.
 
 ## Active Decisions
 - GitHub is the source of truth.
@@ -23,14 +23,17 @@ AI Agent Mesh v0.5 operating model. Goal: define the unified AI Development Team
 
 ## Recently Completed
 - PR #1-#5 merged.
+- PR #6 merged: AI Development Team Mesh operating model.
+- PR #7 merged: docs-only PR gate.
 - OpenRouter works.
 - Gemini works.
 - n8n manual rules are documented.
-- Branch `infra/ai-agent-mesh-v0-5-operating-model` created for the operating-model alignment.
+- Branch `infra/ai-agent-mesh-operational-v0-7-to-v0-9` created.
+- Purpose is to make DeepSeek Manager generate consistent packets for Cascade, Gemini, Copilot, and future GPT-5.5.
 
 ## Next Actions
-- Define v0.6 structured manager input/output contract.
-- Build v0.7 manual n8n workflow combining DeepSeek manager and Gemini review.
+- Use the operational contract for the first real task: Manual POS Regression Planning.
+- Build the manual n8n Manager Router v0.8 only after human approval.
 - Keep all workflow activation, publishing, GitHub commenting, and merging behind explicit human approval.
 
 ## Agent Policy
