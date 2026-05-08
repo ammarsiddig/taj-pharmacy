@@ -2,7 +2,7 @@ version: 0
 defaultQuotaMode: conservation
 assumptions:
   windsurfWeeklyRemainingPercent: 38
-  v0Policy: review-only
+  v0Policy: "manual approval required; manager may route and review but must not auto-merge"
 
 quotaModes:
   fast:
@@ -19,18 +19,37 @@ quotaModes:
     policy: "Use Windsurf only for urgent coordination; prefer Copilot or external review."
 
 agents:
+  openRouterDeepSeek:
+    role: "Head architect and manager agent for task routing, prompts, reviews, and merge recommendations."
+    primaryModel: "deepseek/deepseek-v4-pro"
+    fallbackModel: "deepseek/deepseek-v4-flash"
+    preferredWork:
+      - receive owner goals and break them into tasks
+      - select implementation and review agents
+      - write prompts for Cascade, Gemini, Copilot, and future GPT-5.5
+      - review UI/UX, Rust, Tauri, frontend, backend, database, security, and workflow risk
+      - produce merge recommendations
+    avoid:
+      - exposing secrets
+      - auto-merging
+      - publishing or activating workflows
+      - autonomous production actions
+    output: "Task plan, routing decision, agent prompts, review notes, and merge recommendation."
+
   windsurfCascade:
-    role: "Primary implementation agent for scoped file edits."
+    role: "Implementation agent for scoped file edits and local commands."
     preferredWork:
       - project scaffold
       - focused TypeScript or React edits
       - n8n workflow structure
+      - documentation and rule alignment
     avoid:
       - long architecture reviews in conservation mode
       - live production actions
+      - final merge approval
 
   githubCopilot:
-    role: "Fast inline helper for tests and small cleanup."
+    role: "Inline coding assistant for autocomplete, small refactors, tests, and PR/code support."
     preferredWork:
       - tests
       - small UI edits
@@ -38,9 +57,11 @@ agents:
     avoid:
       - pharmacy business logic authority
       - database migration decisions
+      - project management
+      - final review
 
   rooDeepSeek:
-    role: "Rust, database, and pharmacy logic reviewer."
+    role: "Legacy alias for DeepSeek reviewer; prefer openRouterDeepSeek for manager/head architect routing."
     primaryModel: "deepseek/deepseek-v4-pro"
     fallbackModel: "deepseek/deepseek-v4-flash"
     preferredWork:
@@ -50,11 +71,12 @@ agents:
     output: "Review notes only unless explicitly assigned edits."
 
   geminiUltra:
-    role: "Architecture impact and daily summary reviewer."
+    role: "Architecture reviewer for large-context system, cross-module, and medical workflow safety review."
     preferredWork:
       - cross-system architecture review
       - daily reports
       - risk summaries
+      - scalability and maintainability review
     output: "Architecture notes and impact reports."
 
   gpt55Opus:
@@ -69,20 +91,24 @@ agents:
 routingRules:
   docsOnly:
     risk: low
-    primary: githubCopilot
+    primary: windsurfCascade
+    manager: openRouterDeepSeek
     review: null
     allowAutoEdit: true
 
   reactUiOnly:
     risk: medium
     primary: windsurfCascade
+    manager: openRouterDeepSeek
     fallback: githubCopilot
     review: null
     allowAutoEdit: true
 
   rustDatabasePharmacyLogic:
     risk: high
-    primary: rooDeepSeek
+    manager: openRouterDeepSeek
+    primary: windsurfCascade
+    requiredReview: openRouterDeepSeek
     primaryModel: "deepseek/deepseek-v4-pro"
     fallbackModel: "deepseek/deepseek-v4-flash"
     architecture: geminiUltra
@@ -91,14 +117,27 @@ routingRules:
 
   authPermissionsSecretsTokens:
     risk: critical
-    primary: gpt55Opus
+    manager: openRouterDeepSeek
+    primary: windsurfCascade
+    requiredReview: openRouterDeepSeek
     architecture: geminiUltra
+    optionalStrategy: gpt55Opus
     allowAutoEdit: false
     requiresHumanApproval: true
 
   n8nWorkflowScaffold:
     risk: medium
+    manager: openRouterDeepSeek
     primary: windsurfCascade
-    review: gpt55Opus
+    review: openRouterDeepSeek
+    allowAutoEdit: false
+    requiresHumanApproval: true
+
+  architectureCrossModule:
+    risk: high
+    manager: openRouterDeepSeek
+    primary: windsurfCascade
+    architecture: geminiUltra
+    requiredReview: openRouterDeepSeek
     allowAutoEdit: false
     requiresHumanApproval: true

@@ -1300,3 +1300,33 @@ Old `PMS Pharmacy_0.1.0_x64-setup.exe` is a stale leftover — delete it manuall
 - Reorder Point Alerts — auto-alert when stock falls below minimum
 
 *Last updated: 2026-05-05*
+
+---
+
+### DONE this session - AI Development Team Mesh v0.5 Operating Model
+
+Date: 2026-05-08
+
+#### What changed
+- Created `docs/ai-agent-mesh-operating-model.md` as the unified AI Development Team Mesh model.
+- Defined OpenRouter DeepSeek v4 as Head Architect / Manager Agent for goals, task breakdown, routing, prompt writing, review, and merge recommendations.
+- Defined supporting roles for Windsurf Cascade, Gemini, GitHub Copilot, future GPT-5.5 Pro, n8n, GitHub, and Ammar.
+- Added authority hierarchy, communication flow, model selection rules, conflict prevention, standard lifecycle, risk routing, v0.x non-goals, next phases, and rule conflict audit.
+- Updated `AGENTS.md` with a short AI Development Team Mesh section.
+- Updated `.ai/MODEL_ROUTER.yaml` to make OpenRouter DeepSeek the manager/head architect while keeping Cascade, Gemini, and Copilot responsibilities clear.
+- Updated `.ai/MEMORY.md` and `docs/ai-agent-mesh-v0.md` to point to the v0.5 operating model and preserve v0 as the manual review/n8n runbook.
+
+#### Safety boundaries observed
+- No API keys, tokens, credentials, `.env`, database files, app source files, or workflow JSON were edited.
+- No n8n-as-code sync, workflow import, workflow activation, publish, push, or production action was run.
+
+#### Verification
+- `git diff --check` passed.
+- Tracked `.env`, `.db`, and `.sqlite` scan returned no matches.
+
+#### NEXT
+- v0.6: define a structured manager input/output contract for DeepSeek manager tasks.
+- v0.7: design a manual n8n workflow that combines DeepSeek manager output with Gemini architecture review, still inactive/manual only.
+- v0.8: draft-only GitHub PR comment generation, with no automatic posting until approved.
+
+*Last updated: 2026-05-08*

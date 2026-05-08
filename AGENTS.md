@@ -2,6 +2,17 @@
 
 > This project uses multiple AI agents. Follow these rules regardless of which AI tool you are.
 
+## AI Development Team Mesh
+
+- DeepSeek/OpenRouter is the manager and head architect.
+- Cascade is the implementation agent.
+- Gemini is the architecture reviewer.
+- Copilot is the inline/test assistant.
+- n8n is the coordination layer.
+- GitHub is the shared state.
+- Ammar is the final approver.
+- For full details see `docs/ai-agent-mesh-operating-model.md`.
+
 ## Rule 1: Read Before Coding
 
 At the start of every normal application work session, read `docs/AGENT-HANDOFF.md`. It contains:
@@ -25,10 +36,11 @@ Do not create plan or context files like `WORKING-CONTEXT.md`, `AI_HANDOFF_PLAN.
 
 `docs/AGENT-HANDOFF.md` is the main application handoff file.
 
-Exception: the approved AI Agent Mesh v0 scaffold may use `.ai/` and `docs/ai-agent-mesh-v0.md` for model routing, review reports, runtime lock examples, and n8n setup documentation.
+Exception: the approved AI Agent Mesh scaffold may use `.ai/`, `docs/ai-agent-mesh-v0.md`, and `docs/ai-agent-mesh-operating-model.md` for model routing, review reports, runtime lock examples, operating model documentation, and n8n setup documentation.
 
 ## AI Agent Mesh v0
 
+- DeepSeek/OpenRouter is the manager and head architect for the AI Development Team Mesh.
 - Before major AI mesh work, read `.ai/MEMORY.md` and `.ai/MODEL_ROUTER.yaml`.
 - Do not edit files listed in `.ai/locks/active-locks.json` unless the lock explicitly allows fallback edits.
 - Use Cascade for scoped implementation and workflow scaffold work only.
