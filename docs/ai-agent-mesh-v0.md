@@ -4,6 +4,12 @@
 
 This scaffold creates a safe local-first AI Agent Mesh for TAJ Pharmacy v4. Version 0 classifies changes, routes review work to the right model, and writes review-only output. It does not auto-edit, auto-commit, auto-merge, or deploy.
 
+## v0.5 Operating Model
+
+The unified AI Development Team Mesh operating model is defined in `docs/ai-agent-mesh-operating-model.md`. That document is the detailed team model for the current v0.5 phase.
+
+This v0 document remains the manual n8n and review-runbook scaffold. If this file conflicts with the operating model, use `AGENTS.md`, `.ai/MODEL_ROUTER.yaml`, `.ai/MEMORY.md`, and `docs/ai-agent-mesh-operating-model.md` in that order.
+
 ## Local-First Development
 
 Work starts in the local repository on a dedicated branch:
@@ -331,11 +337,11 @@ Before merging any high-risk PR:
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.
 
+- OpenRouter DeepSeek v4: head architect / manager agent, task router, prompt writer, reviewer, and merge recommender.
 - Windsurf Cascade: focused implementation and workflow scaffold.
 - GitHub Copilot: tests and small inline edits.
-- Roo Code / DeepSeek: Rust, database, and pharmacy logic review.
-- Gemini Ultra: architecture impact and daily summaries.
-- GPT-5.5 / Opus: high-risk security, auth, sync, payment, and integration review.
+- Gemini Pro / Gemini 3.x: architecture impact, large-context review, and medical workflow safety review.
+- GPT-5.5 Pro: future strategy and orchestration agent if explicitly enabled.
 
 ## Quota Fallback
 

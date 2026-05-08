@@ -4,13 +4,17 @@
 TAJ Pharmacy v4 is a Tauri 2 desktop pharmacy system with React, TypeScript, Rust, SQLite, and a Node/PostgreSQL cloud owner dashboard.
 
 ## Current Phase
-AI Agent Mesh v0 scaffold. Goal: classify changes, route reviews, and produce review-only reports before any automation edits code.
+AI Agent Mesh v0.5 operating model. Goal: define the unified AI Development Team Mesh where OpenRouter DeepSeek acts as head architect / manager, routes implementation and review work, and keeps all merge, workflow activation, and production actions behind human approval.
 
 ## Active Decisions
 - GitHub is the source of truth.
-- n8n orchestrates review workflows.
+- OpenRouter DeepSeek v4 is the manager and head architect for task routing, prompts, reviews, and merge recommendations.
+- Windsurf Cascade is the implementation agent.
+- Gemini is the architecture reviewer.
+- GitHub Copilot is the inline/test assistant.
+- n8n is the manual coordination layer.
 - Windsurf weekly quota default is 38%, so default quota mode is conservation.
-- v0 is review-only: no automatic edits, commits, merges, or deployments.
+- v0.x has no auto-merge, no workflow activation/publish, no production deployment automation, and no live patient data in prompts.
 
 ## Current Risks
 - Pharmacy, inventory, prescription, payment, auth, sync, Rust, and database changes are high-risk.
@@ -18,13 +22,16 @@ AI Agent Mesh v0 scaffold. Goal: classify changes, route reviews, and produce re
 - Multiple agents must not edit locked files.
 
 ## Recently Completed
-- Local Git repository initialized.
-- Branch `infra/ai-agent-mesh-v0` created for AI mesh setup.
+- PR #1-#5 merged.
+- OpenRouter works.
+- Gemini works.
+- n8n manual rules are documented.
+- Branch `infra/ai-agent-mesh-v0-5-operating-model` created for the operating-model alignment.
 
 ## Next Actions
-- Configure n8n-as-code manually in Windsurf.
-- Create the first local workflow: `TAJ Agent Mesh - Commit QA v0`.
-- Test with manual payloads before enabling GitHub triggers.
+- Define v0.6 structured manager input/output contract.
+- Build v0.7 manual n8n workflow combining DeepSeek manager and Gemini review.
+- Keep all workflow activation, publishing, GitHub commenting, and merging behind explicit human approval.
 
 ## Agent Policy
 - Read this file and `.ai/MODEL_ROUTER.yaml` before major work.
