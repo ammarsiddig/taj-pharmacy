@@ -10,6 +10,10 @@ The unified AI Development Team Mesh operating model is defined in `docs/ai-agen
 
 This v0 document remains the manual n8n and review-runbook scaffold. If this file conflicts with the operating model, use `AGENTS.md`, `.ai/MODEL_ROUTER.yaml`, `.ai/MEMORY.md`, and `docs/ai-agent-mesh-operating-model.md` in that order.
 
+## v0.6 Docs-Only PR Gate
+
+Docs-only PR gate added to reduce AI credit usage. Docs-only and rule-only PRs that pass deterministic local checks do not need OpenRouter, Gemini, GPT-5.5, or Copilot review.
+
 ## Local-First Development
 
 Work starts in the local repository on a dedicated branch:

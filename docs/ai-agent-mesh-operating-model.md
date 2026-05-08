@@ -176,10 +176,36 @@ Short form:
 - No automatic GitHub commenting.
 - No production deployment automation.
 
-## J. Next Implementation Phases
+## J. Docs-Only PR Gate
+
+Docs-only and rule-only PRs do not require OpenRouter, Gemini, GPT-5.5, or Copilot review when they pass local deterministic checks. AI review is reserved for changes that affect code, security, database state, workflow JSON, app behavior, medical or business logic, auth, sync, payment, prescription handling, inventory, releases, or architecture risk.
+
+Use local checks instead of AI credits for docs-only/rule-only branches:
+
+```bash
+git status
+git diff master..BRANCH --name-only
+git diff master..BRANCH --stat
+git diff master..BRANCH --check
+git ls-files | findstr /i "\.env .db .sqlite"
+```
+
+Pass criteria:
+
+- Changed files are only documentation or rule files.
+- No app source files changed.
+- No workflow JSON changed.
+- No `.env`, `.db`, or `.sqlite` files are tracked.
+- `git diff --check` is clean.
+- Manual inspection finds no API keys, tokens, credentials, or secrets in the diff.
+- Branch merges cleanly on GitHub.
+
+If all criteria pass, create the PR and merge manually without AI safety review. If any criterion fails, stop and escalate to the DeepSeek Manager or human review.
+
+## K. Next Implementation Phases
 
 - v0.5 operating model and rule audit.
-- v0.6 structured manager input/output contract.
+- v0.6 docs-only PR gate and structured manager input/output contract.
 - v0.7 manual n8n workflow combining DeepSeek manager and Gemini review.
 - v0.8 PR comment draft generation only.
 - v1 approved GitHub trigger and PR comment workflow.
