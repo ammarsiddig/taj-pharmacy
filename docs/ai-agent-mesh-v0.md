@@ -259,6 +259,74 @@ Markdown architecture review covering:
 **Symptom:** Multiple node chains or broken workflow.
 **Fix:** Archive and recreate. Never sync or import over an existing workflow.
 
+## v0.4 Manual Review Runbook
+
+This runbook defines the manual review checklist to use before high-risk code changes. It keeps AI Agent Mesh work review-only and keeps local n8n workflows inactive.
+
+### A. Daily Start
+
+1. `git checkout master`
+2. `git pull origin master`
+3. Confirm `git status` is clean.
+4. Confirm no `.env`, `.db`, or `.sqlite` files are tracked.
+5. Confirm local n8n is reachable at `http://localhost:5678`.
+6. Do not publish or activate any n8n workflow.
+
+### B. Before Coding
+
+1. Classify the task as low, medium, or high risk.
+2. Low risk: UI copy, docs, or simple tests can use Sonnet only.
+3. Medium risk: app logic, state, and notifications require Sonnet plus the manual checklist.
+4. High risk: Rust, SQL, inventory, prescription, payment, auth, and sync changes require DeepSeek/OpenRouter review.
+5. Architecture-impacting changes require Gemini review.
+
+### C. Model Routing
+
+- Sonnet 4.6: primary coding and planning in Windsurf.
+- OpenRouter DeepSeek `deepseek/deepseek-v4-pro`: Rust, SQL, and pharmacy logic review.
+- Gemini `gemini-2.5-flash`: architecture impact review smoke and fast review.
+- GPT-5.5: orchestration, prompts, and GitHub/process support when credits are available.
+
+### D. Manual n8n Review Steps
+
+1. Open n8n locally.
+2. Use only manual test/review workflows.
+3. Confirm exactly one node chain exists.
+4. Re-select credentials if needed.
+5. Run OpenRouter review for high-risk logic changes.
+6. Run Gemini review for architecture impact.
+7. Copy the review output into PR notes manually.
+8. Disable or revert any temporary node enablement.
+9. Never publish or activate the workflow.
+
+### E. Merge Gate Checklist
+
+Before merging any high-risk PR:
+
+- `git status` is clean.
+- No `.env`, `.db`, or `.sqlite` files are tracked.
+- Tests/build pass, or failure is documented.
+- OpenRouter review is completed if Rust, SQL, or pharmacy logic was touched.
+- Gemini review is completed if architecture was affected.
+- No API keys or secrets appear in the diff.
+- No n8n workflow is published or activated.
+- A human approves the final merge.
+
+### F. Failure Handling
+
+- Credentials not found: re-select the credential manually.
+- Duplicate n8n nodes: archive the workflow, recreate it clean, and do not sync or import over it.
+- Model unavailable: list available models or use the documented fallback.
+- Git dirty with generated n8n files: restore unrelated files before committing.
+- Secret exposure: stop, scrub history, and rotate secrets.
+
+### G. Daily End
+
+1. Commit or discard all intentional changes.
+2. Leave `master` or the active feature branch clean.
+3. Do not leave workflows active.
+4. Record what was tested and what remains.
+
 ## Model Routing
 
 Routing is defined in `.ai/MODEL_ROUTER.yaml`.
