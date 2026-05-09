@@ -30,3 +30,4 @@ dist-ssr
 logs/
 .ai/USAGE_STATE.json
 .ai/locks/active-locks.json
+.aider*

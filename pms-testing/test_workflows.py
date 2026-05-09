@@ -67,7 +67,7 @@ def money(sdg: float) -> int:
 
 def log_pass(name: str, detail: str = ""):
     test_results["passed"] += 1
-    mark = "[bold green]✓ PASS[/]" if HAS_RICH else "✓ PASS"
+    mark = "[bold green][PASS][/]" if HAS_RICH else "[PASS]"
     msg = f"  {mark}  {name}"
     if detail:
         msg += f" — {detail}"
@@ -79,7 +79,7 @@ def log_pass(name: str, detail: str = ""):
 def log_fail(name: str, detail: str):
     test_results["failed"] += 1
     test_results["errors"].append(f"{name}: {detail}")
-    mark = "[bold red]✗ FAIL[/]" if HAS_RICH else "✗ FAIL"
+    mark = "[bold red][FAIL][/]" if HAS_RICH else "[FAIL]"
     msg = f"  {mark}  {name} — {detail}"
     if console:
         console.print(msg)
@@ -88,11 +88,11 @@ def log_fail(name: str, detail: str):
 
 def log_section(title: str):
     if console:
-        console.print(f"\n[bold cyan]{'═'*60}[/]")
+        console.print(f"\n[bold cyan]{'='*60}[/]")
         console.print(f"[bold cyan]  {title}[/]")
-        console.print(f"[bold cyan]{'═'*60}[/]")
+        console.print(f"[bold cyan]{'='*60}[/]")
     else:
-        print(f"\n{'═'*60}\n  {title}\n{'═'*60}")
+        print(f"\n{'='*60}\n  {title}\n{'='*60}")
 
 def assert_eq(name, actual, expected, detail=""):
     if actual == expected:
@@ -1607,37 +1607,37 @@ def print_results():
     total = test_results['passed'] + test_results['failed']
     
     if console:
-        console.print(f"\n{'═'*60}")
+        console.print(f"\n{'='*60}")
         if test_results['failed'] == 0:
             console.print(Panel(
                 f"[bold green]ALL {total} TESTS PASSED[/]\n\n"
-                f"  ✓ Passed: {test_results['passed']}\n"
-                f"  ✗ Failed: {test_results['failed']}",
+                f"  [PASS] Passed: {test_results['passed']}\n"
+                f"  [FAIL] Failed: {test_results['failed']}",
                 title="[bold green]TEST RESULTS[/]",
                 border_style="green"
             ))
         else:
             console.print(Panel(
                 f"[bold red]{test_results['failed']} TESTS FAILED[/]\n\n"
-                f"  ✓ Passed: {test_results['passed']}\n"
-                f"  ✗ Failed: {test_results['failed']}\n\n"
+                f"  [PASS] Passed: {test_results['passed']}\n"
+                f"  [FAIL] Failed: {test_results['failed']}\n\n"
                 f"Failures:\n" + "\n".join(f"  • {e}" for e in test_results['errors']),
                 title="[bold red]TEST RESULTS[/]",
                 border_style="red"
             ))
     else:
-        print(f"\n{'═'*60}")
-        print(f"  PASSED: {test_results['passed']}")
-        print(f"  FAILED: {test_results['failed']}")
+        print(f"\n{'='*60}")
+        print(f"  [PASS] Passed: {test_results['passed']}")
+        print(f"  [FAIL] Failed: {test_results['failed']}")
         if test_results['errors']:
             print("\n  Failures:")
             for e in test_results['errors']:
                 print(f"    • {e}")
 
 
-# ════════════════════════════════════════════════════════════
+# ============================================================
 # MAIN
-# ════════════════════════════════════════════════════════════
+# ============================================================
 
 def main():
     if console:
