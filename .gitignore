@@ -31,3 +31,34 @@ logs/
 .ai/USAGE_STATE.json
 .ai/locks/active-locks.json
 .aider*
+
+# Tauri updater private key
+src-tauri/update-key
+
+# AI fingerprints (local only, excluded from repo)
+.cursorrules
+.windsurfrules
+AGENTS.md
+opencode.json
+n8nac-config.json
+.agents/
+.ai/
+plans/
+workflows/
+n8n-workflows/
+docs/AGENT-HANDOFF.md
+docs/agents/
+docs/archive/
+docs/ai-agent-mesh-*.md
+.github/copilot-instructions.md
+
+# Old launch infrastructure (broken cross-references)
+docs/launch/README.md
+docs/LAUNCH-PLAN.md
+docs/launch/STAGE-TEMPLATE.md
+
+# Local build/debug artifacts
+src-tauri/cargo_err.txt
+Thumbs.db
+.claude/
+build/
