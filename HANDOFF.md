@@ -427,8 +427,8 @@ git status --short
 | --- | --- |
 | Severity | Critical |
 | Audit ref | Item 10 |
-| Owner | DeepSeek V4 |
-| Status | DONE |
+| Owner | (unassigned) |
+| Status | OPEN |
 | Estimated effort | 5 minutes |
 | Depends on | — |
 
@@ -846,12 +846,6 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** <exact command run, key output line(s) proving success>
 - **Notes:** <surprises, follow-ups, edge cases — anything the curator should see>
 -->
-
-### 2026-05-15 — DeepSeek V4 — TASK-001
-- **Status:** DONE
-- **Files changed:** pms-cloud/src/routes/dashboard.js (line 489), HANDOFF.md (TASK-001 status update + worklog)
-- **Acceptance test result:** `Select-String -Path pms-cloud/src/routes/*.js -Pattern "req\.tenant_id"` returned 0 matches after fix. `npm run dev` (pms-cloud) started without syntax/parse errors — node --watch loaded all modules, only DB auth failure (no local Postgres).
-- **Notes:** 1 occurrence of `req.tenant_id` found and fixed (dashboard.js:489). No other files in routes/ used the snake_case variant. Grep also confirmed no `req.tenantId` occurrences were touched (they were already camelCase).
 
 ### 2026-05-15 — Claude Code (Opus) — TASK-000
 - **Status:** DONE
