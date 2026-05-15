@@ -127,10 +127,13 @@ router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
 
 /**
  * GET /v1/sync-stats
- * Returns sync statistics for the authenticated tenant.
+ * Returns sync statistics and health indicators for the authenticated tenant.
+ * Query: ?branch=
  */
 router.get('/v1/sync-stats', requireAuthOrJwt, async (req, res) => {
   try {
+    const branch = req.query.branch || 'main-branch';
+
     const tenantResult = await query(
       'SELECT first_seen_at, last_sync_at, total_syncs FROM tenants WHERE id = $1',
       [req.tenantId]
@@ -144,16 +147,31 @@ router.get('/v1/sync-stats', requireAuthOrJwt, async (req, res) => {
       ORDER BY table_name
     `, [req.tenantId]);
 
+    const totalRows = syncStateResult.rows.reduce((sum, r) => sum + parseInt(r.row_count || 0), 0);
+
     const todayEventsResult = await query(`
       SELECT COUNT(*) as count FROM sync_events
       WHERE tenant_id = $1 AND DATE(received_at) = CURRENT_DATE
     `, [req.tenantId]);
 
+    // Health: green (<1h), yellow (1-24h), red (>24h or never)
+    const lastSync = tenant?.last_sync_at ? new Date(tenant.last_sync_at).getTime() : 0;
+    const now = Date.now();
+    const minutesSinceSync = lastSync ? Math.floor((now - lastSync) / 60000) : -1;
+
+    let health = 'red';
+    if (lastSync && minutesSinceSync < 60) health = 'green';
+    else if (lastSync && minutesSinceSync < 1440) health = 'yellow';
+
     res.json({
       tenant_id: req.tenantId,
+      branch,
       first_seen_at: tenant?.first_seen_at || null,
       last_sync_at: tenant?.last_sync_at || null,
+      minutes_since_sync: minutesSinceSync,
+      health,
       total_syncs: tenant?.total_syncs || 0,
+      total_rows: totalRows,
       today_events: parseInt(todayEventsResult.rows[0]?.count || 0),
       tables: syncStateResult.rows,
     });
@@ -187,12 +205,51 @@ router.get('/v1/branches', requireAuthOrJwt, async (req, res) => {
       ORDER BY branch_id
     `, [req.tenantId]);
 
+    // Fetch friendly names from tenants.branch_names
+    const namesResult = await query(
+      'SELECT branch_names FROM tenants WHERE id = $1',
+      [req.tenantId]
+    );
+    const branchNames = (namesResult.rows[0] && namesResult.rows[0].branch_names) || {};
+
     res.json({ 
       tenant_id: req.tenantId, 
-      branches: result.rows.map(r => r.branch_id) 
+      branches: result.rows.map(r => ({
+        id: r.branch_id,
+        name: branchNames[r.branch_id] || null,
+      }))
     });
   } catch (err) {
     console.error('[branches] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * PUT /v1/branches/:branchId/name
+ * Set a friendly name for a branch.
+ */
+router.put('/v1/branches/:branchId/name', requireAuthOrJwt, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const branchId = req.params.branchId;
+    const newName = name.trim();
+
+    // Update branch_names JSONB: set key = value
+    await query(
+      `UPDATE tenants 
+       SET branch_names = jsonb_set(COALESCE(branch_names, '{}'), $1::text[], to_jsonb($2::text))
+       WHERE id = $3`,
+      [`{${branchId}}`, newName, req.tenantId]
+    );
+
+    res.json({ branch_id: branchId, name: newName });
+  } catch (err) {
+    console.error('[branches/name] Error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -378,6 +435,78 @@ router.get('/v1/supplier-accounts', requireAuthOrJwt, async (req, res) => {
     });
   } catch (err) {
     console.error('[supplier-accounts] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /v1/dashboard/trend
+ * Returns last 7 days of daily sales totals broken down by payment method.
+ * Query: ?branch=
+ */
+router.get('/v1/dashboard/trend', requireAuthOrJwt, async (req, res) => {
+  try {
+    const branch = req.query.branch || null;
+
+    const result = await query(`
+      SELECT d::date as date,
+             COALESCE(SUM(s.total) FILTER (WHERE s.payment_method = 'cash'), 0)::bigint as cash,
+             COALESCE(SUM(s.total) FILTER (WHERE s.payment_method = 'bank'), 0)::bigint as bank,
+             COALESCE(SUM(s.total) FILTER (WHERE s.payment_method = 'credit'), 0)::bigint as credit,
+             COALESCE(SUM(s.total), 0)::bigint as total
+      FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day') d
+      LEFT JOIN snapshot_pos_sales s
+        ON s.tenant_id = $1
+        AND (s.branch_id = $2 OR $2 IS NULL)
+        AND DATE(s.created_at) = d::date
+        AND s.is_return = false
+      GROUP BY d::date
+      ORDER BY d::date
+    `, [req.tenantId, branch]);
+
+    res.json({
+      tenant_id: req.tenantId,
+      days: result.rows.map(r => ({
+        date: r.date.toISOString().slice(0, 10),
+        total: parseInt(r.total),
+        cash: parseInt(r.cash),
+        bank: parseInt(r.bank),
+        credit: parseInt(r.credit),
+      })),
+    });
+  } catch (err) {
+    console.error('[dashboard/trend] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /v1/accounts
+ * Returns synced accounts for the owner PWA.
+ */
+router.get('/v1/accounts', requireAuthOrJwt, async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    let branch = req.query.branch || req.headers['x-branch-id'] || null;
+
+    let branchParam = '';
+    const params = [tenantId];
+    if (branch) {
+      params.push(branch);
+      branchParam = ` AND branch_id = $${params.length}`;
+    }
+
+    const result = await query(`
+      SELECT id, name, name_ar, account_type, current_balance, is_default, is_active,
+             bank_provider, internal_fee, external_fee, phone_label, created_at, updated_at
+      FROM snapshot_accounts
+      WHERE tenant_id = $1${branchParam}
+      ORDER BY is_default DESC, account_type ASC, name ASC
+    `, params);
+
+    res.json({ accounts: result.rows });
+  } catch (err) {
+    console.error('[dashboard/accounts] Error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
