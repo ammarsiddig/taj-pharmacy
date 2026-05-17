@@ -8,6 +8,7 @@ use crate::commands::cloud_sync;
 use crate::commands::license_guard;
 use crate::commands::guard;
 use crate::commands::audit;
+use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 const FLAG_EXPENSES: i64 = 32;
 
@@ -138,12 +139,14 @@ pub fn create_expense_category(
     db: State<'_, Database>,
     tenant_id: String,
     data: ExpenseCategoryData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<ExpenseCategory, String> {
     if data.name.trim().is_empty() {
         return Err("اسم الفئة مطلوب".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_EXPENSES)?;
     let id = Uuid::new_v4().to_string();
@@ -276,6 +279,7 @@ pub fn create_expense(
     branch_id: String,
     user_id: String,
     data: ExpenseData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<ExpenseRow, String> {
     if data.description.trim().is_empty() {
         return Err("وصف المصروف مطلوب".into());
@@ -285,6 +289,7 @@ pub fn create_expense(
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_EXPENSES)?;
     guard::require_permission(&conn, &user_id, "expenses")?;
@@ -315,6 +320,9 @@ pub fn create_expense(
         ).map_err(|e| format!("فشل إنشاء المصروف: {}", e))?;
 
         // Account transaction
+        if acct_balance < data.amount {
+            return Err(format!("صندوق النقدية يحتوي على {} ج.س فقط. لا يمكن صرف {} ج.س.", acct_balance, data.amount));
+        }
         let bal_after = acct_balance - data.amount;
         let tx_id = Uuid::new_v4().to_string();
         conn.execute(
@@ -359,6 +367,7 @@ pub fn update_expense(
     expense_id: String,
     user_id: String,
     data: ExpenseData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<ExpenseRow, String> {
     if data.description.trim().is_empty() {
         return Err("وصف المصروف مطلوب".into());
@@ -368,6 +377,7 @@ pub fn update_expense(
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_EXPENSES)?;
     guard::require_permission(&conn, &user_id, "expenses")?;
@@ -431,6 +441,10 @@ pub fn update_expense(
             |row| row.get(0),
         ).map_err(|e| e.to_string())?;
 
+        if new_bal < data.amount {
+            return Err(format!("صندوق النقدية يحتوي على {} ج.س فقط. لا يمكن صرف {} ج.س.", new_bal, data.amount));
+        }
+
         let new_bal_after = new_bal - data.amount;
         let new_tx_id = Uuid::new_v4().to_string();
         conn.execute(
@@ -474,8 +488,10 @@ pub fn delete_expense(
     tenant_id: String,
     expense_id: String,
     user_id: String,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "main-branch")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_EXPENSES)?;
     guard::require_permission(&conn, &user_id, "expenses")?;
@@ -531,6 +547,9 @@ pub fn delete_expense(
             }
             if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "expense_deleted") {
                 log::warn!("cloud sync enqueue failed after delete_expense: {}", e);
+            }
+            if let Err(e) = cloud_sync::enqueue_cloud_deletion(&conn, &tenant_id, &bid, "expenses", &expense_id) {
+                log::warn!("cloud sync deletion outbox failed after delete_expense: {}", e);
             }
             Ok(())
         }
@@ -666,8 +685,10 @@ pub fn create_expense_template(
     tenant_id: String,
     data: ExpenseTemplateData,
     db: State<Database>,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<ExpenseTemplate, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     let id = Uuid::new_v4().to_string();
     conn.execute(
@@ -698,8 +719,10 @@ pub fn delete_expense_template(
     tenant_id: String,
     template_id: String,
     db: State<Database>,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     conn.execute(
         "UPDATE expense_templates SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')

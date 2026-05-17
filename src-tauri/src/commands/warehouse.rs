@@ -8,8 +8,30 @@ use crate::commands::cloud_sync;
 use crate::commands::license_guard;
 use crate::commands::guard;
 use crate::commands::audit;
+use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 const FLAG_WAREHOUSE: i64 = 8;
+
+// ────────────────────────────────────────────────────────────────
+// REORDER POINT TYPES
+// ────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Clone)]
+#[allow(dead_code)] // constructed inside get_low_stock_products; false positive from macro
+pub struct LowStockProduct {
+    pub product_id: String,
+    pub product_name: String,
+    pub product_name_ar: Option<String>,
+    pub barcode: Option<String>,
+    pub category: Option<String>,
+    pub unit: String,
+    pub current_qty: i64,
+    pub min_stock_level: i64,
+    pub deficit: i64,
+    pub last_purchase_price: Option<i64>,
+    pub supplier_id: Option<String>,
+    pub supplier_name: Option<String>,
+}
 
 // ────────────────────────────────────────────────────────────────
 // TYPES
@@ -53,37 +75,6 @@ pub struct StockMovementRow {
     pub created_by: String,
     pub created_by_name: String,
     pub created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct StockTakeRow {
-    pub id: String,
-    pub branch_id: String,
-    pub started_by: String,
-    pub started_by_name: String,
-    pub confirmed_by: Option<String>,
-    pub status: String,
-    pub started_at: String,
-    pub completed_at: Option<String>,
-    pub notes: Option<String>,
-    pub item_count: i64,
-    pub discrepancy_count: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct StockTakeItemRow {
-    pub id: String,
-    pub stock_take_id: String,
-    pub product_id: String,
-    pub product_name: String,
-    pub product_name_ar: Option<String>,
-    pub batch_id: String,
-    pub batch_number: Option<String>,
-    pub expiry_date: Option<String>,
-    pub expected_quantity: i64,
-    pub actual_quantity: i64,
-    pub difference: i64,
-    pub adjustment_applied: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -188,8 +179,10 @@ pub fn create_storage_location(
     branch_id: String,
     data: StorageLocationData,
     db: State<Database>,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<StorageLocation, String> {
     let conn = db.conn.lock().unwrap();
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
     let id = Uuid::new_v4().to_string();
@@ -223,8 +216,10 @@ pub fn update_storage_location(
     tenant_id: String,
     data: StorageLocationData,
     db: State<Database>,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().unwrap();
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
 
@@ -246,8 +241,10 @@ pub fn toggle_storage_location_active(
     location_id: String,
     tenant_id: String,
     db: State<Database>,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().unwrap();
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
 
@@ -382,485 +379,6 @@ pub fn get_stock_movements(
 }
 
 // ────────────────────────────────────────────────────────────────
-// DISPOSE BATCH
-// ────────────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn dispose_batch(
-    tenant_id: String,
-    branch_id: String,
-    user_id: String,
-    batch_id: String,
-    quantity: i64,
-    reason: Option<String>,
-    db: State<Database>,
-) -> Result<(), String> {
-    if quantity <= 0 {
-        return Err("الكمية يجب أن تكون أكبر من صفر".into());
-    }
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    license_guard::require_active(&conn, &tenant_id)?;
-    license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
-
-    let (qty_current, product_id): (i64, String) = conn.query_row(
-        "SELECT quantity_current, product_id FROM batches
-         WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",
-        params![batch_id, tenant_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    ).map_err(|_| "الدفعة غير موجودة".to_string())?;
-
-    if quantity > qty_current {
-        return Err(format!("الكمية المطلوبة ({}) أكبر من المتاح ({})", quantity, qty_current));
-    }
-
-    let qty_after = qty_current - quantity;
-    let new_status = if qty_after == 0 { "disposed" } else { "active" };
-
-    conn.execute(
-        "UPDATE batches SET quantity_current = ?2, status = ?3,
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?1",
-        params![batch_id, qty_after, new_status],
-    ).map_err(|e| e.to_string())?;
-
-    let mv_id = Uuid::new_v4().to_string();
-    conn.execute(
-        "INSERT INTO stock_movements (id, tenant_id, branch_id, product_id, batch_id,
-                movement_type, quantity_change, quantity_before, quantity_after,
-                reference_type, reference_id, notes, created_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, 'dispose', ?6, ?7, ?8, 'dispose', ?5, ?9, ?10)",
-        params![mv_id, tenant_id, branch_id, product_id, batch_id,
-                -quantity, qty_current, qty_after, reason, user_id],
-    ).map_err(|e| e.to_string())?;
-
-    if let Err(e) = audit::log_action(&conn, &tenant_id, &user_id, "dispose", "batch", &batch_id, reason.as_deref()) {
-        log::warn!("audit log failed after dispose_batch: {}", e);
-    }
-    if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "batch_disposed") {
-        log::warn!("cloud sync enqueue failed after dispose_batch: {}", e);
-    }
-
-    Ok(())
-}
-
-// ────────────────────────────────────────────────────────────────
-// RECALL BATCH
-// ────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RecalledBatch {
-    pub id: String,
-    pub product_id: String,
-    pub product_name: String,
-    pub batch_number: Option<String>,
-    pub location_id: String,
-    pub location_name: String,
-    pub quantity_recalled: i64,
-}
-
-#[tauri::command]
-pub fn recall_batch(
-    tenant_id: String,
-    branch_id: String,
-    user_id: String,
-    batch_number: String,
-    reason: Option<String>,
-    db: State<Database>,
-) -> Result<Vec<RecalledBatch>, String> {
-    if batch_number.trim().is_empty() {
-        return Err("رقم الدفعة مطلوب".into());
-    }
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    license_guard::require_active(&conn, &tenant_id)?;
-    license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
-
-    let mut stmt = conn.prepare(
-        "SELECT b.id, b.product_id, p.trade_name, b.batch_number, b.location_id,
-                COALESCE(sl.name_ar, sl.name, 'غير محدد') as location_name,
-                b.quantity_current
-         FROM batches b
-         JOIN products p ON b.product_id = p.id
-         LEFT JOIN storage_locations sl ON b.location_id = sl.id
-         WHERE b.tenant_id = ?1 AND b.batch_number = ?2
-           AND b.status = 'active' AND b.quantity_current > 0
-           AND b.deleted_at IS NULL",
-    ).map_err(|e| e.to_string())?;
-
-    let targets: Vec<(String, String, String, Option<String>, String, String, i64)> = stmt.query_map(
-        params![tenant_id, batch_number],
-        |row| Ok((
-            row.get(0)?, row.get(1)?, row.get(2)?,
-            row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?,
-        )),
-    ).map_err(|e| e.to_string())?
-    .filter_map(|r| r.ok())
-    .collect();
-
-    if targets.is_empty() {
-        return Err("لم يتم العثور على دفعات نشطة بهذا الرقم".into());
-    }
-    drop(stmt);
-
-    let mut recalled = Vec::new();
-    for (batch_id, product_id, product_name, batch_num, location_id, location_name, qty_current) in &targets {
-        conn.execute(
-            "UPDATE batches SET status = 'disposed', quantity_current = 0,
-                     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![batch_id],
-        ).map_err(|e| e.to_string())?;
-
-        let mv_id = Uuid::new_v4().to_string();
-        conn.execute(
-            "INSERT INTO stock_movements (id, tenant_id, branch_id, product_id, batch_id,
-                     movement_type, quantity_change, quantity_before, quantity_after,
-                     reference_type, reference_id, notes, created_by)
-             VALUES (?1, ?2, ?3, ?4, ?5, 'dispose', ?6, ?7, 0, 'recall', ?5, ?8, ?9)",
-            params![mv_id, tenant_id, branch_id, product_id, batch_id,
-                    -qty_current, qty_current, reason, user_id],
-        ).map_err(|e| e.to_string())?;
-
-        recalled.push(RecalledBatch {
-            id: batch_id.clone(),
-            product_id: product_id.clone(),
-            product_name: product_name.clone(),
-            batch_number: batch_num.clone(),
-            location_id: location_id.clone(),
-            location_name: location_name.clone(),
-            quantity_recalled: *qty_current,
-        });
-    }
-
-    if let Err(e) = audit::log_action(&conn, &tenant_id, &user_id, "recall", "batch", &batch_number, reason.as_deref()) {
-        log::warn!("audit log failed after recall_batch: {}", e);
-    }
-    if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "batch_recalled") {
-        log::warn!("cloud sync enqueue failed after recall_batch: {}", e);
-    }
-
-    Ok(recalled)
-}
-
-// ────────────────────────────────────────────────────────────────
-// STOCK TAKE
-// ────────────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn get_stock_takes(
-    tenant_id: String,
-    branch_id: String,
-    db: State<Database>,
-) -> Result<Vec<StockTakeRow>, String> {
-    let conn = db.conn.lock().unwrap();
-
-    let mut stmt = conn.prepare(
-        "SELECT st.id, st.branch_id, st.started_by, u.full_name,
-                st.confirmed_by, st.status, st.started_at, st.completed_at, st.notes,
-                COUNT(sti.id) as item_count,
-                SUM(CASE WHEN sti.difference != 0 THEN 1 ELSE 0 END) as discrepancy_count
-         FROM stock_takes st
-         JOIN users u ON st.started_by = u.id
-         LEFT JOIN stock_take_items sti ON sti.stock_take_id = st.id
-         WHERE st.tenant_id = ?1 AND st.branch_id = ?2 AND st.deleted_at IS NULL
-         GROUP BY st.id
-         ORDER BY st.started_at DESC",
-    ).map_err(|e| e.to_string())?;
-
-    let rows = stmt.query_map(params![tenant_id, branch_id], |row| {
-        Ok(StockTakeRow {
-            id: row.get(0)?,
-            branch_id: row.get(1)?,
-            started_by: row.get(2)?,
-            started_by_name: row.get(3)?,
-            confirmed_by: row.get(4)?,
-            status: row.get(5)?,
-            started_at: row.get(6)?,
-            completed_at: row.get(7)?,
-            notes: row.get(8)?,
-            item_count: row.get(9)?,
-            discrepancy_count: row.get::<_, Option<i64>>(10)?.unwrap_or(0),
-        })
-    }).map_err(|e| e.to_string())?;
-
-    let mut result = Vec::new();
-    for row in rows { result.push(row.map_err(|e| e.to_string())?); }
-    Ok(result)
-}
-
-#[tauri::command]
-pub fn start_stock_take(
-    tenant_id: String,
-    branch_id: String,
-    user_id: String,
-    notes: Option<String>,
-    db: State<Database>,
-) -> Result<String, String> {
-    let conn = db.conn.lock().unwrap();
-    license_guard::require_active(&conn, &tenant_id)?;
-    license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-
-    // Check no in_progress stock take exists
-    let existing: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM stock_takes WHERE tenant_id=?1 AND branch_id=?2
-         AND status='in_progress' AND deleted_at IS NULL",
-        params![tenant_id, branch_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
-    if existing > 0 {
-        return Err("A stock take is already in progress for this branch".to_string());
-    }
-
-    let id = Uuid::new_v4().to_string();
-    conn.execute(
-        "INSERT INTO stock_takes (id, tenant_id, branch_id, started_by, status, notes)
-         VALUES (?1, ?2, ?3, ?4, 'in_progress', ?5)",
-        params![id, tenant_id, branch_id, user_id, notes],
-    ).map_err(|e| e.to_string())?;
-
-    // Load all active batches as items with expected_quantity
-    let batches: Vec<(String, String, String, i64)> = {
-        let mut stmt = conn.prepare(
-            "SELECT b.id, b.product_id, b.batch_number, b.quantity_current
-             FROM batches b
-             WHERE b.tenant_id=?1 AND b.status='active' AND b.deleted_at IS NULL
-             ORDER BY b.product_id, b.expiry_date",
-        ).map_err(|e| e.to_string())?;
-
-        let rows = stmt.query_map(params![tenant_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                row.get::<_, i64>(3)?,
-            ))
-        }).map_err(|e| e.to_string())?;
-
-        let mut v = Vec::new();
-        for r in rows { v.push(r.map_err(|e| e.to_string())?); }
-        v
-    };
-
-    for (batch_id, product_id, _batch_num, qty) in batches {
-        let item_id = Uuid::new_v4().to_string();
-        conn.execute(
-            "INSERT INTO stock_take_items (id, tenant_id, stock_take_id, product_id, batch_id,
-              expected_quantity, actual_quantity, difference)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, 0)",
-            params![item_id, tenant_id, id, product_id, batch_id, qty],
-        ).map_err(|e| e.to_string())?;
-    }
-
-    if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "stock_take_started") {
-        log::warn!("cloud sync enqueue failed after start_stock_take: {}", e);
-    }
-
-    Ok(id)
-}
-
-#[tauri::command]
-pub fn get_stock_take_items(
-    stock_take_id: String,
-    tenant_id: String,
-    db: State<Database>,
-) -> Result<Vec<StockTakeItemRow>, String> {
-    let conn = db.conn.lock().unwrap();
-
-    let mut stmt = conn.prepare(
-        "SELECT sti.id, sti.stock_take_id, sti.product_id,
-                p.trade_name, p.trade_name_ar,
-                sti.batch_id, b.batch_number, b.expiry_date,
-                sti.expected_quantity, sti.actual_quantity, sti.difference,
-                sti.adjustment_applied
-         FROM stock_take_items sti
-         JOIN products p ON sti.product_id = p.id
-         JOIN batches b ON sti.batch_id = b.id
-         WHERE sti.stock_take_id = ?1 AND sti.tenant_id = ?2
-         ORDER BY p.trade_name, b.expiry_date",
-    ).map_err(|e| e.to_string())?;
-
-    let rows = stmt.query_map(params![stock_take_id, tenant_id], |row| {
-        Ok(StockTakeItemRow {
-            id: row.get(0)?,
-            stock_take_id: row.get(1)?,
-            product_id: row.get(2)?,
-            product_name: row.get(3)?,
-            product_name_ar: row.get(4)?,
-            batch_id: row.get(5)?,
-            batch_number: row.get(6)?,
-            expiry_date: row.get(7)?,
-            expected_quantity: row.get(8)?,
-            actual_quantity: row.get(9)?,
-            difference: row.get(10)?,
-            adjustment_applied: row.get::<_, i64>(11)? == 1,
-        })
-    }).map_err(|e| e.to_string())?;
-
-    let mut result = Vec::new();
-    for row in rows { result.push(row.map_err(|e| e.to_string())?); }
-    Ok(result)
-}
-
-#[tauri::command]
-pub fn update_stock_take_item(
-    item_id: String,
-    tenant_id: String,
-    actual_quantity: i64,
-    db: State<Database>,
-) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
-    license_guard::require_active(&conn, &tenant_id)?;
-    license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-
-    let expected: i64 = conn.query_row(
-        "SELECT expected_quantity FROM stock_take_items WHERE id=?1 AND tenant_id=?2",
-        params![item_id, tenant_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
-
-    let difference = actual_quantity - expected;
-    conn.execute(
-        "UPDATE stock_take_items SET actual_quantity=?1, difference=?2,
-         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id=?3 AND tenant_id=?4",
-        params![actual_quantity, difference, item_id, tenant_id],
-    ).map_err(|e| e.to_string())?;
-
-    if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "stock_take_item_updated") {
-        log::warn!("cloud sync enqueue failed after update_stock_take_item: {}", e);
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub fn confirm_stock_take(
-    stock_take_id: String,
-    tenant_id: String,
-    user_id: String,
-    db: State<Database>,
-) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
-    license_guard::require_active(&conn, &tenant_id)?;
-    license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
-
-    // Validate status
-    let status: String = conn.query_row(
-        "SELECT status FROM stock_takes WHERE id=?1 AND tenant_id=?2 AND deleted_at IS NULL",
-        params![stock_take_id, tenant_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
-    if status != "in_progress" {
-        return Err("Stock take is not in progress".to_string());
-    }
-
-    // Get all items with differences
-    let items: Vec<(String, String, i64, i64, i64)> = {
-        let mut stmt = conn.prepare(
-            "SELECT id, batch_id, expected_quantity, actual_quantity, difference
-             FROM stock_take_items
-             WHERE stock_take_id=?1 AND difference != 0",
-        ).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map(params![stock_take_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, i64>(4)?,
-            ))
-        }).map_err(|e| e.to_string())?;
-        let mut v = Vec::new();
-        for r in rows { v.push(r.map_err(|e| e.to_string())?); }
-        v
-    };
-
-    // Apply adjustments
-    for (item_id, batch_id, expected, actual, difference) in items {
-        // Get product_id and branch_id for movement
-        let (product_id, branch_id): (String, String) = conn.query_row(
-            "SELECT product_id, (SELECT branch_id FROM storage_locations WHERE id=batches.location_id) FROM batches WHERE id=?1",
-            params![batch_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).map_err(|e| e.to_string())?;
-
-        let movement_type = if difference > 0 { "adjust" } else { "adjust" };
-        let qty_change = difference.abs();
-        let movement_id = Uuid::new_v4().to_string();
-
-        conn.execute(
-            "INSERT INTO stock_movements (id, tenant_id, branch_id, product_id, batch_id,
-              movement_type, quantity_change, quantity_before, quantity_after,
-              reference_type, reference_id, created_by)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'stock_take', ?10, ?11)",
-            params![
-                movement_id, tenant_id, branch_id, product_id, batch_id,
-                movement_type, qty_change, expected, actual,
-                stock_take_id, user_id
-            ],
-        ).map_err(|e| e.to_string())?;
-
-        conn.execute(
-            "UPDATE batches SET quantity_current=?1,
-             status=CASE WHEN ?1=0 THEN 'depleted' ELSE 'active' END,
-             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id=?2",
-            params![actual, batch_id],
-        ).map_err(|e| e.to_string())?;
-
-        conn.execute(
-            "UPDATE stock_take_items SET adjustment_applied=1,
-             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id=?1",
-            params![item_id],
-        ).map_err(|e| e.to_string())?;
-    }
-
-    conn.execute(
-        "UPDATE stock_takes SET status='completed', confirmed_by=?1,
-         completed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
-         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id=?2 AND tenant_id=?3",
-        params![user_id, stock_take_id, tenant_id],
-    ).map_err(|e| e.to_string())?;
-
-    if let Err(e) = audit::log_action(&conn, &tenant_id, &user_id, "confirm", "stock_take", &stock_take_id, None) {
-        log::warn!("audit log failed after confirm_stock_take: {}", e);
-    }
-    if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "stock_take_confirmed") {
-        log::warn!("cloud sync enqueue failed after confirm_stock_take: {}", e);
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub fn cancel_stock_take(
-    stock_take_id: String,
-    tenant_id: String,
-    db: State<Database>,
-) -> Result<(), String> {
-    let conn = db.conn.lock().unwrap();
-    license_guard::require_active(&conn, &tenant_id)?;
-    license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-
-    conn.execute(
-        "UPDATE stock_takes SET status='cancelled',
-         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id=?1 AND tenant_id=?2 AND status='in_progress' AND deleted_at IS NULL",
-        params![stock_take_id, tenant_id],
-    ).map_err(|e| e.to_string())?;
-
-    if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "stock_take_cancelled") {
-        log::warn!("cloud sync enqueue failed after cancel_stock_take: {}", e);
-    }
-    Ok(())
-}
-
-// ────────────────────────────────────────────────────────────────
 // SUPPLIER RETURNS
 // ────────────────────────────────────────────────────────────────
 
@@ -923,8 +441,10 @@ pub fn create_supplier_return(
     user_id: String,
     data: SupplierReturnCreateData,
     db: State<Database>,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<String, String> {
     let conn = db.conn.lock().unwrap();
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
 
@@ -975,8 +495,10 @@ pub fn confirm_supplier_return(
     tenant_id: String,
     user_id: String,
     db: State<Database>,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().unwrap();
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
     guard::require_permission(&conn, &user_id, "warehouse")?;
@@ -987,7 +509,7 @@ pub fn confirm_supplier_return(
         |row| row.get(0),
     ).map_err(|e| e.to_string())?;
     if status != "pending" {
-        return Err("Supplier return is not in pending status".to_string());
+        return Err("مرتجعات المورد ليست قيد الانتظار".to_string());
     }
 
     // Get items
@@ -1010,6 +532,8 @@ pub fn confirm_supplier_return(
         params![return_id],
         |row| row.get(0),
     ).map_err(|e| e.to_string())?;
+
+    conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
 
     for (product_id, batch_id, quantity, _unit_cost) in items {
         let qty_before: i64 = conn.query_row(
@@ -1046,6 +570,8 @@ pub fn confirm_supplier_return(
          WHERE id=?2 AND tenant_id=?3",
         params![user_id, return_id, tenant_id],
     ).map_err(|e| e.to_string())?;
+
+    conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
 
     if let Err(e) = audit::log_action(&conn, &tenant_id, &user_id, "confirm", "supplier_return", &return_id, None) {
         log::warn!("audit log failed after confirm_supplier_return: {}", e);
@@ -1102,128 +628,89 @@ pub fn get_invoice_batches(
 }
 
 // ────────────────────────────────────────────────────────────────
-// STOCK TRANSFER
+// REORDER POINT ALERTS
 // ────────────────────────────────────────────────────────────────
 
+/// Returns products whose current branch stock is below min_stock_level.
+/// Sorted by deficit (most critical first).
 #[tauri::command]
-pub fn transfer_stock(
+pub fn get_low_stock_products(
+    db: State<'_, Database>,
     tenant_id: String,
     branch_id: String,
-    user_id: String,
-    product_id: String,
-    from_location_id: String,
-    to_location_id: String,
-    quantity: i64,
-    db: State<Database>,
-) -> Result<(), String> {
-    if quantity <= 0 { return Err("الكمية يجب أن تكون أكبر من صفر".into()); }
-    if from_location_id == to_location_id { return Err("موقع المصدر والوجهة متطابقان".into()); }
-
+) -> Result<Vec<LowStockProduct>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
+    license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
 
-    let available: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(quantity_current),0) FROM batches
-         WHERE tenant_id=?1 AND product_id=?2 AND location_id=?3
-           AND status='active' AND deleted_at IS NULL",
-        params![tenant_id, product_id, from_location_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
-
-    if available < quantity {
-        return Err(format!("المخزون المتاح ({}) أقل من الكمية المطلوبة ({})", available, quantity));
-    }
-
-    let product_name: String = conn.query_row(
-        "SELECT COALESCE(trade_name_ar, trade_name) FROM products WHERE id=?1 AND tenant_id=?2",
-        params![product_id, tenant_id], |row| row.get(0),
-    ).map_err(|_| "المنتج غير موجود".to_string())?;
-
-    let from_name: String = conn.query_row(
-        "SELECT COALESCE(name_ar,name) FROM storage_locations WHERE id=?1",
-        params![from_location_id], |row| row.get(0),
-    ).unwrap_or_else(|_| from_location_id.clone());
-
-    let to_name: String = conn.query_row(
-        "SELECT COALESCE(name_ar,name) FROM storage_locations WHERE id=?1",
-        params![to_location_id], |row| row.get(0),
-    ).unwrap_or_else(|_| to_location_id.clone());
-
-    conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
-
-    let xfer = do_transfer(
-        &conn, &tenant_id, &branch_id, &user_id,
-        &product_id, &from_location_id, &to_location_id,
-        quantity, &from_name, &to_name, &product_name,
-    );
-    match xfer {
-        Err(e) => { conn.execute("ROLLBACK", []).ok(); Err(e) }
-        Ok(()) => { conn.execute("COMMIT", []).map_err(|e| e.to_string())?; Ok(()) }
-    }
-}
-
-fn do_transfer(
-    conn: &rusqlite::Connection,
-    tenant_id: &str, branch_id: &str, user_id: &str,
-    product_id: &str, from_loc: &str, to_loc: &str,
-    quantity: i64, from_name: &str, to_name: &str, product_name: &str,
-) -> Result<(), String> {
     let mut stmt = conn.prepare(
-        "SELECT id, quantity_current FROM batches
-         WHERE tenant_id=?1 AND product_id=?2 AND location_id=?3
-           AND status='active' AND deleted_at IS NULL AND quantity_current>0
-         ORDER BY COALESCE(expiry_date,'9999-12-31') ASC",
+        "SELECT
+            p.id,
+            p.trade_name,
+            p.trade_name_ar,
+            p.barcode,
+            p.category,
+            p.unit,
+            COALESCE(SUM(b.quantity_current), 0) AS current_qty,
+            p.min_stock_level,
+            p.last_purchase_price,
+            (SELECT s.id
+             FROM suppliers s
+             JOIN supplier_invoices si ON si.supplier_id = s.id
+             JOIN supplier_invoice_items sii ON sii.supplier_invoice_id = si.id
+             WHERE sii.product_id = p.id
+               AND si.tenant_id = p.tenant_id
+               AND si.deleted_at IS NULL
+               AND s.deleted_at IS NULL
+             ORDER BY si.confirmed_at DESC, si.created_at DESC
+             LIMIT 1) AS supplier_id,
+            (SELECT s.name
+             FROM suppliers s
+             JOIN supplier_invoices si ON si.supplier_id = s.id
+             JOIN supplier_invoice_items sii ON sii.supplier_invoice_id = si.id
+             WHERE sii.product_id = p.id
+               AND si.tenant_id = p.tenant_id
+               AND si.deleted_at IS NULL
+               AND s.deleted_at IS NULL
+             ORDER BY si.confirmed_at DESC, si.created_at DESC
+             LIMIT 1) AS supplier_name
+         FROM products p
+         LEFT JOIN batches b
+             ON b.product_id = p.id
+            AND b.tenant_id  = p.tenant_id
+            AND b.branch_id  = ?2
+            AND b.status     = 'active'
+            AND b.deleted_at IS NULL
+         WHERE p.tenant_id    = ?1
+           AND p.deleted_at   IS NULL
+           AND p.is_active    = 1
+           AND p.min_stock_level > 0
+         GROUP BY p.id
+         HAVING current_qty < p.min_stock_level
+         ORDER BY (p.min_stock_level - current_qty) DESC",
     ).map_err(|e| e.to_string())?;
-    let batches: Vec<(String, i64)> = stmt.query_map(
-        params![tenant_id, product_id, from_loc],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    ).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
-    drop(stmt);
 
-    let notes = format!("نقل من {} إلى {}: {}", from_name, to_name, product_name);
-    let mut remaining = quantity;
+    let rows = stmt.query_map(params![tenant_id, branch_id], |row| {
+        let current_qty: i64 = row.get(6)?;
+        let min_stock_level: i64 = row.get(7)?;
+        Ok(LowStockProduct {
+            product_id: row.get(0)?,
+            product_name: row.get(1)?,
+            product_name_ar: row.get(2)?,
+            barcode: row.get(3)?,
+            category: row.get(4)?,
+            unit: row.get(5)?,
+            current_qty,
+            min_stock_level,
+            deficit: min_stock_level - current_qty,
+            last_purchase_price: row.get(8)?,
+            supplier_id: row.get(9)?,
+            supplier_name: row.get(10)?,
+        })
+    }).map_err(|e| e.to_string())?;
 
-    for (batch_id, qty_cur) in batches {
-        if remaining <= 0 { break; }
-        let take = remaining.min(qty_cur);
-        let new_qty = qty_cur - take;
-
-        conn.execute(
-            "UPDATE batches SET quantity_current=?1, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?2",
-            params![new_qty, batch_id],
-        ).map_err(|e| e.to_string())?;
-
-        let out_id = Uuid::new_v4().to_string();
-        conn.execute(
-            "INSERT INTO stock_movements(id,tenant_id,branch_id,product_id,batch_id,
-              movement_type,quantity_change,quantity_before,quantity_after,
-              reference_type,reference_id,notes,created_by)
-             VALUES(?1,?2,?3,?4,?5,'transfer_out',?6,?7,?8,'transfer',?9,?10,?11)",
-            params![out_id,tenant_id,branch_id,product_id,batch_id,-take,qty_cur,new_qty,batch_id,notes,user_id],
-        ).map_err(|e| e.to_string())?;
-
-        let dest_id = Uuid::new_v4().to_string();
-        conn.execute(
-            "INSERT INTO batches(id,tenant_id,product_id,location_id,batch_number,
-              quantity_received,quantity_current,unit_cost,status)
-             VALUES(?1,?2,?3,?4,'TRANSFER',?5,?5,0,'active')",
-            params![dest_id,tenant_id,product_id,to_loc,take],
-        ).map_err(|e| e.to_string())?;
-
-        let in_id = Uuid::new_v4().to_string();
-        conn.execute(
-            "INSERT INTO stock_movements(id,tenant_id,branch_id,product_id,batch_id,
-              movement_type,quantity_change,quantity_before,quantity_after,
-              reference_type,reference_id,notes,created_by)
-             VALUES(?1,?2,?3,?4,?5,'transfer_in',?6,0,?6,'transfer',?7,?8,?9)",
-            params![in_id,tenant_id,branch_id,product_id,dest_id,take,dest_id,notes,user_id],
-        ).map_err(|e| e.to_string())?;
-
-        remaining -= take;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
     }
-    if remaining > 0 { return Err("لم يتم نقل الكمية كاملة".into()); }
-    if let Err(e) = audit::log_action(&conn, &tenant_id, &user_id, "transfer", "stock", &product_id, None) {
-        log::warn!("audit log failed after transfer_stock: {}", e);
-    }
-    Ok(())
+    Ok(result)
 }

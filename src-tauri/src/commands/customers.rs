@@ -7,6 +7,7 @@ use crate::db::Database;
 use crate::commands::audit;
 use crate::commands::cloud_sync;
 use crate::commands::license_guard;
+use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 const FLAG_CUSTOMERS: i64 = 64;
 
@@ -264,12 +265,14 @@ pub fn create_customer(
     db: State<'_, Database>,
     tenant_id: String,
     data: CustomerData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<CustomerRow, String> {
     if data.name.trim().is_empty() {
         return Err("اسم العميل مطلوب".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_CUSTOMERS)?;
     let id = Uuid::new_v4().to_string();
@@ -296,12 +299,14 @@ pub fn update_customer(
     tenant_id: String,
     customer_id: String,
     data: CustomerData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<CustomerRow, String> {
     if data.name.trim().is_empty() {
         return Err("اسم العميل مطلوب".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_CUSTOMERS)?;
 
@@ -328,8 +333,10 @@ pub fn toggle_customer_active(
     db: State<'_, Database>,
     tenant_id: String,
     customer_id: String,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<CustomerRow, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_CUSTOMERS)?;
 
@@ -354,12 +361,14 @@ pub fn record_customer_payment(
     customer_id: String,
     user_id: String,
     data: CustomerPaymentData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<CustomerPaymentRow, String> {
     if data.amount <= 0 {
         return Err("المبلغ يجب أن يكون أكبر من صفر".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_CUSTOMERS)?;
 

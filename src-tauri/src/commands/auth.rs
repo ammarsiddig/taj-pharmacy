@@ -6,6 +6,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
 use crate::db::Database;
+use crate::commands::session_state::{AuthSession, AuthSessionState, resolve_identity};
 
 type HmacSha256 = Hmac<Sha256>;
 // TODO(Phase 3): derive TOKEN_SECRET from a per-installation secret stored in
@@ -59,7 +60,7 @@ fn generate_token(user_id: &str) -> Result<String, String> {
 fn verify_token(token: &str) -> Result<String, String> {
     let parts: Vec<&str> = token.rsplitn(2, '.').collect();
     if parts.len() != 2 {
-        return Err("Invalid token format".into());
+        return Err("تنسيق الرمز غير صالح".into());
     }
     let sig = parts[0];
     let payload = parts[1];
@@ -70,17 +71,17 @@ fn verify_token(token: &str) -> Result<String, String> {
     let expected_sig = hex::encode(mac.finalize().into_bytes());
 
     if sig != expected_sig {
-        return Err("Invalid token signature".into());
+        return Err("توقيع الرمز غير صالح".into());
     }
 
     let parts: Vec<&str> = payload.split(':').collect();
     if parts.len() != 2 {
-        return Err("Invalid token payload".into());
+        return Err("حمولة الرمز غير صالحة".into());
     }
 
-    let expiry: i64 = parts[1].parse().map_err(|_| "Invalid expiry")?;
+    let expiry: i64 = parts[1].parse().map_err(|_| "تاريخ انتهاء غير صالح")?;
     if chrono::Utc::now().timestamp() > expiry {
-        return Err("Token expired".into());
+        return Err("انتهت صلاحية الرمز".into());
     }
 
     Ok(parts[0].to_string())
@@ -146,6 +147,7 @@ pub fn login(
     username: String,
     password: String,
     tenant_id: String,
+    auth_session_state: State<'_, AuthSessionState>,
 ) -> Result<LoginResponse, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
@@ -217,6 +219,15 @@ pub fn login(
     let token = generate_token(&user.id)?;
     let permissions = get_user_permissions(&db, &user.id, &role.name)?;
 
+    // Populate AuthSession state for use by other commands
+    auth_session_state.set(AuthSession {
+        user_id: user.id.clone(),
+        tenant_id: user.tenant_id.clone(),
+        branch_id: user.branch_id.clone().unwrap_or_default(),
+        role_name: role.name.clone(),
+        username: user.username.clone(),
+    }).ok();
+
     Ok(LoginResponse {
         user,
         role,
@@ -255,7 +266,15 @@ pub fn get_current_user(
             })
         },
     )
-    .map_err(|_| "User not found".into())
+    .map_err(|_| "المستخدم غير موجود".into())
+}
+
+/// Clears the current AuthSession (called on logout).
+#[tauri::command]
+pub fn clear_auth_session(
+    auth_session_state: State<'_, AuthSessionState>,
+) -> Result<(), String> {
+    auth_session_state.clear()
 }
 
 #[tauri::command]
@@ -275,7 +294,7 @@ pub fn check_permission(
             params![user_id],
             |row| row.get(0),
         )
-        .map_err(|_| "User not found".to_string())?;
+        .map_err(|_| "المستخدم غير موجود".to_string())?;
 
     drop(conn);
 
@@ -288,10 +307,12 @@ pub fn check_permission(
 pub fn reset_admin_password(
     db: State<'_, Database>,
     new_password: String,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<String, String> {
     if !cfg!(debug_assertions) {
         return Err("هذا الأمر متاح في بيئة التطوير فقط".into());
     }
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, "", "", "")?;
     use argon2::{password_hash::SaltString, PasswordHasher};
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -303,22 +324,22 @@ pub fn reset_admin_password(
             [],
             |row| row.get(0),
         )
-        .map_err(|_| "Admin user not found".to_string())?;
+        .map_err(|_| "المستخدم المسؤول غير موجود".to_string())?;
 
     // Hash new password using Argon2 with random salt
     let salt = SaltString::from_b64(&uuid::Uuid::new_v4().to_string().replace("-", ""))
-        .map_err(|e| format!("Failed to create salt: {}", e))?;
+        .map_err(|e| format!("فشل إنشاء الملح: {}", e))?;
     let argon2 = Argon2::default();
     let password_hash = argon2
         .hash_password(new_password.as_bytes(), &salt)
-        .map_err(|e| format!("Failed to hash password: {}", e))?
+        .map_err(|e| format!("فشل تشفير كلمة المرور: {}", e))?
         .to_string();
 
     // Update password
     conn.execute(
         "UPDATE users SET password_hash = ?1, updated_at = datetime('now') WHERE id = ?2",
         params![&password_hash, &admin_id],
-    ).map_err(|e| format!("Failed to update password: {}", e))?;
+    ).map_err(|e| format!("فشل تحديث كلمة المرور: {}", e))?;
 
-    Ok(format!("Admin password reset successfully for user {}", admin_id))
+    Ok(format!("تم إعادة تعيين كلمة مرور المسؤول بنجاح للمستخدم {}", admin_id))
 }

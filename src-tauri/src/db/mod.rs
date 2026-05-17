@@ -12,7 +12,7 @@ pub struct Database {
 
 impl Database {
     pub fn new(db_path: &Path) -> Result<Self, String> {
-        let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+        let conn = Connection::open(db_path).map_err(|e| format!("فشل فتح قاعدة البيانات: {}", e))?;
 
         // Set pragmas
         conn.execute_batch(
@@ -20,7 +20,7 @@ impl Database {
              PRAGMA foreign_keys=ON;
              PRAGMA busy_timeout=5000;",
         )
-        .map_err(|e| format!("Failed to set pragmas: {}", e))?;
+        .map_err(|e| format!("فشل تعيين إعدادات قاعدة البيانات: {}", e))?;
 
         let db = Database {
             conn: Arc::new(Mutex::new(conn)),

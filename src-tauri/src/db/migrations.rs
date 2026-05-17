@@ -962,6 +962,15 @@ pub fn run(conn: &Connection) -> Result<(), String> {
             FOREIGN KEY (tenant_id) REFERENCES tenants(id)
         );
 
+        CREATE TABLE IF NOT EXISTS cloud_sync_table_state (
+            tenant_id        TEXT NOT NULL,
+            table_name       TEXT NOT NULL,
+            last_sync_at     TEXT,
+            row_count        INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (tenant_id, table_name),
+            FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+        );
+
         CREATE TABLE IF NOT EXISTS cloud_sync_outbox (
             id               TEXT PRIMARY KEY,
             tenant_id        TEXT NOT NULL,
@@ -1017,8 +1026,16 @@ pub fn run(conn: &Connection) -> Result<(), String> {
             value TEXT NOT NULL DEFAULT ''
         );
         INSERT INTO cloud_sync_config (key, value)
-        VALUES ('endpoint', 'http://178.104.158.147')
-        ON CONFLICT(key) DO NOTHING;"
+        VALUES ('endpoint', 'https://pharmacy.taj.systems')
+        ON CONFLICT(key) DO NOTHING;
+        UPDATE cloud_sync_config
+        SET value = 'https://pharmacy.taj.systems'
+        WHERE key = 'endpoint'
+          AND value IN (
+              'http://178.104.158.147',
+              'https://178.104.158.147',
+              'http://taj.systems'
+          );"
     ).map_err(|e| e.to_string())?;
 
     // Pharmacy configs for multi-pharmacy admin mode (stored in system.db)
@@ -1127,6 +1144,60 @@ pub fn run(conn: &Connection) -> Result<(), String> {
             ON pos_parked_carts(session_id, tenant_id);
         "
     ).map_err(|e| format!("pos_parked_carts migration failed: {}", e))?;
+
+    // Phase 3.5: Add updated_at to tables that sync to cloud (for delta sync)
+    ensure_column(&conn, "sale_items", "updated_at", "TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(&conn, "stock_movements", "updated_at", "TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(&conn, "supplier_payments", "updated_at", "TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(&conn, "customer_payments", "updated_at", "TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(&conn, "sale_payments", "updated_at", "TEXT NOT NULL DEFAULT ''")?;
+
+    // Phase 3.5: Add missing columns to existing cloud_sync_outbox
+    ensure_column(&conn, "cloud_sync_outbox", "branch_id", "TEXT NOT NULL DEFAULT 'main-branch'")?;
+    ensure_column(&conn, "cloud_sync_outbox", "synced_at", "TEXT")?;
+
+    // Phase 4.3: Pending update tracking
+    ensure_column(&conn, "tenants", "pending_update_version", "TEXT")?;
+    ensure_column(&conn, "tenants", "pending_update_checked_at", "TEXT")?;
+
+    // Phase 4: System alert dismissals
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS system_alert_dismissals (
+            tenant_id TEXT NOT NULL,
+            alert_type TEXT NOT NULL,
+            dismissed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            PRIMARY KEY (tenant_id, alert_type)
+        );"
+    ).map_err(|e| e.to_string())?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_cloud_sync_outbox_pending
+            ON cloud_sync_outbox(tenant_id, branch_id, created_at) WHERE synced_at IS NULL;"
+    ).ok(); // non-critical: index may already exist
+
+    // Money Accounts Pro: bank provider + transfer fees
+    ensure_column(&conn, "accounts", "bank_provider", "TEXT")?;
+    ensure_column(&conn, "accounts", "internal_fee", "INTEGER NOT NULL DEFAULT 0")?;
+    ensure_column(&conn, "accounts", "external_fee", "INTEGER NOT NULL DEFAULT 0")?;
+    ensure_column(&conn, "accounts", "phone_label", "TEXT")?;
+
+    // Sync: outbox for deleted record IDs to clear stale cloud data
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS cloud_sync_deletions (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            branch_id TEXT NOT NULL,
+            table_name TEXT NOT NULL,
+            record_id TEXT NOT NULL,
+            deleted_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        );"
+    ).map_err(|e| e.to_string())?;
+
+    // TASK-100: migrate customers with credit_limit=0 (old "unlimited" semantic)
+    // who have outstanding balances to the sentinel value -1 (new "unlimited")
+    conn.execute(
+        "UPDATE customers SET credit_limit = -1 WHERE credit_limit = 0 AND current_balance > 0",
+        [],
+    ).map_err(|e| e.to_string())?;
 
     log::info!("Database migrations completed successfully");
     Ok(())

@@ -10,6 +10,7 @@ use crate::commands::auth::RoleInfo;
 use crate::commands::license_guard;
 use crate::commands::audit;
 use crate::commands::guard;
+use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserWithRole {
@@ -114,17 +115,19 @@ pub fn create_user(
     tenant_id: String,
     actor_id: String,
     data: UserData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<UserWithRole, String> {
     if data.full_name.trim().is_empty() || data.username.trim().is_empty() {
-        return Err("Full name and username are required".into());
+        return Err("الاسم الكامل واسم المستخدم مطلوبان".into());
     }
 
     let password = data.password.as_deref().unwrap_or("");
     if password.is_empty() {
-        return Err("Password is required for new users".into());
+        return Err("كلمة المرور مطلوبة للمستخدمين الجدد".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &actor_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     guard::require_permission(&conn, &actor_id, "settings")?;
     license_guard::check_user_limit(&conn, &tenant_id)?;
@@ -137,13 +140,13 @@ pub fn create_user(
     ).map_err(|e| e.to_string())?;
 
     if exists {
-        return Err("Username already exists".into());
+        return Err("اسم المستخدم موجود بالفعل".into());
     }
 
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
         .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| format!("Failed to hash password: {}", e))?
+        .map_err(|e| format!("فشل تشفير كلمة المرور: {}", e))?
         .to_string();
 
     let id = Uuid::new_v4().to_string();
@@ -152,7 +155,7 @@ pub fn create_user(
         "INSERT INTO users (id, tenant_id, branch_id, role_id, username, password_hash, full_name, full_name_ar, is_active)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![id, tenant_id, data.branch_id, data.role_id, data.username, password_hash, data.full_name, data.full_name_ar, data.is_active as i32],
-    ).map_err(|e| format!("Failed to create user: {}", e))?;
+    ).map_err(|e| format!("فشل إنشاء المستخدم: {}", e))?;
 
     if let Some(ref perms) = data.permissions {
         for (feature, &allowed) in perms {
@@ -172,7 +175,7 @@ pub fn create_user(
 
     // Return the created user
     let users = get_users(db, tenant_id)?;
-    users.into_iter().find(|u| u.id == id).ok_or("Failed to fetch created user".into())
+    users.into_iter().find(|u| u.id == id).ok_or("فشل جلب المستخدم المنشأ".into())
 }
 
 #[tauri::command]
@@ -182,12 +185,14 @@ pub fn update_user(
     actor_id: String,
     user_id: String,
     data: UserData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<UserWithRole, String> {
     if data.full_name.trim().is_empty() || data.username.trim().is_empty() {
-        return Err("Full name and username are required".into());
+        return Err("الاسم الكامل واسم المستخدم مطلوبان".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &actor_id, "")?;
     guard::require_permission(&conn, &actor_id, "settings")?;
 
     // Check username uniqueness (exclude self)
@@ -198,7 +203,7 @@ pub fn update_user(
     ).map_err(|e| e.to_string())?;
 
     if exists {
-        return Err("Username already exists".into());
+        return Err("اسم المستخدم موجود بالفعل".into());
     }
 
     // Update base fields
@@ -209,7 +214,7 @@ pub fn update_user(
             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
          WHERE tenant_id = ?1 AND id = ?2 AND deleted_at IS NULL",
         params![tenant_id, user_id, data.full_name, data.full_name_ar, data.username, data.role_id, data.branch_id, data.is_active as i32],
-    ).map_err(|e| format!("Failed to update user: {}", e))?;
+    ).map_err(|e| format!("فشل تحديث المستخدم: {}", e))?;
 
     // Update password if provided
     if let Some(ref password) = data.password {
@@ -217,13 +222,13 @@ pub fn update_user(
             let salt = SaltString::generate(&mut OsRng);
             let password_hash = Argon2::default()
                 .hash_password(password.as_bytes(), &salt)
-                .map_err(|e| format!("Failed to hash password: {}", e))?
+                .map_err(|e| format!("فشل تشفير كلمة المرور: {}", e))?
                 .to_string();
 
             conn.execute(
                 "UPDATE users SET password_hash = ?3 WHERE tenant_id = ?1 AND id = ?2",
                 params![tenant_id, user_id, password_hash],
-            ).map_err(|e| format!("Failed to update password: {}", e))?;
+            ).map_err(|e| format!("فشل تحديث كلمة المرور: {}", e))?;
         }
     }
 
@@ -248,7 +253,7 @@ pub fn update_user(
     drop(conn);
 
     let users = get_users(db, tenant_id)?;
-    users.into_iter().find(|u| u.id == user_id).ok_or("Failed to fetch updated user".into())
+    users.into_iter().find(|u| u.id == user_id).ok_or("فشل جلب المستخدم المحدث".into())
 }
 
 #[tauri::command]

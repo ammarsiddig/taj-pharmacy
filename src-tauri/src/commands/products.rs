@@ -1,15 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tauri::{Manager, State};
+use tauri::State;
 use rusqlite::params;
 use uuid::Uuid;
-use std::fs;
-use std::path::PathBuf;
-use base64::Engine;
 
 use crate::db::Database;
 use crate::commands::cloud_sync;
 use crate::commands::license_guard;
+use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 const FLAG_PRODUCTS: i64 = 2;
 
@@ -276,12 +274,14 @@ pub fn create_product(
     db: State<'_, Database>,
     tenant_id: String,
     data: ProductData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<Product, String> {
     if data.trade_name.trim().is_empty() {
         return Err("اسم الدواء مطلوب".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_PRODUCTS)?;
 
@@ -372,12 +372,14 @@ pub fn update_product(
     tenant_id: String,
     product_id: String,
     data: ProductData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<Product, String> {
     if data.trade_name.trim().is_empty() {
         return Err("اسم الدواء مطلوب".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_PRODUCTS)?;
 
@@ -468,6 +470,7 @@ pub fn import_products(
     db: State<'_, Database>,
     tenant_id: String,
     data: ProductImportData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<ProductImportResult, String> {
     if data.rows.is_empty() {
         return Err("لا توجد صفوف صالحة للاستيراد".into());
@@ -478,6 +481,7 @@ pub fn import_products(
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_PRODUCTS)?;
     conn.execute("BEGIN IMMEDIATE", []).map_err(|e| e.to_string())?;
@@ -662,8 +666,10 @@ pub fn toggle_product_active(
     db: State<'_, Database>,
     tenant_id: String,
     product_id: String,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<Product, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
 
     conn.execute(
         "UPDATE products SET
@@ -706,192 +712,3 @@ pub fn get_product_categories(
     Ok(categories)
 }
 
-// ─── Product Substitutes ───────────────────────────────────────────────────
-
-#[derive(Debug, Serialize)]
-pub struct ProductSubstitute {
-    pub id: String,
-    pub substitute_id: String,
-    pub trade_name: String,
-    pub trade_name_ar: Option<String>,
-    pub generic_name: Option<String>,
-    pub total_stock: i64,
-    pub sale_price: i64,
-    pub notes: Option<String>,
-}
-
-#[tauri::command]
-pub fn get_product_substitutes(
-    db: State<'_, Database>,
-    tenant_id: String,
-    product_id: String,
-) -> Result<Vec<ProductSubstitute>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    // Query both directions of the bidirectional relationship
-    let sql = "
-        SELECT ps.id, p.id, p.trade_name, p.trade_name_ar, p.generic_name,
-               COALESCE((SELECT SUM(b.quantity_current) FROM batches b
-                         WHERE b.product_id = p.id AND b.deleted_at IS NULL), 0),
-               p.sale_price, ps.notes
-        FROM product_substitutes ps
-        JOIN products p ON p.id = ps.substitute_id
-        WHERE ps.tenant_id = ?1 AND ps.product_id = ?2 AND p.deleted_at IS NULL
-        UNION
-        SELECT ps2.id, p2.id, p2.trade_name, p2.trade_name_ar, p2.generic_name,
-               COALESCE((SELECT SUM(b2.quantity_current) FROM batches b2
-                         WHERE b2.product_id = p2.id AND b2.deleted_at IS NULL), 0),
-               p2.sale_price, ps2.notes
-        FROM product_substitutes ps2
-        JOIN products p2 ON p2.id = ps2.product_id
-        WHERE ps2.tenant_id = ?1 AND ps2.substitute_id = ?2 AND p2.deleted_at IS NULL
-        ORDER BY 3
-    ";
-
-    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
-    let rows: Vec<ProductSubstitute> = stmt.query_map(
-        params![tenant_id, product_id],
-        |row| Ok(ProductSubstitute {
-            id: row.get(0)?,
-            substitute_id: row.get(1)?,
-            trade_name: row.get(2)?,
-            trade_name_ar: row.get(3)?,
-            generic_name: row.get(4)?,
-            total_stock: row.get(5)?,
-            sale_price: row.get(6)?,
-            notes: row.get(7)?,
-        }),
-    ).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
-
-    Ok(rows)
-}
-
-#[tauri::command]
-pub fn add_product_substitute(
-    db: State<'_, Database>,
-    tenant_id: String,
-    product_id: String,
-    substitute_id: String,
-    notes: Option<String>,
-) -> Result<(), String> {
-    if product_id == substitute_id {
-        return Err("لا يمكن إضافة المنتج كبديل لنفسه".into());
-    }
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    license_guard::require_active(&conn, &tenant_id)?;
-
-    let id = Uuid::new_v4().to_string();
-    conn.execute(
-        "INSERT OR IGNORE INTO product_substitutes (id, tenant_id, product_id, substitute_id, notes)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![id, tenant_id, product_id, substitute_id, notes],
-    ).map_err(|e| format!("فشل في إضافة البديل: {}", e))?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub fn remove_product_substitute(
-    db: State<'_, Database>,
-    tenant_id: String,
-    product_id: String,
-    substitute_id: String,
-) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    license_guard::require_active(&conn, &tenant_id)?;
-
-    // Delete in both directions so the relationship is symmetric
-    conn.execute(
-        "DELETE FROM product_substitutes
-         WHERE tenant_id = ?1
-           AND ((product_id = ?2 AND substitute_id = ?3)
-             OR (product_id = ?3 AND substitute_id = ?2))",
-        params![tenant_id, product_id, substitute_id],
-    ).map_err(|e| format!("فشل في حذف البديل: {}", e))?;
-
-    Ok(())
-}
-
-// ─── Product Images ────────────────────────────────────────────────────────
-
-fn product_images_dir(app_handle: &tauri::AppHandle, tenant_id: &str) -> Result<PathBuf, String> {
-    let dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?
-        .join("product_images")
-        .join(tenant_id);
-    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create product images dir: {}", e))?;
-    Ok(dir)
-}
-
-#[tauri::command]
-pub fn save_product_image(
-    app_handle: tauri::AppHandle,
-    db: State<'_, Database>,
-    tenant_id: String,
-    product_id: String,
-    base64_data: String,
-) -> Result<String, String> {
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(&base64_data)
-        .map_err(|e| format!("Invalid base64: {}", e))?;
-
-    if bytes.len() > 1_000_000 {
-        return Err("حجم الصورة يجب أن لا يتجاوز 1MB".into());
-    }
-
-    let dir = product_images_dir(&app_handle, &tenant_id)?;
-    let path = dir.join(format!("{}.jpg", product_id));
-    fs::write(&path, &bytes).map_err(|e| format!("Failed to save image: {}", e))?;
-
-    let path_str = path.to_string_lossy().to_string();
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute(
-        "UPDATE products SET image_path = ?1 WHERE id = ?2 AND tenant_id = ?3",
-        params![path_str, product_id, tenant_id],
-    ).map_err(|e| format!("Failed to update product image_path: {}", e))?;
-
-    Ok(path_str)
-}
-
-#[tauri::command]
-pub fn get_product_image(
-    app_handle: tauri::AppHandle,
-    tenant_id: String,
-    product_id: String,
-) -> Result<Option<String>, String> {
-    let dir = product_images_dir(&app_handle, &tenant_id)?;
-    let path = dir.join(format!("{}.jpg", product_id));
-    if path.exists() {
-        let bytes = fs::read(&path).map_err(|e| format!("Failed to read image: {}", e))?;
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        Ok(Some(format!("data:image/jpeg;base64,{}", b64)))
-    } else {
-        Ok(None)
-    }
-}
-
-#[tauri::command]
-pub fn delete_product_image(
-    app_handle: tauri::AppHandle,
-    db: State<'_, Database>,
-    tenant_id: String,
-    product_id: String,
-) -> Result<(), String> {
-    let dir = product_images_dir(&app_handle, &tenant_id)?;
-    let path = dir.join(format!("{}.jpg", product_id));
-    if path.exists() {
-        fs::remove_file(&path).map_err(|e| format!("Failed to delete image: {}", e))?;
-    }
-
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute(
-        "UPDATE products SET image_path = NULL WHERE id = ?1 AND tenant_id = ?2",
-        params![product_id, tenant_id],
-    ).map_err(|e| format!("Failed to clear product image_path: {}", e))?;
-
-    Ok(())
-}

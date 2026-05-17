@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection};
 use argon2::{password_hash::{SaltString, rand_core::OsRng}, Argon2, PasswordHasher};
+use uuid::Uuid;
 
 pub fn run(conn: &Connection) -> Result<(), String> {
     // Check if already seeded
@@ -13,8 +14,8 @@ pub fn run(conn: &Connection) -> Result<(), String> {
 
     log::info!("Seeding database...");
 
-    let tenant_id = "default-tenant";
-    let branch_id = "main-branch";
+    let tenant_id = Uuid::new_v4().to_string();
+    let branch_id = Uuid::new_v4().to_string();
 
     // Insert tenant
     conn.execute(
@@ -83,9 +84,9 @@ pub fn run(conn: &Connection) -> Result<(), String> {
 
     // Insert bank account
     conn.execute(
-        "INSERT INTO accounts (id, tenant_id, branch_id, name, name_ar, account_type, current_balance, is_default, is_active)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, 1)",
-        params!["acct-main-bank", tenant_id, branch_id, "Main Bank Account", "الحساب البنكي الرئيسي", "bank"],
+        "INSERT INTO accounts (id, tenant_id, branch_id, name, name_ar, account_type, current_balance, is_default, is_active, bank_provider, internal_fee, external_fee, phone_label)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, 1, 'bok', 0, 0, ?7)",
+        params!["acct-main-bank", tenant_id, branch_id, "Main Bank Account", "الحساب البنكي الرئيسي", "bank", "Bnkak"],
     ).map_err(|e| format!("Seed bank account: {}", e))?;
 
     // Seed unit measures

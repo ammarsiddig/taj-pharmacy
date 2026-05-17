@@ -16,7 +16,7 @@
 | --- | --- |
 | Product name | **TAJ Pharmacy** (repo folder name is `pms-pharmacy-v4` — do not confuse) |
 | Production domain | `taj.systems` (Owner PWA), `taj.systems/mgmt` (Admin PWA) |
-| Current phase | **Phase 0 — Stop Silent Data Loss** |
+| Current phase | **Phase 1 — Lock Money Paths** |
 | Last updated | 2026-05-15 |
 | Curator (planning) | Claude Code (Opus) — owns sections 0–4 |
 | Implementers (code) | Cascade (Windsurf), DeepSeek V4 (OpenCode), or any future agent |
@@ -229,22 +229,24 @@ These conventions are non-negotiable. Violating them creates inconsistency that 
 
 ## 2. CURRENT PHASE
 
-### Phase 0 — Stop Silent Data Loss
+### Phase 1 — Lock Money Paths
 
-**Goal:** Fix bugs where data is being silently lost or features are silently broken, with no error visible to the pharmacist.
-
-**Why this phase first:** Every other phase can wait. These bugs are losing customer data **today** in any pharmacy that is using the system. A pharmacy paying for the service is currently not getting some of what they're paying for, and won't know until they audit their own records.
+**Goal:** Close every path where money amounts (credit limits, account balances, costs, discounts) can be silently corrupted or bypassed.
 
 **Done when:**
-- All Phase 0 tasks (TASK-000 through TASK-007) are `DONE`
-- `customer_payments`, `supplier_payments`, `sale_payments`, and `account_transactions` are verified to reach the cloud
-- `GET /v1/accounts` returns rows for an authenticated tenant
-- A `pg_dump` snapshot of the cloud database exists in offsite storage and is restorable
-- The repo no longer tracks AI agent infrastructure files
+- All Phase 1 tasks (TASK-100 through TASK-107) are `DONE`
+- `credit_limit = 0` means "no credit allowed" everywhere
+- Invoice sales enforce the same checks as POS sales (expiry, batch status, permissions)
+- Cash-change accounting is correct in invoice path
+- Returns and voids check account balance before refunding
+- Expenses check account balance before deducting
+- Discounts can't push sale below cost price
+- Warehouse multi-write ops are transactional
+- Transferred batches retain their `unit_cost`
 
-**Estimated effort:** 3–5 days for one agent working full-time, or 1–2 weeks across multiple agents working on their own pace.
+**Estimated effort:** 1–2 days for one agent working full-time.
 
-**After Phase 0:** Curator (Opus) will write Phase 1 (Lock Money Paths) into section 3.
+**After Phase 1:** Curator (Opus) will write Phase 2 (SaaS Control Plane) into section 3.
 
 ---
 
@@ -742,20 +744,411 @@ pnpm tauri dev
 
 ---
 
+### TASK-100 — Fix `credit_limit = 0` semantics (currently means unlimited)
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical |
+| Audit ref | POS-B4 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1–2 hours |
+| Depends on | — |
+
+**Verification before starting (MANDATORY per rule 0.2).** Run from
+repo root in PowerShell:
+
+```powershell
+Select-String -Path src-tauri/src/commands/pos_sale_create.rs `
+  -Pattern "credit_limit"
+Select-String -Path src-tauri/src/commands/customers.rs `
+  -Pattern "credit_limit"
+```
+
+Expected: at least one location that gates the credit-limit check on
+`if X > 0` or similar, treating 0 as "no limit". If you find no
+`credit_limit` references at all, the audit was wrong — set Status
+to BLOCKED and stop.
+
+**Problem.** Customer credit limit check currently treats
+`credit_limit = 0` as **unlimited** (because `if customer.credit_limit
+> 0 { enforce }`). Customers created with default 0 limit can rack
+up unlimited debt. This is the most dangerous accounting bug in the
+codebase — first dishonest customer who notices walks away with
+unlimited goods on credit.
+
+**Fix.**
+
+Change the semantic at every credit_limit check site:
+- `credit_limit < 0` (sentinel, e.g. -1): unlimited credit, allow
+- `credit_limit = 0`: NO credit allowed — block any credit sale
+- `credit_limit > 0`: enforce limit (block if `current_balance + sale_total > credit_limit`)
+
+Match the pattern from any equivalent check in the codebase. Most
+likely just `pos_sale_create.rs` — but grep first to find them all.
+
+**Data migration.** Existing customers with `credit_limit = 0` were
+created under the old "0 = unlimited" semantic. After the fix they
+would all become cash-only. Add a one-time migration in
+`src-tauri/src/db/migrations.rs` (additive only):
+
+```sql
+-- Migration: customers with credit_limit=0 and outstanding balance
+-- were previously unlimited; convert them to sentinel -1 to preserve access.
+UPDATE customers
+   SET credit_limit = -1
+ WHERE credit_limit = 0 AND current_balance > 0;
+```
+
+New customers default to `credit_limit = 0` = cash-only. Document
+this in any UI placeholder/help text if you find one in
+`src/pages/CustomerNew.tsx` or `src/pages/CustomerDetail.tsx`.
+
+**i18n.** Add to BOTH `src/i18n/ar.json` and `src/i18n/en.json`:
+
+- en: `"errors.customer_cash_only": "This customer is cash-only (no credit allowed)."`
+- ar: `"errors.customer_cash_only": "هذا العميل نقدي فقط (لا يسمح بالائتمان)."`
+
+**Acceptance test.**
+
+```powershell
+cd src-tauri ; cargo check
+```
+
+Expected: no errors. Then grep:
+
+```powershell
+Select-String -Path src-tauri/src/commands -Pattern "credit_limit > 0"
+```
+
+Expected: zero or only-correct matches (no more "treat 0 as unlimited"
+pattern).
+
+**Worklog must include:** files modified with line numbers, migration
+number added, i18n keys added, `cargo check` result.
+
+---
+
+### TASK-101 — Invoice sales must check expiry, batch status, and permission
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical |
+| Audit ref | POS-B8, POS-B9, POS-B10 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1–2 hours |
+| Depends on | — |
+
+**Verification before starting.** Read the function declared around
+`pos_invoice.rs:72`:
+
+```powershell
+Get-Content src-tauri/src/commands/pos_invoice.rs | Select-Object -Skip 71 -First 50
+```
+
+Then compare with the equivalent function in `pos_sale_create.rs`:
+
+```powershell
+Select-String -Path src-tauri/src/commands/pos_sale_create.rs `
+  -Pattern "expiry|deleted_at|status|permission" | Select-Object -First 30
+```
+
+Expected: `pos_sale_create.rs` performs three checks the invoice path
+does not — (a) batch expiry date is not in the past, (b) batch status
+is `active` (not disposed/recalled), (c) user has permission for POS
+operations. If the invoice path already does these checks, set Status
+to BLOCKED.
+
+**Problem.** Invoice sales bypass three safety checks that regular
+POS sales perform. A cashier without invoice permission can sell
+expired or recalled medication via the invoice flow — this is a
+**regulatory and patient-safety risk** in pharmacy, not just a bug.
+
+**Fix.** At the start of the invoice sale function (the one around
+line 72), add the same three checks `pos_sale_create.rs` performs.
+Use identical error messages and i18n keys so the UX is consistent.
+
+**Acceptance test.**
+
+```powershell
+cd src-tauri ; cargo check
+```
+
+Grep to verify the new checks were added:
+
+```powershell
+Select-String -Path src-tauri/src/commands/pos_invoice.rs `
+  -Pattern "expiry_date|status.*active|require_permission|has_permission"
+```
+
+Expected: matches for all three concepts.
+
+---
+
+### TASK-102 — Invoice cash sales over-credit account by change amount
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical |
+| Audit ref | POS-I4 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 30 minutes |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Get-Content src-tauri/src/commands/pos_invoice.rs | Select-Object -Skip 199 -First 25
+```
+
+Expected: a block that handles cash payment and credits an account.
+Look for: it credits `paid_amount` to the account instead of
+`paid_amount - change_amount`. Compare with the same logic in
+`pos_sale_create.rs` — they should compute the credited amount the
+same way; currently they don't.
+
+If both functions already use `paid - change`, set Status to BLOCKED.
+
+**Problem.** Customer pays 100 SDG, change is 20 SDG. Correct
+behavior: credit 80 SDG to the cash account (the amount the
+pharmacy actually kept). Current behavior: credits the full 100 SDG.
+Cash drawer accounting becomes 20 SDG over each invoice sale with
+change.
+
+**Fix.** Change the credited amount to `paid_amount - change_amount`.
+Mirror `pos_sale_create.rs` logic exactly.
+
+**Acceptance test.** `cargo check` passes. Manually trace: a cash
+invoice for 80 SDG paid with 100 SDG should credit 80 to the
+account, not 100.
+
+---
+
+### TASK-103 — Account balance can go negative on returns / voids
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical |
+| Audit ref | POS-I2 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1 hour |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Get-Content src-tauri/src/commands/pos_returns.rs | Select-Object -Skip 175 -First 15
+Get-Content src-tauri/src/commands/pos_void.rs | Select-Object -Skip 135 -First 15
+```
+
+Expected: both files deduct refund amount from account balance
+without first checking `account.current_balance >= refund_amount`.
+If either already checks, narrow the fix to whichever lacks it.
+
+**Problem.** Return/void refunds the customer from a pharmacy
+account. If the account doesn't have enough cash (e.g., end of day
+when most cash has been transferred), the balance goes negative
+silently. End-of-day reconciliation breaks.
+
+**Fix.** Before deducting, check balance. If insufficient, return
+an error: cash drawer has only X SDG, cannot refund Y SDG.
+
+Add i18n keys to BOTH locale files:
+- en: `"errors.insufficient_account_balance": "Cash drawer has only {available} SDG. Cannot refund {required} SDG."`
+- ar: `"errors.insufficient_account_balance": "صندوق النقدية يحتوي على {available} ج.س فقط. لا يمكن إعادة {required} ج.س."`
+
+**Acceptance test.** `cargo check`. Then trace: returning 100 SDG
+when account has only 50 SDG must return the insufficient-balance
+error and NOT mutate the account.
+
+---
+
+### TASK-104 — Expense overdraft (create + update)
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | E-4, E-5 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 45 minutes |
+| Depends on | TASK-103 (reuse the same i18n key + helper if you extract one) |
+
+**Verification before starting.**
+
+```powershell
+Get-Content src-tauri/src/commands/expenses.rs | Select-Object -Skip 296 -First 15
+Get-Content src-tauri/src/commands/expenses.rs | Select-Object -Skip 434 -First 25
+```
+
+Expected: expense creation (around line 297) and expense update
+(around line 435) both deduct from account without checking balance.
+
+**Problem.** Recording an expense larger than the account balance
+silently overdrafts. Same accounting damage as TASK-103.
+
+**Fix.** Add balance check before deducting, in both create and
+update paths. For update: the delta to deduct is `new_amount - old_amount`
+(if same account) or `new_amount` on the new account + `-old_amount`
+on the old account (if account changed). Validate the resulting
+balance is non-negative.
+
+Reuse the i18n key from TASK-103.
+
+**Acceptance test.** `cargo check`. Manual trace: try to record a
+500 SDG expense from an account with 300 SDG balance — must be blocked.
+
+---
+
+### TASK-105 — Below-cost discount allowed (POS sale + invoice)
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | POS-B5, P-3 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1–2 hours |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path src-tauri/src/commands -Pattern "discount" -Include "*.rs" | Select-Object -First 30
+```
+
+Expected: discount math in `pos_sale_create.rs` and `pos_invoice.rs`
+with no comparison against `batch.unit_cost`. Find both sites.
+
+**Problem.** A discount can push the unit price below cost.
+Pharmacist accidentally types 90% instead of 9% discount and sells
+medication at a loss. No guardrail.
+
+**Fix.** Per line item, after computing final unit price (post-discount),
+verify `final_unit_price >= batch.unit_cost`. If below, return an
+error citing the line item, the cost, and the would-be sale price.
+
+This is a business rule. Owners may want to allow exceptions
+(loss leaders); that's a future feature. For now, hard-enforce.
+
+i18n keys:
+- en: `"errors.sale_below_cost": "Item {name} would sell at {price} SDG which is below cost ({cost} SDG). Reduce the discount."`
+- ar: `"errors.sale_below_cost": "صنف {name} سيُباع بـ {price} ج.س وهو أقل من سعر التكلفة ({cost} ج.س). قلل من الخصم."`
+
+**Acceptance test.** `cargo check`. Manual trace: a sale with 100%
+discount must be blocked. A sale with 50% discount on an item priced
+at 2x cost must succeed.
+
+---
+
+### TASK-106 — Wrap warehouse multi-write ops in transactions
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical |
+| Audit ref | W-21, W-22, W-23 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1.5 hours |
+| Depends on | — |
+
+**Verification before starting.** Three separate functions; verify
+each:
+
+```powershell
+Get-Content src-tauri/src/commands/warehouse.rs | Select-Object -Skip 491 -First 90
+Get-Content src-tauri/src/commands/warehouse_stocktake.rs | Select-Object -Skip 84 -First 71
+Get-Content src-tauri/src/commands/warehouse_batch.rs | Select-Object -Skip 82 -First 86
+```
+
+Expected: each function performs multiple INSERT/UPDATE statements
+without `conn.transaction()?` wrapping. If any of the three is
+already wrapped, scope the fix to whichever is not.
+
+**Problem.** `confirm_supplier_return`, `start_stock_take`, and
+`recall_batch` do multi-step writes. A crash, power loss, or
+SIGTERM mid-execution leaves the database inconsistent. Stock take
+half-applied = pharmacy inventory is permanently wrong.
+
+**Fix.** Wrap each function's write block in:
+
+```rust
+let tx = conn.transaction().map_err(|e| e.to_string())?;
+// ... all writes go through `tx` instead of `conn` ...
+tx.commit().map_err(|e| e.to_string())?;
+```
+
+If `conn` is borrowed inside `tx`'s scope, you may need to switch
+calls from `conn.execute(...)` to `tx.execute(...)`. Look at other
+transaction-wrapped functions in the same file for the exact
+pattern (search `conn.transaction`).
+
+If any of the three functions calls helpers that themselves do
+writes, those helpers must accept the transaction handle instead of
+opening their own connection. Refactor minimally — do not change
+business logic.
+
+**Acceptance test.** `cargo check` is the primary test. Then grep:
+
+```powershell
+Select-String -Path src-tauri/src/commands/warehouse.rs `
+  -Pattern "fn confirm_supplier_return" -Context 0,5
+Select-String -Path src-tauri/src/commands/warehouse_stocktake.rs `
+  -Pattern "fn start_stock_take" -Context 0,5
+Select-String -Path src-tauri/src/commands/warehouse_batch.rs `
+  -Pattern "fn recall_batch" -Context 0,5
+```
+
+Each function should show `let tx = conn.transaction()` within the
+first ~5 lines after the signature.
+
+---
+
+### TASK-107 — Transfer creates batches with unit_cost=0
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | W-13 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 30 minutes |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Get-Content src-tauri/src/commands/warehouse_transfer.rs | Select-Object -Skip 112 -First 10
+```
+
+Expected: when inserting a new batch at the destination branch, the
+SQL sets `unit_cost` to literal `0` (or `?` bound to `0`). If the
+INSERT already uses the source batch's `unit_cost`, set Status to
+BLOCKED.
+
+**Problem.** Branch-to-branch transfer creates a new batch at the
+destination with `unit_cost = 0`. Inventory valuation reports
+(COGS, balance sheet) become wrong because the transferred stock
+"costs nothing".
+
+**Fix.** Read the source batch row before inserting the destination
+batch. Pass `source.unit_cost` (and any other cost-related fields:
+sale_price too, if it's also defaulted to 0) when creating the
+destination batch.
+
+**Acceptance test.** `cargo check`. Manual trace: transfer a batch
+with `unit_cost = 50` → destination batch has `unit_cost = 50`.
+
+---
+
 ## 4. BACKLOG
 
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
 
-### Phase 1 — Lock Money Paths (planned next after Phase 0)
-
-- **B1-1** Audit Item 6 — `credit_limit = 0` semantics: change to mean "no credit allowed" (currently means "unlimited"). `src-tauri/src/commands/pos_sale_create.rs:244`
-- **B1-2** Audit Item 5 — Invoice sales bypass expiry / batch-status / permission checks. `src-tauri/src/commands/pos_invoice.rs:72-109`
-- **B1-3** Audit Item 7 — Invoice cash sales over-credit account by change amount. `pos_invoice.rs:200-221`
-- **B1-4** Audit Item 8 — Account balance can go negative on returns/voids. `pos_returns.rs:180`, `pos_void.rs:140`
-- **B1-5** Audit Item 18 — Expense creation/update does not check account balance. `expenses.rs:297-306`, `:435-453`
-- **B1-6** Audit Item 19 — Discounts can push sale below cost price. Add cost-price floor in POS + Sales.
-- **B1-7** Audit Item 9 — Wrap warehouse multi-write ops in transactions. `warehouse.rs:492-580`, `warehouse_stocktake.rs:85-155`, `warehouse_batch.rs:83-168`
-- **B1-8** Audit Item 24 — Stock transfers create batches with `unit_cost=0` corrupting valuation. `warehouse_transfer.rs:113-118`
+### Phase 1 — Lock Money Paths (IN PROGRESS — see section 3)
 
 ### Phase 2 — SaaS Control Plane
 
@@ -837,6 +1230,67 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** <exact command run, key output line(s) proving success>
 - **Notes:** <surprises, follow-ups, edge cases — anything the curator should see>
 -->
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-103
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/pos_returns.rs` (line 180 — added balance check before refund deduction), `src-tauri/src/commands/pos_void.rs` (line 140 — added balance check before void deduction), `src/i18n/en.json` (added `errors.insufficient_account_balance`), `src/i18n/ar.json` (same)
+- **Acceptance test result:** `cargo check` — Finished in 11.44s, no errors. Both return and void paths now reject refunds exceeding account balance.
+- **Notes:** Uses same Arabic error message pattern as existing code (`format!("...", bal_before, total)`). Reused i18n key for TASK-104 per dependency.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-104
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/expenses.rs` (line 323 — added balance check before expense creation deduction; line 444 — added balance check before expense update deduction)
+- **Acceptance test result:** `cargo check` — Finished in 11.90s, no errors. Both create and update paths now block overdrafts.
+- **Notes:** Reused i18n key from TASK-103. Update path checks `new_bal < data.amount` (full new amount) — does not handle account-change delta per spec because current code only supports single-account expenses.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-105
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/pos_sale_create.rs` (added `unit_cost` to batch query line 95, collected item_costs line 93, below-cost check after discount line 151-163), `src-tauri/src/commands/pos_invoice.rs` (same pattern — `unit_cost` in query line 102, item_costs collection line 100, below-cost check line 153-165), `src/i18n/en.json` (added `errors.sale_below_cost`), `src/i18n/ar.json` (same)
+- **Acceptance test result:** `cargo check` — Finished in 18.29s, 1 warning (fixed). Verifies per-line-item: `discounted_price >= unit_cost` using proportional discount rate.
+- **Notes:** Check only runs when `subtotal > 0 && discount > 0 && unit_cost > 0`. Items with unit_cost=0 (legacy) skip the check.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-106
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/warehouse.rs` (lines 538, 574 — wrapped `confirm_supplier_return` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_stocktake.rs` (lines 112, 149 — wrapped `start_stock_take` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_batch.rs` (lines 130, 162 — wrapped `recall_batch` writes in BEGIN/COMMIT)
+- **Acceptance test result:** `cargo check` — Finished in 14.81s, no errors. All three functions now have transactional write blocks.
+- **Notes:** Used `conn.execute("BEGIN"/"COMMIT", [])` pattern (same as `pos_invoice.rs`). All three had exactly one write block each — no nested transactions needed.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-107
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/warehouse_transfer.rs` (lines 112-116 — reads source batch `unit_cost` before INSERT; changed literal `0` to `source_unit_cost` parameter)
+- **Acceptance test result:** `cargo check` — Final Phase 1 check: Finished in 14.81s, no errors. Manual trace: transfer a batch with unit_cost=50 → destination batch has unit_cost=50.
+- **Notes:** Uses `.unwrap_or(0)` on the unit_cost query — if the source batch row is somehow missing, falls back to 0 (same as before). This is conservative.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-102
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/pos_invoice.rs` (lines 230, 237, 242 — introduced `effective_amount = amount_paid - change_amount` and used it for account credit instead of raw `amount_paid`)
+- **Acceptance test result:** `cargo check` — Finished in 28.91s, no errors. Manual trace: cash invoice 80 SDG paid 100 SDG → change 20 → account credited 80 SDG (not 100). Non-cash payments: change=0 → effective_amount = amount_paid, no behavior change.
+- **Notes:** Mirrors `pos_sale_create.rs` logic where `payment.amount` is already the collected amount. The `UPDATE accounts SET current_balance = bal_after` already used the corrected value since `bal_after = bal_before + effective_amount`.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-101
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/pos_invoice.rs` (added `guard` import line 7, permission check line 96, expanded batch query lines 101-122 to include expiry_date and status checks)
+- **Acceptance test result:** `cargo check` — Finished in 1m 20s, no errors. Grep confirms `require_permission`, `expiry_date`, and `batch_status` checks present. Checked status for both `disposed` and `recalled` (broader than POS which only checks disposed).
+- **Notes:** Invoice path now mirrors POS checks identically: (a) `guard::require_permission(&conn, &cashier_id, "pos")`, (b) batch status check for disposed/recalled, (c) expiry date check. Used same Arabic error messages as POS for consistency.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-100
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/pos_sale_create.rs` (lines 245-248 — changed `cust_limit > 0` to `cust_limit < 0` sentinel + `cust_limit == 0` block), `src-tauri/src/commands/pos_invoice.rs` (lines 185-188 — same fix), `src-tauri/src/db/migrations.rs` (line 1195 — data migration: customers with credit_limit=0 AND current_balance>0 → sentinel -1), `src/i18n/en.json` (added `errors.customer_cash_only`), `src/i18n/ar.json` (same)
+- **Acceptance test result:** `cargo check` — Finished in 2m 25s, no errors. `Get-ChildItem *.rs | Select-String "cust_limit\s*>\s*0\s*&&"` — zero matches (old enforcement pattern removed). `reports.rs` display-level `credit_limit > 0` checks preserved (correct for reports — 0=no credit, show 0% utilization).
+- **Notes:** Two enforcement sites found (pos_sale_create.rs, pos_invoice.rs), both fixed identically. Three report-display sites in reports.rs left unchanged (display logic correctly handles credit_limit=0). Data migration converts only customers with outstanding balance to sentinel -1; customers with credit_limit=0 and balance=0 correctly stay at 0 (now meaning "cash-only").
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-006 VPS deployment (close-out)
+- **Status:** DONE
+- **Files changed:** `pms-cloud/scripts/backup-postgres.sh` (deployed to VPS as-is, no edits needed)
+- **Acceptance test result (all steps on VPS):**
+  - A1: VPS layout confirmed — `/opt/pms` created, container `pms-postgres` matches script
+  - A2-A3: Script deployed to `/opt/pms/backup-postgres.sh` (`-rwxr-xr-x`)
+  - A4: rclone installed — v1.74.1 (upgraded from apt's v1.60.1)
+  - A5-A6: rclone configured — backend **Cloudflare R2**, bucket `pms-postgres-backups`, region `weur` (Western Europe). Required `no_check_bucket=true` in config (API token has object-only permissions, can't list/create buckets).
+  - A7: First manual run — dump size 61 KB, offsite copy verified on R2
+  - A8: `pg_restore --list` smoke test — PASS (140 TOC entries, valid custom-format dump from pms_cloud)
+  - A9: Cron scheduled — `0 3 * * *` daily at 3 AM UTC alongside existing renewal-check cron
+- **Notes:** rclone v1.60.1 from apt was too old for Cloudflare R2 (403 errors). Upgraded to v1.74.1 from official downloads. R2 token has "Object Read & Write" on all buckets but rclone's bucket-existence check fails — solved with `no_check_bucket=true` in rclone config. The backup script in the repo should document this rclone config requirement.
 
 ### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-007
 - **Status:** DONE

@@ -24,7 +24,7 @@ pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<()
     };
 
     if status == "suspended" {
-        return Err("License is not active. Please contact support to renew.".into());
+        return Err("الترخيص غير نشط. يرجى التواصل مع الدعم للتجديد.".into());
     }
 
     if let Some(exp) = expiry {
@@ -37,8 +37,8 @@ pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<()
             let diff = (e - t).num_days(); // negative = expired
             if diff < -GRACE_DAYS {
                 return Err(
-                    "Your license has expired and the grace period has ended. \
-                     Please renew your license to continue."
+                    "انتهت صلاحية ترخيصك وانتهت فترة السماح. \
+                     يرجى تجديد الترخيص للمتابعة."
                         .into(),
                 );
             }
@@ -48,8 +48,8 @@ pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<()
     // Explicitly block expired records that have no usable expiry date context.
     if status == "expired" {
         return Err(
-            "Your license has expired and the system is now in read-only mode. \
-             Please renew your license to continue making changes."
+            "انتهت صلاحية ترخيصك والنظام الآن في وضع القراءة فقط. \
+             يرجى تجديد الترخيص لإجراء التغييرات."
                 .into(),
         );
     }
@@ -77,8 +77,8 @@ pub fn require_feature(
                 Ok(())
             } else {
                 Err(
-                    "This feature is not included in your current subscription plan. \
-                     Please upgrade to access it."
+                    "هذه الميزة غير مضمنة في خطة اشتراكك الحالية. \
+                     يرجى الترقية للوصول إليها."
                         .into(),
                 )
             }
@@ -102,7 +102,7 @@ pub fn check_branch_limit(conn: &rusqlite::Connection, tenant_id: &str) -> Resul
         Ok((count, max)) => {
             if count >= max {
                 Err(format!(
-                    "Branch limit reached ({}/{}). Upgrade your plan to add more branches.",
+                    "تم الوصول للحد الأقصى للفروع ({}/{}). قم بترقية خطتك لإضافة المزيد من الفروع.",
                     count, max
                 ))
             } else {
@@ -128,7 +128,7 @@ pub fn check_user_limit(conn: &rusqlite::Connection, tenant_id: &str) -> Result<
         Ok((count, max)) => {
             if count >= max {
                 Err(format!(
-                    "User limit reached ({}/{}). Upgrade your plan to add more users.",
+                    "تم الوصول للحد الأقصى للمستخدمين ({}/{}). قم بترقية خطتك لإضافة المزيد من المستخدمين.",
                     count, max
                 ))
             } else {

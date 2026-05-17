@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::db::Database;
 use crate::commands::license_guard;
+use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 const FLAG_ASSETS: i64 = 1 << 14; // 16384
 
@@ -64,8 +65,10 @@ pub fn create_asset_category(
     db: State<'_, Database>,
     tenant_id: String,
     data: AssetCategoryData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<AssetCategory, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     let id = Uuid::new_v4().to_string();
     conn.execute(
@@ -201,8 +204,10 @@ pub fn create_asset(
     db: State<'_, Database>,
     tenant_id: String,
     data: AssetData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<AssetRow, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_ASSETS)?;
 
@@ -258,8 +263,10 @@ pub fn update_asset(
     tenant_id: String,
     asset_id: String,
     data: AssetData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_ASSETS)?;
     conn.execute(
@@ -292,8 +299,10 @@ pub fn dispose_asset(
     tenant_id: String,
     asset_id: String,
     data: DisposeAssetData,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     let new_status = if data.write_off { "written_off" } else { "disposed" };
     conn.execute(
@@ -376,12 +385,14 @@ pub fn run_depreciation(
     tenant_id: String,
     year: i64,
     month: i64,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<DepreciationRunResult, String> {
     if month < 1 || month > 12 {
         return Err("الشهر يجب أن يكون بين 1 و 12".into());
     }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, "", "")?;
     license_guard::require_active(&conn, &tenant_id)?;
 
     // Load all active assets not yet processed for this period

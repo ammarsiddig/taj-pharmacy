@@ -30,6 +30,12 @@
   },
   "products": {
     "title": "المنتجات",
+    "nameHint": "مثال: أموكسيسيلين",
+    "unitNameEn": "اسم الوحدة (إنجليزي)",
+    "enableSubUnits": "تفعيل الوحدات الفرعية",
+    "subUnit": "الوحدة الفرعية",
+    "subUnitRatio": "النسبة (1 رئيسية = X فرعية)",
+    "financials": "المالية",
     "addNew": "+ منتج جديد",
     "search": "ابحث باسم الدواء أو الباركود...",
     "barcode": "الباركود",
@@ -54,6 +60,7 @@
     "editProduct": "تعديل المنتج",
     "addProduct": "إضافة منتج",
     "pharmacyInfo": "معلومات صيدلانية",
+    "primaryInfo": "معلومات أساسية",
     "manufacturer": "الشركة المصنعة",
     "activeIngredient": "الاسم العلمي",
     "newUnit": "وحدة جديدة",
@@ -523,6 +530,29 @@
     "cloudSyncTab": "المزامنة السحابية",
     "unitsTab": "وحدات القياس",
     "auditTab": "سجل المراجعة",
+    "units": {
+      "title": "إدارة وحدات القياس",
+      "unitName": "اسم الوحدة",
+      "unitNameAr": "اسم الوحدة بالعربي",
+      "active": "نشط",
+      "disabled": "معطل",
+      "unit": "الوحدة",
+      "status": "الحالة"
+    },
+    "payment": {
+      "title": "إعدادات الدفع",
+      "name": "الاسم",
+      "nameAr": "الاسم بالعربي",
+      "cash": "نقداً",
+      "bankWallet": "بنك / محفظة",
+      "credit": "آجل",
+      "accountOptional": "الحساب (اختياري)",
+      "default": "افتراضي",
+      "active": "نشط",
+      "disabled": "معطل",
+      "type": "النوع",
+      "status": "الحالة"
+    },
     "general": {
       "title": "معلومات الصيدلية",
       "pharmacyName": "اسم الصيدلية",
@@ -705,6 +735,8 @@
       "activateSuccess": "تم تفعيل الترخيص بنجاح",
       "activateError": "فشل تفعيل الترخيص",
       "activateEmailRequired": "البريد الإلكتروني وكلمة المرور مطلوبان للتفعيل الأول.",
+      "licenseKeyPlaceholder": "PMS-XXXX-XXXX-XXXX",
+      "emailPlaceholder": "owner@example.com",
       "plans": {
         "basic": "أساسي",
         "professional": "احترافي",
@@ -838,11 +870,16 @@
     "close": "إغلاق",
     "done": "تم",
     "add": "إضافة",
-    "actions": "إجراءات"
+    "actions": "إجراءات",
+    "logo": "الشعار",
+    "select": "اختر",
+    "amount": "المبلغ"
   },
   "expenses": {
     "title": "المصروفات",
     "addExpense": "إضافة مصروف",
+    "amountDate": "المبلغ / التاريخ",
+    "categoryNotes": "التصنيف / الملاحظات",
     "editExpense": "تعديل مصروف",
     "amount": "المبلغ",
     "description": "الوصف",
@@ -956,6 +993,8 @@
   "accounts": {
     "title": "الحسابات",
     "addAccount": "إضافة حساب",
+    "editAccount": "تعديل حساب",
+    "accountSaved": "تم حفظ الحساب بنجاح",
     "name": "الاسم",
     "nameAr": "الاسم (عربي)",
     "type": "النوع",
@@ -993,7 +1032,22 @@
     "type_customer_refund": "استرداد عميل",
     "type_adjustment": "تحويل",
     "type_pos_session": "جلسة البيع",
-    "selectDestination": "اختر حساب الوجهة"
+    "selectDestination": "اختر حساب الوجهة",
+    "type_transfer_fee": "رسوم تحويل",
+    "bankProvider": "المصرف",
+    "bankProviderBok": "بنك الخرطوم",
+    "bankProviderFib": "فيصل الإسلامي",
+    "bankProviderOnb": "أم درمان الوطني",
+    "bankProviderOther": "آخر",
+    "phoneLabel": "اسم التطبيق البنكي",
+    "phoneLabelPlaceholder": "مثال: بنكك، فوري، Ocash",
+    "internalFee": "رسوم التحويل الداخلي",
+    "externalFee": "رسوم التحويل الخارجي",
+    "transferFee": "الرسوم",
+    "transferNetAmount": "صافي المبلغ",
+    "transferDebitTotal": "إجمالي المخصوم",
+    "fee_internal": "داخلي",
+    "fee_external": "خارجي"
   },
   "reports": {
     "title": "التقارير",
@@ -1129,7 +1183,8 @@
       "stockTake": "الجرد",
       "supplierReturns": "مرتجعات الموردين",
       "transfer": "نقل المخزون",
-      "inventory": "المخزون بالموقع"
+      "inventory": "المخزون بالموقع",
+      "reorder": "تنبيهات إعادة الطلب"
     },
     "locations": {
       "addLocation": "+ إضافة موقع",
@@ -1283,6 +1338,25 @@
       "product": "المنتج",
       "location": "الموقع",
       "qty": "الكمية المستدعاة"
+    },
+    "reorder": {
+      "title": "تنبيهات إعادة الطلب",
+      "subtitle": "المنتجات التي وصل مخزونها دون الحد الأدنى وتحتاج إلى طلب",
+      "empty": "لا توجد منتجات بحاجة لإعادة الطلب",
+      "emptyHint": "جميع المنتجات فوق حدودها الدنيا للمخزون",
+      "product": "المنتج",
+      "category": "التصنيف",
+      "unit": "الوحدة",
+      "currentQty": "الكمية الحالية",
+      "minQty": "الحد الأدنى",
+      "deficit": "العجز",
+      "lastPrice": "آخر سعر شراء",
+      "supplier": "المورد",
+      "noSupplier": "غير محدد",
+      "createPurchase": "إنشاء طلب شراء",
+      "refresh": "تحديث",
+      "summaryOne": "{{count}} منتج يحتاج إعادة طلب",
+      "summaryOther": "{{count}} منتجات تحتاج إعادة طلب"
     }
   },
   "sales": {
@@ -1371,7 +1445,16 @@
     "daysAgo": "ي",
     "products": "منتج",
     "batches": "دفعة",
-    "suppliers": "مورد"
+    "suppliers": "مورد",
+    "dismiss": "تجاهل",
+    "dismissAll": "مسح الكل",
+    "installUpdate": "تثبيت التحديث",
+    "installing": "جاري التثبيت...",
+    "viewProducts": "المنتجات",
+    "viewWarehouse": "المخزن",
+    "viewPurchases": "المشتريات",
+    "viewLicense": "الترخيص",
+    "view": "عرض"
   },
   "assets": {
     "register": "سجل الأصول",
@@ -1416,6 +1499,26 @@
       "grace": "فترة السماح — {{days}} يوم(أيام) متبقية قبل قفل النظام.",
       "nearExpiry": "ينتهي ترخيصك خلال {{days}} يوم(أيام).",
       "renewNow": "جدد الآن"
-    }
+    },
+    "featureNotAvailable": "الميزة غير متاحة",
+    "featureNotAvailableDesc": "هذه الميزة غير مشمولة في خطة اشتراكك الحالية. قم بترقية الترخيص لفتح الوصول.",
+    "viewUpgradeOptions": "عرض خيارات الترقية",
+    "expired": "الترخيص منتهي",
+    "expiredDesc": "انتهت صلاحية الترخيص. النظام في وضع القراءة فقط. جدد الترخيص لاستعادة الوصول الكامل.",
+    "renewButton": "تجديد الترخيص",
+    "licenseExpired": "الترخيص منتهي"
+  },
+  "onboarding": {
+    "pharmacyNamePlaceholder": "صيدلية TAJ",
+    "licensePlaceholder": "رخصة-XXXX",
+    "mainBranchPlaceholder": "الفرع الرئيسي",
+    "adminNamePlaceholder": "مدير النظام",
+    "usernamePlaceholder": "admin",
+    "emailPlaceholder": "owner@pharmacy.com"
+  },
+  "errors": {
+    "customer_cash_only": "هذا العميل نقدي فقط (لا يسمح بالائتمان).",
+    "insufficient_account_balance": "صندوق النقدية يحتوي على {available} ج.س فقط. لا يمكن إعادة {required} ج.س.",
+    "sale_below_cost": "صنف {name} سيُباع بـ {price} ج.س وهو أقل من سعر التكلفة ({cost} ج.س). قلل من الخصم."
   }
 }

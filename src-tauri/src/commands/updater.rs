@@ -2,10 +2,11 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
-/// Returned by check_for_update.
+const DEFAULT_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2MkFGNDE5RTU0NjI0QzEKUldUQkpFYmxHZlFxaGhsb3QwRkM1c01qSjlIcExVeFhnY2l1VldDYlU1Q0c2K1BpZHM2QnNkaHUK";
+const DEFAULT_ENDPOINT: &str = "https://github.com/ammarsiddig/pms-pharmacy-v4/releases/latest/download/latest.json";
+
 #[derive(Debug, Serialize)]
 pub struct UpdateCheckResult {
-    /// false when PMS_UPDATE_ENDPOINT / PMS_UPDATE_PUBKEY env vars are not set.
     pub configured: bool,
     pub available: bool,
     pub version: String,
@@ -14,37 +15,40 @@ pub struct UpdateCheckResult {
     pub pub_date: Option<String>,
 }
 
-/// Returned by install_update.
 #[derive(Debug, Serialize)]
 pub struct InstallResult {
     pub success: bool,
     pub message: String,
 }
 
-/// Reads update server config from environment variables:
-///   PMS_UPDATE_ENDPOINT  — full URL template, e.g. https://releases.example.com/{{target}}/{{arch}}/{{current_version}}
-///   PMS_UPDATE_PUBKEY    — minisign public key string
-fn update_config() -> Option<(String, String)> {
+pub(crate) fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
     let endpoint = std::env::var("PMS_UPDATE_ENDPOINT")
         .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())?;
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_ENDPOINT.into());
     let pubkey = std::env::var("PMS_UPDATE_PUBKEY")
         .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())?;
-    Some((endpoint, pubkey))
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_PUBKEY.into());
+
+    let endpoint_url = url::Url::parse(&endpoint)
+        .map_err(|e| format!("رابط تحديث غير صالح: {}", e))?;
+
+    app.updater_builder()
+        .endpoints(vec![endpoint_url])
+        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?
+        .pubkey(pubkey)
+        .build()
+        .map_err(|e: tauri_plugin_updater::Error| e.to_string())
 }
 
-/// Checks whether a new version is available from the configured update server.
-/// Returns `configured: false` when env vars are not set — safe to call unconditionally.
 #[tauri::command]
 pub async fn check_for_update(app: AppHandle) -> Result<UpdateCheckResult, String> {
     let current = app.package_info().version.to_string();
 
-    let (endpoint, pubkey) = match update_config() {
-        Some(c) => c,
-        None => {
+    let updater = match build_updater(&app) {
+        Ok(u) => u,
+        Err(_) => {
             return Ok(UpdateCheckResult {
                 configured: false,
                 available: false,
@@ -55,17 +59,6 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
             });
         }
     };
-
-    let endpoint_url = url::Url::parse(&endpoint)
-        .map_err(|e| format!("Invalid PMS_UPDATE_ENDPOINT URL: {}", e))?;
-
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![endpoint_url])
-        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?
-        .pubkey(pubkey)
-        .build()
-        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
 
     match updater
         .check()
@@ -91,30 +84,17 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
     }
 }
 
-/// Downloads and installs the available update then restarts the app.
-/// Safe to call only when `check_for_update` returned `available: true`.
 #[tauri::command]
 pub async fn install_update(app: AppHandle) -> Result<InstallResult, String> {
-    let (endpoint, pubkey) = match update_config() {
-        Some(c) => c,
-        None => {
+    let updater = match build_updater(&app) {
+        Ok(u) => u,
+        Err(e) => {
             return Ok(InstallResult {
                 success: false,
-                message: "Update server not configured (set PMS_UPDATE_ENDPOINT and PMS_UPDATE_PUBKEY)".into(),
+                message: format!("خادم التحديث غير مكون: {}", e),
             });
         }
     };
-
-    let endpoint_url = url::Url::parse(&endpoint)
-        .map_err(|e| format!("Invalid PMS_UPDATE_ENDPOINT URL: {}", e))?;
-
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![endpoint_url])
-        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?
-        .pubkey(pubkey)
-        .build()
-        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
 
     match updater
         .check()
@@ -126,11 +106,11 @@ pub async fn install_update(app: AppHandle) -> Result<InstallResult, String> {
                 .download_and_install(|_downloaded, _total| {}, || {})
                 .await
                 .map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
-            app.restart()  // fn restart(self) -> ! diverges; no return needed
+            app.restart()
         }
         None => Ok(InstallResult {
             success: false,
-            message: "No update available".into(),
+            message: "لا يوجد تحديث متاح".into(),
         }),
     }
 }

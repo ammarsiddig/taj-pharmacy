@@ -30,6 +30,12 @@
   },
   "products": {
     "title": "Products",
+    "nameHint": "e.g. Amoxicillin",
+    "unitNameEn": "Unit name (EN)",
+    "enableSubUnits": "Enable Sub-Units",
+    "subUnit": "Sub-Unit",
+    "subUnitRatio": "Ratio (1 Main = X Sub)",
+    "financials": "Financials",
     "addNew": "+ New Product",
     "search": "Search by drug name or barcode...",
     "barcode": "Barcode",
@@ -56,6 +62,7 @@
     "activeIngredient": "Scientific Name",
     "newUnit": "New Unit",
     "pharmacyInfo": "Pharmacy Info",
+    "primaryInfo": "Primary Info",
     "manufacturer": "Manufacturer",
     "dosageForm": "Dosage Form",
     "dosageFormHint": "Tablets, Syrup, Capsules...",
@@ -519,6 +526,29 @@
     "cloudSyncTab": "Cloud Sync",
     "unitsTab": "Unit Measures",
     "auditTab": "Audit Log",
+    "units": {
+      "title": "Unit Management",
+      "unitName": "Unit Name",
+      "unitNameAr": "Arabic Unit Name",
+      "active": "Active",
+      "disabled": "Disabled",
+      "unit": "Unit",
+      "status": "Status"
+    },
+    "payment": {
+      "title": "Payment Settings",
+      "name": "Name",
+      "nameAr": "Arabic Name",
+      "cash": "Cash",
+      "bankWallet": "Bank / Wallet",
+      "credit": "Credit",
+      "accountOptional": "Account (optional)",
+      "default": "Default",
+      "active": "Active",
+      "disabled": "Disabled",
+      "type": "Type",
+      "status": "Status"
+    },
     "general": {
       "title": "Pharmacy Information",
       "pharmacyName": "Pharmacy Name",
@@ -681,6 +711,8 @@
       "ownerEmail": "Owner Email",
       "ownerPassword": "Owner Account Password",
       "activateEmailRequired": "Email and password are required for first-time activation.",
+      "licenseKeyPlaceholder": "PMS-XXXX-XXXX-XXXX",
+      "emailPlaceholder": "owner@example.com",
       "licenseKey": "License Key",
       "activate": "Activate",
       "activating": "Activating...",
@@ -808,11 +840,16 @@
     "close": "Close",
     "done": "Done",
     "add": "Add",
-    "actions": "Actions"
+    "actions": "Actions",
+    "logo": "Logo",
+    "select": "Select",
+    "amount": "Amount"
   },
   "expenses": {
     "title": "Expenses",
     "addExpense": "Add Expense",
+    "amountDate": "Amount / Date",
+    "categoryNotes": "Category / Notes",
     "editExpense": "Edit Expense",
     "amount": "Amount",
     "description": "Description",
@@ -926,6 +963,8 @@
   "accounts": {
     "title": "Accounts",
     "addAccount": "Add Account",
+    "editAccount": "Edit Account",
+    "accountSaved": "Account saved successfully",
     "name": "Name",
     "nameAr": "Name (Arabic)",
     "type": "Type",
@@ -963,7 +1002,22 @@
     "type_customer_refund": "Customer Refund",
     "type_adjustment": "Transfer",
     "type_pos_session": "POS Session",
-    "selectDestination": "Select destination account"
+    "type_transfer_fee": "Transfer Fee",
+    "selectDestination": "Select destination account",
+    "bankProvider": "Bank",
+    "bankProviderBok": "Bank of Khartoum",
+    "bankProviderFib": "Faisal Islamic Bank",
+    "bankProviderOnb": "Omdurman National Bank",
+    "bankProviderOther": "Other",
+    "phoneLabel": "Bank app name",
+    "phoneLabelPlaceholder": "Example: Bnkak, Fawry, Ocash",
+    "internalFee": "Internal transfer fee",
+    "externalFee": "External transfer fee",
+    "transferFee": "Fee",
+    "transferNetAmount": "Net amount",
+    "transferDebitTotal": "Total deducted",
+    "fee_internal": "internal",
+    "fee_external": "external"
   },
   "reports": {
     "title": "Reports",
@@ -1099,7 +1153,8 @@
       "stockTake": "Stock Take",
       "supplierReturns": "Supplier Returns",
       "transfer": "Stock Transfer",
-      "inventory": "Stock by Location"
+      "inventory": "Stock by Location",
+      "reorder": "Reorder Alerts"
     },
     "locations": {
       "addLocation": "+ Add Location",
@@ -1253,6 +1308,25 @@
       "product": "Product",
       "location": "Location",
       "qty": "Qty Recalled"
+    },
+    "reorder": {
+      "title": "Reorder Point Alerts",
+      "subtitle": "Products that have fallen below minimum stock level and need reordering",
+      "empty": "No products need reordering",
+      "emptyHint": "All products are above their minimum stock levels",
+      "product": "Product",
+      "category": "Category",
+      "unit": "Unit",
+      "currentQty": "Current Qty",
+      "minQty": "Min Level",
+      "deficit": "Deficit",
+      "lastPrice": "Last Cost",
+      "supplier": "Supplier",
+      "noSupplier": "Unknown",
+      "createPurchase": "Create Purchase Order",
+      "refresh": "Refresh",
+      "summaryOne": "{{count}} product needs reordering",
+      "summaryOther": "{{count}} products need reordering"
     }
   },
   "sales": {
@@ -1364,7 +1438,16 @@
     "daysAgo": "d ago",
     "products": "products",
     "batches": "batches",
-    "suppliers": "suppliers"
+    "suppliers": "suppliers",
+    "dismiss": "Dismiss",
+    "dismissAll": "Clear all",
+    "installUpdate": "Install Update",
+    "installing": "Installing...",
+    "viewProducts": "Products",
+    "viewWarehouse": "Warehouse",
+    "viewPurchases": "Purchases",
+    "viewLicense": "License",
+    "view": "View"
   },
   "assets": {
     "register": "Asset Register",
@@ -1409,6 +1492,26 @@
       "grace": "Grace period — {{days}} day(s) remaining before the system locks.",
       "nearExpiry": "Your license expires in {{days}} day(s).",
       "renewNow": "Renew Now"
-    }
+    },
+    "featureNotAvailable": "Feature Not Available",
+    "featureNotAvailableDesc": "This feature is not included in your current subscription plan. Upgrade your license to unlock access.",
+    "viewUpgradeOptions": "View Upgrade Options",
+    "expired": "License Expired",
+    "expiredDesc": "Your license has expired. The system is in read-only mode. Renew your license to restore full access.",
+    "renewButton": "Renew License",
+    "licenseExpired": "License expired"
+  },
+  "onboarding": {
+    "pharmacyNamePlaceholder": "TAJ Pharmacy",
+    "licensePlaceholder": "LIC-XXXX",
+    "mainBranchPlaceholder": "Main Branch",
+    "adminNamePlaceholder": "System Administrator",
+    "usernamePlaceholder": "admin",
+    "emailPlaceholder": "owner@pharmacy.com"
+  },
+  "errors": {
+    "customer_cash_only": "This customer is cash-only (no credit allowed).",
+    "insufficient_account_balance": "Cash drawer has only {available} SDG. Cannot refund {required} SDG.",
+    "sale_below_cost": "Item {name} would sell at {price} SDG which is below cost ({cost} SDG). Reduce the discount."
   }
 }

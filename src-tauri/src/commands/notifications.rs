@@ -1,10 +1,11 @@
 use rusqlite::params;
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::db::Database;
 use crate::commands::license_guard;
+use crate::commands::updater;
 
 #[derive(Debug, Serialize)]
 pub struct NotificationRow {
@@ -128,6 +129,22 @@ pub fn get_system_alerts(
     _branch_id: String,
 ) -> Result<Vec<NotificationRow>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Load dismissed alert types
+    let dismissed: std::collections::HashSet<String> = {
+        let mut stmt = conn.prepare(
+            "SELECT alert_type FROM system_alert_dismissals WHERE tenant_id = ?1"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map(
+            params![tenant_id],
+            |row: &rusqlite::Row| row.get::<_, String>(0),
+        ).map_err(|e| e.to_string())?;
+        let mut set = std::collections::HashSet::new();
+        for row in rows {
+            if let Ok(t) = row { set.insert(t); }
+        }
+        set
+    };
 
     // Generate alerts dynamically from current DB state
     let mut alerts: Vec<NotificationRow> = Vec::new();
@@ -301,5 +318,234 @@ pub fn get_system_alerts(
         });
     }
 
+    // License expiry alerts
+    let license_row = conn.query_row(
+        "SELECT subscription_status, subscription_expiry, subscription_plan
+         FROM tenants WHERE id = ?1",
+        params![tenant_id],
+        |row| Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, String>(2)?,
+        )),
+    );
+
+    if let Ok((status, expiry, plan)) = license_row {
+        if status == "suspended" {
+            alerts.push(NotificationRow {
+                id: now_id(),
+                notification_type: "license_suspended".to_string(),
+                title: "License Suspended".to_string(),
+                title_ar: Some("الترخيص معلق".to_string()),
+                message: "Your pharmacy license has been suspended. Please contact support to reactivate.".to_string(),
+                message_ar: Some("تم تعليق ترخيص الصيدلية. يرجى التواصل مع الدعم لإعادة التفعيل.".to_string()),
+                severity: "error".to_string(),
+                reference_type: Some("license".to_string()),
+                reference_id: None,
+                is_read: false,
+                created_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+            });
+        } else if let Some(ref exp) = expiry {
+            // Expired
+            if exp.as_str() <= chrono::Utc::now().format("%Y-%m-%d").to_string().as_str() {
+                alerts.push(NotificationRow {
+                    id: now_id(),
+                    notification_type: "license_expired".to_string(),
+                    title: format!("License Expired ({})", plan),
+                    title_ar: Some(format!("الترخيص منتهي ({})", plan)),
+                    message: "Your pharmacy license has expired. Renew now to avoid service interruption.".to_string(),
+                    message_ar: Some("انتهى ترخيص الصيدلية. جدد الآن لتجنب انقطاع الخدمة.".to_string()),
+                    severity: "error".to_string(),
+                    reference_type: Some("license".to_string()),
+                    reference_id: None,
+                    is_read: false,
+                    created_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                });
+            } else {
+                // Days until expiry
+                if let Some(days) = chrono::NaiveDate::parse_from_str(exp, "%Y-%m-%d")
+                    .ok()
+                    .and_then(|exp_dt| {
+                        let exp_utc = exp_dt.and_hms_opt(0, 0, 0)?.and_utc();
+                        Some((exp_utc - chrono::Utc::now()).num_days())
+                    })
+                {
+                    if days <= 7 {
+                        alerts.push(NotificationRow {
+                            id: now_id(),
+                            notification_type: "license_expiring_7".to_string(),
+                            title: format!("License Expires in {} Days", days),
+                            title_ar: Some(format!("الترخيص ينتهي خلال {} أيام", days)),
+                            message: format!("Your {} license expires in {} days. Renew immediately.", plan, days),
+                            message_ar: Some(format!("ترخيص {} ينتهي خلال {} أيام. جدد فوراً.", plan, days)),
+                            severity: "error".to_string(),
+                            reference_type: Some("license".to_string()),
+                            reference_id: None,
+                            is_read: false,
+                            created_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                        });
+                    } else if days <= 30 {
+                        alerts.push(NotificationRow {
+                            id: now_id(),
+                            notification_type: "license_expiring_30".to_string(),
+                            title: format!("License Expires in {} Days", days),
+                            title_ar: Some(format!("الترخيص ينتهي خلال {} يوم", days)),
+                            message: format!("Your {} license will expire in {} days. Plan to renew soon.", plan, days),
+                            message_ar: Some(format!("سينتهي ترخيص {} خلال {} يوم. خطط للتجديد قريباً.", plan, days)),
+                            severity: "warning".to_string(),
+                            reference_type: Some("license".to_string()),
+                            reference_id: None,
+                            is_read: false,
+                            created_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Pending app update
+    let pending_version: Option<String> = conn.query_row(
+        "SELECT pending_update_version FROM tenants WHERE id = ?1",
+        params![tenant_id],
+        |row| row.get(0),
+    ).ok().flatten();
+
+    if let Some(ref ver) = pending_version {
+        if !ver.is_empty() {
+            let current_ver = env!("CARGO_PKG_VERSION");
+            alerts.push(NotificationRow {
+                id: now_id(),
+                notification_type: "update_available".to_string(),
+                title: format!("Update Available: v{}", ver),
+                title_ar: Some(format!("تحديث متاح: الإصدار {}", ver)),
+                message: format!("Version {} is available. You are running {}. Go to Settings > License to install.", ver, current_ver),
+                message_ar: Some(format!("الإصدار {} متاح. أنت تستخدم {}. اذهب للإعدادات > الترخيص للتثبيت.", ver, current_ver)),
+                severity: "info".to_string(),
+                reference_type: Some("settings".to_string()),
+                reference_id: Some("license".to_string()),
+                is_read: false,
+                created_at: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+            });
+        }
+    }
+
+    // Filter dismissed and sort by severity
+    alerts.retain(|a| !dismissed.contains(&a.notification_type));
+    alerts.sort_by(|a, b| {
+        fn rank(s: &str) -> u8 {
+            match s { "error" => 0, "warning" => 1, _ => 2 }
+        }
+        rank(&a.severity).cmp(&rank(&b.severity))
+    });
+
     Ok(alerts)
+}
+
+#[derive(Debug, Serialize)]
+pub struct PendingUpdateResult {
+    pub available: bool,
+    pub version: String,
+    pub current_version: String,
+    pub notes: Option<String>,
+    pub pub_date: Option<String>,
+}
+
+#[tauri::command]
+pub async fn check_pending_update(
+    app: AppHandle,
+    db: State<'_, Database>,
+    tenant_id: String,
+) -> Result<PendingUpdateResult, String> {
+    let current = app.package_info().version.to_string();
+
+    let updater = match updater::build_updater(&app) {
+        Ok(u) => u,
+        Err(_) => {
+            return Ok(PendingUpdateResult {
+                available: false,
+                version: String::new(),
+                current_version: current,
+                notes: None,
+                pub_date: None,
+            });
+        }
+    };
+
+    match updater
+        .check()
+        .await
+        .map_err(|e| e.to_string())
+    {
+        Ok(Some(update)) => {
+            let version = update.version.to_string();
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE tenants SET pending_update_version = ?1,
+                 pending_update_checked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 WHERE id = ?2",
+                params![version, tenant_id],
+            ).map_err(|e| e.to_string())?;
+
+            Ok(PendingUpdateResult {
+                available: true,
+                version: version.clone(),
+                current_version: update.current_version.to_string(),
+                notes: update.body.clone(),
+                pub_date: update.date.map(|d| d.to_string()),
+            })
+        }
+        Ok(None) => {
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE tenants SET pending_update_version = NULL,
+                 pending_update_checked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 WHERE id = ?1",
+                params![tenant_id],
+            ).map_err(|e| e.to_string())?;
+
+            Ok(PendingUpdateResult {
+                available: false,
+                version: String::new(),
+                current_version: current,
+                notes: None,
+                pub_date: None,
+            })
+        }
+        Err(_e) => Ok(PendingUpdateResult {
+            available: false,
+            version: String::new(),
+            current_version: current,
+            notes: None,
+            pub_date: None,
+        }),
+    }
+}
+
+#[tauri::command]
+pub fn dismiss_system_alert(
+    db: State<'_, Database>,
+    tenant_id: String,
+    alert_type: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO system_alert_dismissals (tenant_id, alert_type, dismissed_at)
+         VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+        params![tenant_id, alert_type],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn undismiss_all_system_alerts(
+    db: State<'_, Database>,
+    tenant_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM system_alert_dismissals WHERE tenant_id = ?1",
+        params![tenant_id],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
 }
