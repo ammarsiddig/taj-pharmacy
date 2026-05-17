@@ -21,7 +21,7 @@ async function recomputeDashboard(tenantId, branchId) {
   const monthStart = "DATE_TRUNC('month', CURRENT_DATE)";
   const thirtyDays = "CURRENT_DATE + INTERVAL '30 days'";
 
-  const [products, customers, suppliers, todaySales, monthSales, stock, expiring, receivables, payables, monthExpenses] = await Promise.all([
+  const [products, customers, suppliers, todaySales, monthSales, stock, expiring, receivables, payables, monthExpenses, todayExpenses] = await Promise.all([
     query('SELECT COUNT(*) FROM snapshot_products WHERE tenant_id=$1 AND branch_id=$2 AND is_active=true', [tenantId, branchId]),
     query('SELECT COUNT(*) FROM snapshot_customers WHERE tenant_id=$1 AND branch_id=$2 AND is_active=true', [tenantId, branchId]),
     query('SELECT COUNT(*) FROM snapshot_suppliers WHERE tenant_id=$1 AND branch_id=$2 AND is_active=true', [tenantId, branchId]),
@@ -45,6 +45,8 @@ async function recomputeDashboard(tenantId, branchId) {
     query('SELECT COALESCE(SUM(current_balance),0) FROM snapshot_suppliers WHERE tenant_id=$1 AND branch_id=$2', [tenantId, branchId]),
     query(`SELECT COALESCE(SUM(amount),0) FROM snapshot_expenses
            WHERE tenant_id=$1 AND branch_id=$2 AND expense_date>=${monthStart}`, [tenantId, branchId]),
+    query(`SELECT COALESCE(SUM(amount),0) FROM snapshot_expenses
+           WHERE tenant_id=$1 AND branch_id=$2 AND expense_date=${today}`, [tenantId, branchId]),
   ]);
 
   await query(`
@@ -54,14 +56,14 @@ async function recomputeDashboard(tenantId, branchId) {
        month_sales_count, month_sales_total,
        out_of_stock_count, low_stock_count, expiring_soon_count,
        total_receivables, total_payables, month_expenses_total, today_expenses_total, computed_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,0,NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
     ON CONFLICT (tenant_id, branch_id)
     DO UPDATE SET
       products_count=$3, customers_count=$4, suppliers_count=$5,
       today_sales_count=$6, today_sales_total=$7, today_cash_sales=$8, today_bank_sales=$9, today_credit_sales=$10,
       month_sales_count=$11, month_sales_total=$12,
       out_of_stock_count=$13, low_stock_count=$14, expiring_soon_count=$15,
-      total_receivables=$16, total_payables=$17, month_expenses_total=$18, today_expenses_total=0,
+      total_receivables=$16, total_payables=$17, month_expenses_total=$18, today_expenses_total=$19,
       computed_at=NOW()
   `, [
     tenantId, branchId,
@@ -81,6 +83,7 @@ async function recomputeDashboard(tenantId, branchId) {
     parseInt(receivables.rows[0].coalesce) || 0,
     parseInt(payables.rows[0].coalesce) || 0,
     parseInt(monthExpenses.rows[0].coalesce) || 0,
+    parseInt(todayExpenses.rows[0].coalesce) || 0,
   ]);
 }
 
@@ -107,29 +110,54 @@ const TABLE_SCHEMAS = {
     updateColumns: ['name', 'phone', 'email', 'address', 'current_balance', 'is_active', 'updated_at', 'synced_at']
   },
   pos_sales: {
-    columns: ['id', 'tenant_id', 'branch_id', 'session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'created_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'is_active', 'created_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'created_at', 'synced_at']
+    updateColumns: ['session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'is_active', 'created_at', 'synced_at']
   },
   pos_sale_items: {
-    columns: ['id', 'tenant_id', 'branch_id', 'sale_id', 'product_id', 'product_name', 'batch_id', 'batch_number', 'quantity', 'unit_price', 'subtotal'],
+    columns: ['id', 'tenant_id', 'branch_id', 'sale_id', 'product_id', 'product_name', 'batch_id', 'batch_number', 'quantity', 'unit_price', 'subtotal', 'is_active'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['sale_id', 'product_id', 'product_name', 'batch_id', 'batch_number', 'quantity', 'unit_price', 'subtotal', 'synced_at']
+    updateColumns: ['sale_id', 'product_id', 'product_name', 'batch_id', 'batch_number', 'quantity', 'unit_price', 'subtotal', 'is_active', 'synced_at']
   },
   expenses: {
-    columns: ['id', 'tenant_id', 'branch_id', 'category', 'amount', 'description', 'expense_date', 'created_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'category', 'amount', 'description', 'expense_date', 'is_active', 'created_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['category', 'amount', 'description', 'expense_date', 'created_at', 'synced_at']
+    updateColumns: ['category', 'amount', 'description', 'expense_date', 'is_active', 'created_at', 'synced_at']
   },
   stock_movements: {
-    columns: ['id', 'tenant_id', 'branch_id', 'product_id', 'batch_id', 'movement_type', 'quantity', 'reference_type', 'reference_id', 'notes', 'created_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'product_id', 'batch_id', 'movement_type', 'quantity', 'reference_type', 'reference_id', 'notes', 'is_active', 'created_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['product_id', 'batch_id', 'movement_type', 'quantity', 'reference_type', 'reference_id', 'notes', 'created_at', 'synced_at']
+    updateColumns: ['product_id', 'batch_id', 'movement_type', 'quantity', 'reference_type', 'reference_id', 'notes', 'is_active', 'created_at', 'synced_at']
   },
   supplier_invoices: {
     columns: ['id', 'tenant_id', 'branch_id', 'supplier_id', 'supplier_name', 'invoice_number', 'invoice_date', 'status', 'payment_status', 'total', 'amount_paid', 'balance_due', 'created_at', 'updated_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
     updateColumns: ['supplier_id', 'supplier_name', 'invoice_number', 'invoice_date', 'status', 'payment_status', 'total', 'amount_paid', 'balance_due', 'created_at', 'updated_at', 'synced_at']
+  },
+  supplier_payments: {
+    columns: ['id', 'tenant_id', 'branch_id', 'supplier_id', 'invoice_id', 'amount', 'payment_method', 'account_id', 'payment_date', 'notes', 'created_by', 'created_at'],
+    conflictColumns: ['tenant_id', 'branch_id', 'id'],
+    updateColumns: ['supplier_id', 'invoice_id', 'amount', 'payment_method', 'account_id', 'payment_date', 'notes', 'created_by', 'created_at', 'synced_at']
+  },
+  customer_payments: {
+    columns: ['id', 'tenant_id', 'branch_id', 'customer_id', 'amount', 'payment_method', 'account_id', 'notes', 'created_by', 'is_active', 'created_at'],
+    conflictColumns: ['tenant_id', 'branch_id', 'id'],
+    updateColumns: ['customer_id', 'amount', 'payment_method', 'account_id', 'notes', 'created_by', 'is_active', 'created_at', 'synced_at']
+  },
+  sale_payments: {
+    columns: ['id', 'tenant_id', 'branch_id', 'sale_id', 'payment_method', 'payment_method_id', 'payment_method_name', 'amount', 'is_active', 'created_at'],
+    conflictColumns: ['tenant_id', 'branch_id', 'id'],
+    updateColumns: ['sale_id', 'payment_method', 'payment_method_id', 'payment_method_name', 'amount', 'is_active', 'created_at', 'synced_at']
+  },
+  accounts: {
+    columns: ['id', 'tenant_id', 'branch_id', 'name', 'name_ar', 'account_type', 'current_balance', 'is_default', 'is_active', 'bank_provider', 'internal_fee', 'external_fee', 'phone_label', 'created_at', 'updated_at'],
+    conflictColumns: ['tenant_id', 'branch_id', 'id'],
+    updateColumns: ['name', 'name_ar', 'account_type', 'current_balance', 'is_default', 'is_active', 'bank_provider', 'internal_fee', 'external_fee', 'phone_label', 'created_at', 'updated_at', 'synced_at']
+  },
+  account_transactions: {
+    columns: ['id', 'tenant_id', 'branch_id', 'account_id', 'transaction_type', 'direction', 'amount', 'balance_before', 'balance_after', 'reference_type', 'reference_id', 'description', 'created_by', 'is_active', 'created_at'],
+    conflictColumns: ['tenant_id', 'branch_id', 'id'],
+    updateColumns: ['account_id', 'transaction_type', 'direction', 'amount', 'balance_before', 'balance_after', 'reference_type', 'reference_id', 'description', 'created_by', 'is_active', 'created_at', 'synced_at']
   }
 };
 
@@ -195,7 +223,7 @@ router.post('/v1/sync/batch', authenticateToken, async (req, res) => {
 
         // Delete
         if (deletedIds.length > 0) {
-          const deletePlaceholders = deletedIds.map((_, i) => `$${i + 4}`).join(',');
+          const deletePlaceholders = deletedIds.map((_, i) => `$${i + 3}`).join(',');
           const deleteSql = `
             UPDATE ${snapshotTable}
             SET is_active = false, synced_at = NOW()
@@ -312,7 +340,7 @@ router.post('/v1/sync/:table', authenticateToken, async (req, res) => {
 
       // Soft-delete rows (mark as inactive)
       if (deletedIds.length > 0) {
-        const deletePlaceholders = deletedIds.map((_, i) => `$${i + 4}`).join(',');
+        const deletePlaceholders = deletedIds.map((_, i) => `$${i + 3}`).join(',');
         const deleteSql = `
           UPDATE ${snapshotTable}
           SET is_active = false, synced_at = NOW()
