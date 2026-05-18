@@ -1,9 +1,18 @@
 # PMS Cloud - Deploy to VPS from Windows
-# Usage: .\deploy.ps1
+# Usage:
+#   $env:PMS_VPS_IP = "<your-vps-ip>"   # one-time per shell session
+#   .\deploy.ps1
 
-$VPS_IP = "178.104.158.147"
-$VPS_USER = "root"
-$REMOTE_DIR = "/opt/pms-cloud"
+if (-not $env:PMS_VPS_IP) {
+    Write-Host "ERROR: PMS_VPS_IP environment variable is not set." -ForegroundColor Red
+    Write-Host "Set it once per shell session:" -ForegroundColor Yellow
+    Write-Host '  $env:PMS_VPS_IP = "<your-vps-ip>"' -ForegroundColor Yellow
+    exit 1
+}
+
+$VPS_IP = $env:PMS_VPS_IP
+$VPS_USER = if ($env:PMS_VPS_USER) { $env:PMS_VPS_USER } else { "root" }
+$REMOTE_DIR = if ($env:PMS_VPS_REMOTE_DIR) { $env:PMS_VPS_REMOTE_DIR } else { "/opt/pms-cloud" }
 
 Write-Host "=== PMS Cloud Deploy ===" -ForegroundColor Cyan
 
