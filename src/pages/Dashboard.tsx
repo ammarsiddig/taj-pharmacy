@@ -50,6 +50,11 @@ export default function Dashboard() {
         <p className="mt-1 text-base text-ink-muted">{t('dashboard.todaySales')}، {t('dashboard.recentActivity')}، {t('dashboard.stockAlerts')}</p>
       </div>
 
+      {/* Getting Started Checklist — TASK-506 */}
+      {data && data.today_sales_count === 0 && data.today_sales_total === 0 && (
+        <GettingStarted />
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
         <KpiCard
@@ -387,6 +392,34 @@ function BackupIndicator({ status, backingUp, onBackupNow, rtl }: { status: api.
         <RefreshCw size={14} className={backingUp ? 'animate-spin' : ''} />
         {backingUp ? '...' : t('dashboard.backupNow')}
       </button>
+    </div>
+  );
+}
+
+function GettingStarted() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const steps = [
+    { key: 'addProduct', label: t('dashboard.checklist.addProduct'), href: '/products' },
+    { key: 'addSupplier', label: t('dashboard.checklist.addSupplier'), href: '/suppliers' },
+    { key: 'purchaseInvoice', label: t('dashboard.checklist.purchaseInvoice'), href: '/purchases/new' },
+    { key: 'firstSale', label: t('dashboard.checklist.firstSale'), href: '/pos' },
+  ];
+  return (
+    <div className="app-card mb-5 p-4 border border-primary-200 bg-primary-50/50">
+      <h3 className="text-sm font-bold text-ink-main mb-3">{t('dashboard.checklist.title')}</h3>
+      <div className="flex flex-wrap gap-2">
+        {steps.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => navigate(s.href)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-ivory-border px-3 py-1.5 text-xs font-medium text-ink-main hover:border-primary-400 hover:text-primary-700 transition-colors"
+          >
+            <span className="w-4 h-4 rounded-full border-2 border-primary-300 flex items-center justify-center text-[10px] text-primary-500">○</span>
+            {s.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

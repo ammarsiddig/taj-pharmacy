@@ -92,7 +92,7 @@ export default function Purchases() {
       const active = locs.filter(l => l.is_active);
       setLocations(active);
       if (active.length > 0) setSelectedLocationId(active[0].id);
-    }).catch(() => {});
+    }).catch((e: unknown) => { console.error('[Purchases] getStorageLocations failed:', e); });
     api.getAllAccounts(branchId).then(accts => {
       const active = accts.filter(a => a.is_active);
       setAccounts(active);
@@ -101,7 +101,7 @@ export default function Purchases() {
         const derived = api.paymentMethodFromAccountType(first.account_type);
         setConfirmPaymentInfo(p => ({ ...p, account_id: first.id, payment_method: derived }));
       }
-    }).catch(() => {});
+    }).catch((e: unknown) => { console.error('[Purchases] getAllAccounts failed:', e); });
   }, [branchId]);
 
   const activeAccounts = useMemo(() => accounts.filter(a => a.is_active), [accounts]);

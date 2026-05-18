@@ -8,6 +8,7 @@ import {
   Package,
   Warehouse,
   Receipt,
+  Landmark,
   BarChart3,
   Settings,
   Lock,
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { key: 'products',   path: '/products',   icon: Package,         group: 'ops',   featureFlag: FEATURE_FLAGS.PRODUCTS },
   { key: 'warehouse',  path: '/warehouse',  icon: Warehouse,       group: 'ops',   featureFlag: FEATURE_FLAGS.WAREHOUSE },
   { key: 'expenses',   path: '/expenses',   icon: Receipt,         group: 'ops',   featureFlag: FEATURE_FLAGS.EXPENSES },
+  { key: 'accounts',   path: '/accounts',   icon: Landmark,        group: 'ops',   featureFlag: FEATURE_FLAGS.ACCOUNTS },
   { key: 'reports',    path: '/reports',    icon: BarChart3,       group: 'admin', featureFlag: FEATURE_FLAGS.REPORTS },
   { key: 'settings',   path: '/settings',   icon: Settings,        group: 'admin' },
 ];
@@ -51,11 +53,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside className={`${collapsed ? 'w-[78px]' : 'w-[256px]'} min-h-screen bg-[#1C5F6F] flex flex-col shrink-0 transition-[width] duration-200 border-l border-white/6 shadow-[0_20px_40px_-24px_rgb(0_0_0_/_0.6)]`}>
       {/* Logo area */}
-      <div className="px-4 py-5 border-b border-white/8 flex items-center justify-between">
-        {!collapsed && (
-          <div>
-            <h1 className="text-white text-lg font-bold">TAJ Pharmacy</h1>
-            <p className="text-brand-100/75 text-xs mt-0.5">{t('app.title')}</p>
+      <div className={`${collapsed ? 'px-3 py-4 flex-col gap-3' : 'px-4 py-5'} border-b border-white/8 flex items-center justify-between`}>
+        {collapsed ? (
+          <img src="/taj-logo-mark-reversed.svg" alt="TAJ Pharmacy" className="h-9 w-9 object-contain" />
+        ) : (
+          <div className="flex items-center gap-3 min-w-0">
+            <img src="/taj-logo-mark-reversed.svg" alt="TAJ Pharmacy" className="h-11 w-11 shrink-0 object-contain" />
+            <div className="min-w-0">
+              <h1 className="text-white text-lg font-bold leading-tight">TAJ Pharmacy</h1>
+              <p className="text-brand-100/75 text-xs mt-0.5 truncate">{t('app.title')}</p>
+            </div>
           </div>
         )}
         <button onClick={onToggle} className="text-brand-100 hover:text-white p-2 rounded-full hover:bg-white/6">
@@ -99,7 +106,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     ? 'bg-white/20 text-white shadow-[inset_0_1px_0_rgb(255_255_255_/_0.15)]'
                     : 'text-white/75 hover:bg-white/10 hover:text-white'}`}
               >
-                {isActive && <span className="absolute right-0 top-2 bottom-2 w-[3px] rounded-full bg-brand-200" />}
+                {isActive && <span className="absolute end-0 top-2 bottom-2 w-[3px] rounded-full bg-brand-200" />}
                 <Icon size={18} />
                 {!collapsed && <span>{t(`nav.${item.key}`)}</span>}
               </NavLink>

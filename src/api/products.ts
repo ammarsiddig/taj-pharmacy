@@ -1,4 +1,4 @@
-import { invoke } from '../lib/tauri';
+﻿import { invoke } from '../lib/tauri';
 import type {
   Product, ProductFormData, ProductImportRowData, ProductImportResult,
   ProductSubstitute,
@@ -8,7 +8,7 @@ import type {
 } from '../types';
 import { getTenantId } from './core';
 
-// ====== Auth ======
+// ---
 
 export async function login(username: string, password: string) {
   return invoke<{ token: string; user: User; role: Role; permissions: string[]; tenant_id: string }>(
@@ -20,7 +20,7 @@ export async function getCurrentUser(token: string): Promise<User> {
   return invoke('get_current_user', { token });
 }
 
-// ====== Products ======
+// ---
 
 export async function getProducts(
   search?: string,
@@ -66,7 +66,7 @@ export async function getProductCategories(): Promise<string[]> {
   return invoke('get_product_categories', { tenantId: getTenantId() });
 }
 
-// ====== Product Substitutes ======
+// ---
 
 export async function getProductSubstitutes(productId: string): Promise<ProductSubstitute[]> {
   return invoke('get_product_substitutes', { tenantId: getTenantId(), productId });
@@ -104,7 +104,7 @@ export async function deleteProductImage(productId: string): Promise<void> {
   return invoke('delete_product_image', { tenantId: getTenantId(), productId });
 }
 
-// ====== Units & Payment Methods ======
+// ---
 
 export async function getUnitMeasures(activeOnly?: boolean): Promise<UnitMeasure[]> {
   return invoke('get_unit_measures', { tenantId: getTenantId(), activeOnly: activeOnly ?? null });
@@ -138,7 +138,7 @@ export async function deletePaymentMethod(paymentMethodId: string): Promise<void
   return invoke('delete_payment_method', { tenantId: getTenantId(), paymentMethodId });
 }
 
-// ====== Users / Roles / Branches ======
+// ---
 
 export async function getUsers(): Promise<User[]> {
   return invoke('get_users', { tenantId: getTenantId() });

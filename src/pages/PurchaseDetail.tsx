@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Check, Printer, Pencil, Plus, Trash2, CreditCard, RotateCcw, Undo2 } from 'lucide-react';
+import { ArrowRight, Check, Printer, Pencil, Trash2, CreditCard, RotateCcw, Undo2 } from 'lucide-react';
 import * as api from '../api';
 import type { PurchaseInvoiceDetail, StorageLocationFull, PaymentSchedule, PaymentScheduleData, AccountRow, SchedulePaymentData, ConfirmPurchasePaymentData, BatchRow, CreatePurchaseReturnData } from '../types';
 import Button from '../components/ui/Button';
@@ -9,6 +9,11 @@ import Badge from '../components/ui/Badge';
 import Toast from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import PrintInvoice from '../components/ui/PrintInvoice';
+import PaymentSchedulesPanel from '../components/purchases/PaymentSchedulesPanel';
+import PurchaseReturnModal from '../components/purchases/PurchaseReturnModal';
+import ConfirmPurchaseModal from '../components/purchases/ConfirmPurchaseModal';
+import PayInvoiceModal from '../components/purchases/PayInvoiceModal';
+import PayScheduleModal from '../components/purchases/PayScheduleModal';
 import { useAuditLog } from '../hooks/useAuditLog';
 
 export default function PurchaseDetail() {
@@ -39,8 +44,6 @@ export default function PurchaseDetail() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [schedules, setSchedules] = useState<PaymentSchedule[]>([]);
-  const [showAddSchedule, setShowAddSchedule] = useState(false);
-  const [newSchedule, setNewSchedule] = useState<PaymentScheduleData>({ due_date: '', amount: 0, note: '' });
   const [confirmPaymentInfo, setConfirmPaymentInfo] = useState<ConfirmPurchasePaymentData>({
     payment_mode: 'unpaid',
     payment_method: 'cash',
@@ -134,7 +137,7 @@ export default function PurchaseDetail() {
       const active = locs.filter(l => l.is_active);
       setLocations(active);
       if (active.length > 0) setSelectedLocationId(active[0].id);
-    }).catch(() => {});
+    }).catch((e: unknown) => { console.error('[PurchaseDetail] getStorageLocations failed:', e); });
     api.getAllAccounts(api.getBranchId()).then(accts => {
       const active = accts.filter(a => a.is_active);
       setAccounts(active);
@@ -145,7 +148,7 @@ export default function PurchaseDetail() {
         setPayInvoiceForm(f => ({ ...f, account_id: first.id, payment_method: derived }));
         setConfirmPaymentInfo(p => ({ ...p, account_id: first.id, payment_method: derived }));
       }
-    }).catch(() => {});
+    }).catch((e: unknown) => { console.error('[PurchaseDetail] getAllAccounts failed:', e); });
   }, []);
 
   const handleConfirm = async () => {
@@ -231,13 +234,11 @@ export default function PurchaseDetail() {
     }
   };
 
-  const handleAddSchedule = async () => {
-    if (!id || !newSchedule.due_date || newSchedule.amount <= 0) return;
+  const handleAddSchedule = async (data: PaymentScheduleData) => {
+    if (!id) return;
     try {
-      const created = await api.createPaymentSchedule(id, newSchedule);
+      const created = await api.createPaymentSchedule(id, data);
       setSchedules(prev => [...prev, created]);
-      setNewSchedule({ due_date: '', amount: 0, note: '' });
-      setShowAddSchedule(false);
     } catch (e: unknown) {
       setToast({ msg: api.errMsg(e, t('common.error')), type: 'danger' });
     }
@@ -438,443 +439,72 @@ export default function PurchaseDetail() {
         </div>
       )}
 
-      {/* Payment Schedules — only for confirmed invoices with remaining balance */}
       {invoice.status === 'confirmed' && invoice.payment_status !== 'paid' && (
-      <div className="mt-6">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-ink-main">{t('purchases.scheduleTitle')}</h3>
-          <button
-            onClick={() => setShowAddSchedule(s => !s)}
-            className="flex items-center gap-1 rounded-xl border border-ivory-border px-3 py-1.5 text-sm text-ink-muted hover:text-primary-600 hover:bg-ivory-muted"
-          >
-            <Plus size={14} />{t('purchases.addSchedule')}
-          </button>
-        </div>
-
-        {showAddSchedule && (
-          <div className="mb-3 flex flex-wrap gap-2 p-3 bg-ivory-muted rounded-sm border border-ivory-border">
-            <input
-              type="date"
-              value={newSchedule.due_date}
-              onChange={e => setNewSchedule(s => ({ ...s, due_date: e.target.value }))}
-              className="app-input px-3 py-2 text-sm"
-            />
-            <input
-              type="number"
-              placeholder={t('purchases.scheduleAmount')}
-              value={newSchedule.amount > 0 ? newSchedule.amount / 100 : ''}
-              onChange={e => setNewSchedule(s => ({ ...s, amount: Math.round(parseFloat(e.target.value || '0') * 100) }))}
-              min={0}
-              step={0.01}
-              className="app-input px-3 py-2 text-sm w-32"
-            />
-            <input
-              type="text"
-              placeholder={t('purchases.scheduleNote')}
-              value={newSchedule.note ?? ''}
-              onChange={e => setNewSchedule(s => ({ ...s, note: e.target.value }))}
-              className="app-input px-3 py-2 text-sm flex-1 min-w-[120px]"
-            />
-            <Button onClick={handleAddSchedule}>{t('common.save')}</Button>
-          </div>
-        )}
-
-        {schedules.length === 0 ? (
-          <div className="py-6 text-center text-sm text-ink-muted border border-dashed border-ivory-border rounded-sm">
-            {t('purchases.scheduleEmpty')}
-          </div>
-        ) : (
-          <div className="overflow-x-auto border border-ivory-border rounded-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-ivory-muted border-b border-ivory-border">
-                  <th className="px-4 py-2 text-right font-medium text-ink-muted">{t('purchases.scheduleDueDate')}</th>
-                  <th className="px-4 py-2 text-right font-medium text-ink-muted">{t('purchases.scheduleAmount')}</th>
-                  <th className="px-4 py-2 text-right font-medium text-ink-muted">{t('purchases.scheduleNote')}</th>
-                  <th className="px-4 py-2 text-right font-medium text-ink-muted">{t('purchases.scheduleStatus')}</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {schedules.map(s => {
-                  const today = new Date().toISOString().slice(0, 10);
-                  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-                  const isOverdue = !s.is_paid && s.due_date < today;
-                  const isDueSoon = !s.is_paid && !isOverdue && s.due_date <= tomorrow;
-                  return (
-                    <tr key={s.id} className="border-b border-ivory-border bg-ivory-surface last:border-0">
-                      <td className={`px-4 py-2 tabular-nums ${
-                        isOverdue ? 'text-status-danger font-medium'
-                        : isDueSoon ? 'text-amber-600 font-medium'
-                        : 'text-ink-main'
-                      }`}>
-                        {s.due_date}
-                      </td>
-                      <td className="px-4 py-2 tabular-nums text-ink-main">{api.formatMoney(s.amount)}</td>
-                      <td className="px-4 py-2 text-ink-muted">{s.note}</td>
-                      <td className="px-4 py-2">
-                        {s.is_paid
-                          ? <span className="text-status-success text-xs font-medium">{t('purchases.schedulePaid')}</span>
-                          : isOverdue
-                            ? <span className="text-status-danger text-xs font-medium">{t('purchases.scheduleOverdue')}</span>
-                            : isDueSoon
-                              ? <span className="text-amber-600 text-xs font-medium">{t('purchases.scheduleDueSoon')}</span>
-                              : <span className="text-ink-muted text-xs">{t('purchases.schedulePending')}</span>
-                        }
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex gap-1 justify-end">
-                          {!s.is_paid && (
-                            <button
-                              onClick={() => openPayModal(s)}
-                              className="flex items-center gap-1 rounded-lg border border-ivory-border px-2 py-1 text-xs text-ink-muted hover:text-primary-600 hover:border-primary-600"
-                              title={t('purchases.markPaid')}
-                            >
-                              <CreditCard size={13} />{t('purchases.payNow')}
-                            </button>
-                          )}
-                          {!s.is_paid && (
-                            <button
-                              onClick={() => { setDeleteScheduleId(s.id); setModal('deleteSchedule'); }}
-                              className="p-1.5 rounded-lg text-ink-muted hover:text-status-danger hover:bg-red-50"
-                              title={t('common.delete')}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        <PaymentSchedulesPanel
+          schedules={schedules}
+          onAddSchedule={handleAddSchedule}
+          onPaySchedule={openPayModal}
+          onDeleteSchedule={(scheduleId) => { setDeleteScheduleId(scheduleId); setModal('deleteSchedule'); }}
+        />
       )}
 
-      {/* Confirm modal with location + payment choice */}
-      {modal === 'confirm' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[420px] rounded-2xl bg-white p-5 shadow-[var(--shadow-float)] border border-ivory-border">
-            <h3 className="mb-1 font-bold text-ink-main">{t('purchases.confirmTitle')}</h3>
-            <p className="mb-4 text-sm text-ink-muted">{t('purchases.confirmMsg')}</p>
-            {locations.length > 0 && (
-              <div className="mb-3">
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.storageLocation')}</label>
-                <select
-                  value={selectedLocationId}
-                  onChange={e => setSelectedLocationId(e.target.value)}
-                  className="app-input w-full px-3 py-2 text-sm"
-                >
-                  {locations.map(l => (
-                    <option key={l.id} value={l.id}>{l.name_ar || l.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className="mb-3">
-              <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.confirmPaymentMode')}</label>
-              <select
-                value={confirmPaymentInfo.payment_mode}
-                onChange={e => setConfirmPaymentInfo(p => ({ ...p, payment_mode: e.target.value as 'unpaid' | 'paid' | 'partial' }))}
-                className="app-input w-full px-3 py-2 text-sm"
-              >
-                <option value="unpaid">{t('purchases.payModeUnpaid')}</option>
-                <option value="paid">{t('purchases.payModePaid')}</option>
-                <option value="partial">{t('purchases.payModePartial')}</option>
-              </select>
-            </div>
-            {confirmPaymentInfo.payment_mode !== 'unpaid' && (
-              <div className="space-y-3 mb-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payAccount')}</label>
-                  <select
-                    value={confirmPaymentInfo.account_id ?? ''}
-                    onChange={e => {
-                      const acctId = e.target.value;
-                      const derived = api.paymentMethodFromAccountType(accountTypeFor(acctId));
-                      setConfirmPaymentInfo(p => ({ ...p, account_id: acctId, payment_method: derived }));
-                    }}
-                    className="app-input w-full px-3 py-2 text-sm"
-                  >
-                    <option value="">{t('purchases.payAccount')}</option>
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id}>{a.name_ar || a.name} — {api.formatMoney(a.current_balance)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payMethod')}</label>
-                  <div className="px-3 py-2 text-sm rounded-lg bg-ivory-muted border border-ivory-border text-ink-muted">
-                    {derivedMethodLabel(confirmPaymentInfo.account_id ?? '')}
-                  </div>
-                </div>
-                {confirmPaymentInfo.payment_mode === 'partial' && (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.partialAmount')}</label>
-                    <input
-                      type="number"
-                      min={0.01}
-                      step={0.01}
-                      value={confirmPaymentInfo.amount_paid !== undefined ? confirmPaymentInfo.amount_paid / 100 : ''}
-                      onChange={e => setConfirmPaymentInfo(p => ({ ...p, amount_paid: Math.round(parseFloat(e.target.value || '0') * 100) }))}
-                      className="app-input w-full px-3 py-2 text-sm"
-                    />
-                  </div>
-                )}
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payDate')}</label>
-                  <input
-                    type="date"
-                    value={confirmPaymentInfo.payment_date ?? new Date().toISOString().slice(0, 10)}
-                    onChange={e => setConfirmPaymentInfo(p => ({ ...p, payment_date: e.target.value }))}
-                    className="app-input w-full px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-            )}
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setModal(null)} className="rounded-xl border border-ivory-border px-4 py-2 text-sm text-ink-muted hover:bg-ivory-muted">{t('common.cancel')}</button>
-              <Button onClick={handleConfirm}>{t('purchases.confirm')}</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmPurchaseModal
+        open={modal === 'confirm'}
+        locations={locations}
+        selectedLocationId={selectedLocationId}
+        confirmPaymentInfo={confirmPaymentInfo}
+        accounts={accounts}
+        accountTypeFor={accountTypeFor}
+        derivedMethodLabel={derivedMethodLabel}
+        onClose={() => setModal(null)}
+        onLocationChange={setSelectedLocationId}
+        onPaymentInfoChange={setConfirmPaymentInfo}
+        onConfirm={handleConfirm}
+      />
 
-      {/* Pay Invoice Modal */}
-      {modal === 'payInvoice' && invoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[380px] rounded-2xl bg-white p-5 shadow-[var(--shadow-float)] border border-ivory-border">
-            <h3 className="mb-1 font-bold text-ink-main">{t('purchases.payInvoiceTitle')}</h3>
-            <p className="mb-4 text-sm text-ink-muted">
-              {t('purchases.payInvoiceMsg')} — <span className="font-semibold tabular-nums text-ink-main">{api.formatMoney(invoice.total - invoice.amount_paid)}</span>
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.partialAmount')}</label>
-                <input
-                  type="number"
-                  min={0.01}
-                  step={0.01}
-                  value={payInvoiceAmount > 0 ? payInvoiceAmount / 100 : ''}
-                  onChange={e => setPayInvoiceAmount(Math.round(parseFloat(e.target.value || '0') * 100))}
-                  className="app-input w-full px-3 py-2 text-sm"
-                  placeholder={api.formatMoney(invoice.total - invoice.amount_paid).replace(' SDG', '')}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payAccount')}</label>
-                <select
-                  value={payInvoiceForm.account_id}
-                  onChange={e => {
-                    const acctId = e.target.value;
-                    const derived = api.paymentMethodFromAccountType(accountTypeFor(acctId));
-                    setPayInvoiceForm(f => ({ ...f, account_id: acctId, payment_method: derived }));
-                  }}
-                  className="app-input w-full px-3 py-2 text-sm"
-                >
-                  {accounts.map(a => (
-                    <option key={a.id} value={a.id}>{a.name_ar || a.name} — {api.formatMoney(a.current_balance)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payMethod')}</label>
-                <div className="px-3 py-2 text-sm rounded-lg bg-ivory-muted border border-ivory-border text-ink-muted">
-                  {derivedMethodLabel(payInvoiceForm.account_id)}
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payDate')}</label>
-                <input
-                  type="date"
-                  value={payInvoiceForm.payment_date}
-                  onChange={e => setPayInvoiceForm(f => ({ ...f, payment_date: e.target.value }))}
-                  className="app-input w-full px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payNotes')}</label>
-                <input
-                  type="text"
-                  value={payInvoiceForm.notes ?? ''}
-                  onChange={e => setPayInvoiceForm(f => ({ ...f, notes: e.target.value }))}
-                  className="app-input w-full px-3 py-2 text-sm"
-                  placeholder={t('common.optional')}
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setModal(null)}
-                className="rounded-xl border border-ivory-border px-4 py-2 text-sm text-ink-muted hover:bg-ivory-muted"
-              >
-                {t('common.cancel')}
-              </button>
-              <Button onClick={handlePayInvoice} disabled={!payInvoiceForm.account_id}>
-                {t('purchases.confirmPay')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PayInvoiceModal
+        open={modal === 'payInvoice' && !!invoice}
+        remaining={invoice ? invoice.total - invoice.amount_paid : 0}
+        payInvoiceAmount={payInvoiceAmount}
+        payInvoiceForm={payInvoiceForm}
+        accounts={accounts}
+        accountTypeFor={accountTypeFor}
+        derivedMethodLabel={derivedMethodLabel}
+        onClose={() => setModal(null)}
+        onAmountChange={setPayInvoiceAmount}
+        onFormChange={setPayInvoiceForm}
+        onPay={handlePayInvoice}
+      />
 
-      {/* Pay Schedule Modal */}
-      {modal === 'paySchedule' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[380px] rounded-2xl bg-white p-5 shadow-[var(--shadow-float)] border border-ivory-border">
-            <h3 className="mb-1 font-bold text-ink-main">{t('purchases.payScheduleTitle')}</h3>
-            <p className="mb-4 text-sm text-ink-muted">
-              {t('purchases.payScheduleMsg')} — <span className="font-semibold tabular-nums text-ink-main">{api.formatMoney(payingScheduleAmount)}</span>
-            </p>
+      <PayScheduleModal
+        open={modal === 'paySchedule'}
+        scheduleAmount={payingScheduleAmount}
+        payForm={payForm}
+        accounts={accounts}
+        accountTypeFor={accountTypeFor}
+        derivedMethodLabel={derivedMethodLabel}
+        onClose={() => { setModal(null); setPayingScheduleId(null); }}
+        onFormChange={setPayForm}
+        onPay={handlePaySchedule}
+      />
 
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payAccount')}</label>
-                <select
-                  value={payForm.account_id}
-                  onChange={e => {
-                    const acctId = e.target.value;
-                    const derived = api.paymentMethodFromAccountType(accountTypeFor(acctId));
-                    setPayForm(f => ({ ...f, account_id: acctId, payment_method: derived }));
-                  }}
-                  className="app-input w-full px-3 py-2 text-sm"
-                >
-                  {accounts.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.name_ar || a.name} — {api.formatMoney(a.current_balance)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payMethod')}</label>
-                <div className="px-3 py-2 text-sm rounded-lg bg-ivory-muted border border-ivory-border text-ink-muted">
-                  {derivedMethodLabel(payForm.account_id)}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payDate')}</label>
-                <input
-                  type="date"
-                  value={payForm.payment_date}
-                  onChange={e => setPayForm(f => ({ ...f, payment_date: e.target.value }))}
-                  className="app-input w-full px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.payNotes')}</label>
-                <input
-                  type="text"
-                  value={payForm.notes ?? ''}
-                  onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))}
-                  className="app-input w-full px-3 py-2 text-sm"
-                  placeholder={t('common.optional')}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => { setModal(null); setPayingScheduleId(null); }}
-                className="rounded-xl border border-ivory-border px-4 py-2 text-sm text-ink-muted hover:bg-ivory-muted"
-              >
-                {t('common.cancel')}
-              </button>
-              <Button onClick={handlePaySchedule} disabled={!payForm.account_id}>
-                {t('purchases.confirmPay')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Purchase Return Modal */}
-      {modal === 'purchaseReturn' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="mx-4 w-full max-w-xl rounded-2xl border border-ivory-border bg-white shadow-[var(--shadow-float)] flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-ivory-border flex items-center gap-3">
-              <Undo2 size={18} className="text-primary-600" />
-              <div>
-                <h3 className="font-semibold text-ink-main">{t('purchases.returnTitle')}</h3>
-                <p className="text-xs text-ink-muted mt-0.5">{invoice?.invoice_number}</p>
-              </div>
-            </div>
-            <div className="p-6 flex flex-col gap-4 overflow-y-auto">
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.returnDate')}</label>
-                  <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} className="app-input w-full px-3 py-2 text-sm" />
-                </div>
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.returnAccount')}</label>
-                  <select value={returnAccountId} onChange={e => setReturnAccountId(e.target.value)} className="app-input w-full px-3 py-2 text-sm">
-                    <option value="">{t('common.none')}</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-ink-muted">{t('purchases.returnReason')}</label>
-                <input value={returnReason} onChange={e => setReturnReason(e.target.value)} placeholder={t('purchases.returnReasonPlaceholder')} className="app-input w-full px-3 py-2 text-sm" />
-              </div>
-              {returnBatches.length === 0 ? (
-                <p className="text-center text-sm text-ink-muted py-4">{t('warehouse.inventory.emptyBatches')}</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-ivory-border bg-ivory-muted">
-                        <th className="px-3 py-2 text-start text-xs font-medium text-ink-muted">{t('purchases.productName')}</th>
-                        <th className="px-3 py-2 text-start text-xs font-medium text-ink-muted">{t('purchases.batchNumber')}</th>
-                        <th className="px-3 py-2 text-end text-xs font-medium text-ink-muted">{t('purchases.returnAvailableQty')}</th>
-                        <th className="px-3 py-2 text-end text-xs font-medium text-ink-muted">{t('purchases.returnQty')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {returnBatches.map(b => (
-                        <tr key={b.id} className="border-b border-ivory-border">
-                          <td className="px-3 py-2 text-ink-main">{b.product_name_ar || b.product_name}</td>
-                          <td className="px-3 py-2 text-ink-muted">{b.batch_number ?? '—'}</td>
-                          <td className="px-3 py-2 text-end tabular-nums">{b.quantity_current}</td>
-                          <td className="px-3 py-2 text-end">
-                            <input
-                              type="number" min={0} max={b.quantity_current}
-                              value={returnQtys[b.id] ?? 0}
-                              onChange={e => setReturnQtys(prev => ({ ...prev, [b.id]: Math.min(b.quantity_current, Math.max(0, parseInt(e.target.value) || 0)) }))}
-                              className="app-input w-20 px-2 py-1 text-sm text-end"
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {(() => {
-                const total = returnBatches.reduce((sum, b) => sum + (returnQtys[b.id] ?? 0) * (b.unit_cost ?? 0), 0);
-                return total > 0 ? (
-                  <div className="flex justify-end gap-2 text-sm font-semibold">
-                    <span className="text-ink-muted">{t('purchases.returnTotal')}:</span>
-                    <span className="text-status-danger">{api.formatMoney(total)}</span>
-                  </div>
-                ) : null;
-              })()}
-            </div>
-            <div className="px-6 py-4 border-t border-ivory-border flex gap-3">
-              <button onClick={() => setModal(null)} className="flex-1 rounded-xl border border-ivory-border py-2 text-sm text-ink-muted hover:bg-ivory-muted">{t('common.cancel')}</button>
-              <Button onClick={handlePurchaseReturn} disabled={returningPurchase}>
-                {returningPurchase ? t('common.loading') : t('purchases.returnConfirm')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PurchaseReturnModal
+        open={modal === 'purchaseReturn'}
+        invoiceNumber={invoice?.invoice_number ?? ''}
+        returnBatches={returnBatches}
+        returnQtys={returnQtys}
+        returnDate={returnDate}
+        returnReason={returnReason}
+        returnAccountId={returnAccountId}
+        accounts={accounts}
+        returningPurchase={returningPurchase}
+        onClose={() => setModal(null)}
+        onDateChange={setReturnDate}
+        onReasonChange={setReturnReason}
+        onAccountChange={setReturnAccountId}
+        onQtyChange={(batchId, qty) => setReturnQtys(prev => ({ ...prev, [batchId]: qty }))}
+        onReturn={handlePurchaseReturn}
+      />
 
       <Modal
         open={modal === 'cancel'}

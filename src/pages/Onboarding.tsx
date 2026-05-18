@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Building2, User, ChevronRight, ChevronLeft, Key } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -34,6 +35,7 @@ const STEPS = [
 ];
 
 export default function Onboarding({ onComplete }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -108,7 +110,7 @@ export default function Onboarding({ onComplete }: Props) {
         license_number: licenseNumber.trim() || undefined,
         currency_code: currencyCode,
         timezone,
-        branch_name: branchName.trim() || 'Main Branch',
+        branch_name: branchName.trim() || 'الفرع الرئيسي',
         branch_name_ar: branchNameAr.trim() || 'الفرع الرئيسي',
         admin_username: adminUsername.trim(),
         owner_email: ownerEmail.trim() || undefined,
@@ -237,7 +239,7 @@ export default function Onboarding({ onComplete }: Props) {
                       name="pharmacyName"
                       value={pharmacyName}
                       onChange={(e) => setPharmacyName(e.target.value)}
-                      placeholder="TAJ Pharmacy"
+                      placeholder={t('onboarding.pharmacyNamePlaceholder')}
                       dir="ltr"
                       required
                     />
@@ -256,7 +258,7 @@ export default function Onboarding({ onComplete }: Props) {
                       name="licenseNumber"
                       value={licenseNumber}
                       onChange={(e) => setLicenseNumber(e.target.value)}
-                      placeholder="LIC-XXXX"
+                      placeholder={t('onboarding.licensePlaceholder')}
                       dir="ltr"
                     />
                     <Input
@@ -302,7 +304,7 @@ export default function Onboarding({ onComplete }: Props) {
                         name="branchName"
                         value={branchName}
                         onChange={(e) => setBranchName(e.target.value)}
-                        placeholder="Main Branch"
+                        placeholder={t('onboarding.mainBranchPlaceholder')}
                         dir="ltr"
                         required
                       />
@@ -331,7 +333,7 @@ export default function Onboarding({ onComplete }: Props) {
                       name="adminFullName"
                       value={adminFullName}
                       onChange={(e) => setAdminFullName(e.target.value)}
-                      placeholder="System Administrator"
+                      placeholder={t('onboarding.adminNamePlaceholder')}
                       dir="ltr"
                       required
                     />
@@ -350,7 +352,7 @@ export default function Onboarding({ onComplete }: Props) {
                       name="adminUsername"
                       value={adminUsername}
                       onChange={(e) => setAdminUsername(e.target.value)}
-                      placeholder="admin"
+                      placeholder={t('onboarding.usernamePlaceholder')}
                       dir="ltr"
                       autoComplete="username"
                       required
@@ -361,7 +363,7 @@ export default function Onboarding({ onComplete }: Props) {
                       type="email"
                       value={ownerEmail}
                       onChange={(e) => setOwnerEmail(e.target.value)}
-                      placeholder="owner@pharmacy.com"
+                      placeholder={t('onboarding.emailPlaceholder')}
                       dir="ltr"
                       autoComplete="email"
                       required

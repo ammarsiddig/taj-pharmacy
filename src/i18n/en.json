@@ -37,6 +37,7 @@
     "subUnitRatio": "Ratio (1 Main = X Sub)",
     "financials": "Financials",
     "addNew": "+ New Product",
+    "purchaseInvoice": "Purchase Invoice",
     "search": "Search by drug name or barcode...",
     "barcode": "Barcode",
     "tradeName": "Trade Name",
@@ -818,7 +819,14 @@
     "backupNever": "No backup yet",
     "backupFailed": "Backup failed",
     "backupAgoHours": "{hours} hours ago",
-    "backupAgoDays": "{days} days ago"
+    "backupAgoDays": "{days} days ago",
+    "checklist": {
+      "title": "Getting Started",
+      "addProduct": "Add your first product",
+      "addSupplier": "Add your first supplier",
+      "purchaseInvoice": "Create a purchase invoice",
+      "firstSale": "Make your first sale"
+    }
   },
   "common": {
     "loading": "Loading...",
@@ -1518,6 +1526,7 @@
   "errors": {
     "customer_cash_only": "This customer is cash-only (no credit allowed).",
     "insufficient_account_balance": "Cash drawer has only {available} SDG. Cannot refund {required} SDG.",
-    "sale_below_cost": "Item {name} would sell at {price} SDG which is below cost ({cost} SDG). Reduce the discount."
+    "sale_below_cost": "Item {name} would sell at {price} SDG which is below cost ({cost} SDG). Reduce the discount.",
+    "unexpected": "An unexpected error occurred. Please try again."
   }
 }

@@ -37,6 +37,7 @@
     "subUnitRatio": "النسبة (1 رئيسية = X فرعية)",
     "financials": "المالية",
     "addNew": "+ منتج جديد",
+    "purchaseInvoice": "فاتورة مشتريات",
     "search": "ابحث باسم الدواء أو الباركود...",
     "barcode": "الباركود",
     "tradeName": "اسم الدواء",
@@ -848,7 +849,14 @@
     "backupNever": "لا توجد نسخة احتياطية",
     "backupFailed": "فشلت النسخة الاحتياطية",
     "backupAgoHours": "قبل {hours} ساعة",
-    "backupAgoDays": "قبل {days} يوم"
+    "backupAgoDays": "قبل {days} يوم",
+    "checklist": {
+      "title": "البدء",
+      "addProduct": "أضف أول منتج",
+      "addSupplier": "أضف أول مورد",
+      "purchaseInvoice": "أنشئ فاتورة مشتريات",
+      "firstSale": "قم بأول عملية بيع"
+    }
   },
   "common": {
     "loading": "جاري التحميل...",
@@ -1525,6 +1533,7 @@
   "errors": {
     "customer_cash_only": "هذا العميل نقدي فقط (لا يسمح بالائتمان).",
     "insufficient_account_balance": "صندوق النقدية يحتوي على {available} ج.س فقط. لا يمكن إعادة {required} ج.س.",
-    "sale_below_cost": "صنف {name} سيُباع بـ {price} ج.س وهو أقل من سعر التكلفة ({cost} ج.س). قلل من الخصم."
+    "sale_below_cost": "صنف {name} سيُباع بـ {price} ج.س وهو أقل من سعر التكلفة ({cost} ج.س). قلل من الخصم.",
+    "unexpected": "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى."
   }
 }

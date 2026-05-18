@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getSubscription, clearToken, type SubscriptionInfo } from '../api';
+import { getSubscription, clearToken, changePassword, type SubscriptionInfo } from '../api';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
+import InstallBanner from '../components/InstallBanner';
 
 interface Props {
   onLogout: () => void;
@@ -8,6 +10,11 @@ interface Props {
 export default function OwnerSettings({ onLogout }: Props) {
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const { canInstall, isIOS, install } = useInstallPrompt();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     getSubscription()
@@ -26,6 +33,22 @@ export default function OwnerSettings({ onLogout }: Props) {
     expiring: { bg: '#FFFBEB', color: '#D97706', label: 'ينتهي قريباً' },
     expired: { bg: '#FEF2F2', color: '#DC2626', label: 'منتهي' },
     suspended: { bg: '#F3F4F6', color: '#374151', label: 'موقوف' },
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || newPassword.length < 6) return;
+    setChangingPassword(true);
+    setPasswordMsg(null);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setPasswordMsg({ text: 'تم تغيير كلمة المرور بنجاح', ok: true });
+      setCurrentPassword('');
+      setNewPassword('');
+    } catch {
+      setPasswordMsg({ text: 'كلمة المرور الحالية غير صحيحة', ok: false });
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   return (
@@ -47,6 +70,42 @@ export default function OwnerSettings({ onLogout }: Props) {
             </p>
             <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>الحساب نشط</p>
           </div>
+        </div>
+      </div>
+
+      {/* Password Change Card — TASK-507 */}
+      <div className="app-card p-5">
+        <p className="font-semibold mb-4" style={{ color: 'var(--color-ink-main)' }}>🔑 تغيير كلمة المرور</p>
+        <div className="flex flex-col gap-3">
+          <input
+            type="password"
+            placeholder="كلمة المرور الحالية"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="app-input px-3 py-2.5 text-sm"
+            autoComplete="current-password"
+          />
+          <input
+            type="password"
+            placeholder="كلمة المرور الجديدة (6 أحرف على الأقل)"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="app-input px-3 py-2.5 text-sm"
+            autoComplete="new-password"
+          />
+          <button
+            onClick={handleChangePassword}
+            disabled={changingPassword || !currentPassword || newPassword.length < 6}
+            className="rounded-xl py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            style={{ background: 'var(--color-primary-600)' }}
+          >
+            {changingPassword ? 'جاري التغيير...' : 'تغيير كلمة المرور'}
+          </button>
+          {passwordMsg && (
+            <p className={`text-xs text-center ${passwordMsg.ok ? '' : ''}`} style={{ color: passwordMsg.ok ? '#059669' : '#DC2626' }}>
+              {passwordMsg.text}
+            </p>
+          )}
         </div>
       </div>
 
@@ -137,6 +196,9 @@ export default function OwnerSettings({ onLogout }: Props) {
       <div className="text-center py-4">
         <p className="text-xs" style={{ color: 'var(--color-ink-placeholder)' }}>TAJ Pharmacy v4.0</p>
         <p className="text-xs mt-1" style={{ color: 'var(--color-ink-placeholder)' }}>© 2025 جميع الحقوق محفوظة</p>
+        <div className="mt-3">
+          <InstallBanner canInstall={canInstall} isIOS={isIOS} onInstall={install} compact />
+        </div>
       </div>
 
       {/* Logout Button */}
