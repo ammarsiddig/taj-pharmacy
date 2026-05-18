@@ -149,12 +149,27 @@ router.get('/v1/sync-stats', requireAuthOrJwt, async (req, res) => {
       WHERE tenant_id = $1 AND DATE(received_at) = CURRENT_DATE
     `, [req.tenantId]);
 
+    const lastSyncAt = tenant?.last_sync_at || null;
+    const minutesSinceSync = lastSyncAt
+      ? Math.floor((Date.now() - new Date(lastSyncAt).getTime()) / 60000)
+      : -1;
+    const health = !lastSyncAt ? 'red'
+      : minutesSinceSync < 1440 ? 'green'
+      : minutesSinceSync < 10080 ? 'yellow'
+      : 'red';
+    const totalRows = syncStateResult.rows.reduce((s, r) => s + (r.row_count || 0), 0);
+    const branch = req.query.branch || null;
+
     res.json({
       tenant_id: req.tenantId,
+      branch,
       first_seen_at: tenant?.first_seen_at || null,
-      last_sync_at: tenant?.last_sync_at || null,
+      last_sync_at: lastSyncAt,
       total_syncs: tenant?.total_syncs || 0,
+      total_rows: totalRows,
       today_events: parseInt(todayEventsResult.rows[0]?.count || 0),
+      health,
+      minutes_since_sync: minutesSinceSync,
       tables: syncStateResult.rows,
     });
   } catch (err) {
