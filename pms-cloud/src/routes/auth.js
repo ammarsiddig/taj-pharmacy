@@ -440,6 +440,28 @@ router.post('/auth/recover', loginLimiter, async (req, res) => {
 });
 
 /**
+ * PATCH /v1/tenants/me
+ * Update own pharmacy name. Auth: Bearer sync_token or JWT.
+ * Body: { pharmacy_name }
+ */
+router.patch('/v1/tenants/me', requireAuthOrJwt, async (req, res) => {
+  try {
+    const { pharmacy_name } = req.body;
+    if (!pharmacy_name) {
+      return res.status(400).json({ error: 'pharmacy_name is required' });
+    }
+    await query(
+      'UPDATE tenants SET pharmacy_name = $1 WHERE id = $2',
+      [pharmacy_name, req.tenantId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[auth] update tenant error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * GET /v1/config
  * Desktop polls this on startup + every sync cycle.
  * Auth: Bearer sync_token

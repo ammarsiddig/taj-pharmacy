@@ -548,7 +548,9 @@
       "active": "Active",
       "disabled": "Disabled",
       "type": "Type",
-      "status": "Status"
+      "status": "Status",
+      "deleteTitle": "Delete Payment Method",
+      "deleteConfirm": "Are you sure you want to delete this payment method?"
     },
     "general": {
       "title": "Pharmacy Information",
@@ -644,6 +646,8 @@
       "actions": "Actions",
       "restore": "Restore",
       "delete": "Delete",
+      "deleteTitle": "Delete Backup",
+      "deleteConfirm": "Are you sure you want to delete this cloud backup? This cannot be undone.",
       "deleteSuccess": "Cloud backup deleted successfully",
       "verificationTitle": "Restore Verification",
       "restoreWarning": "A local safety backup will be created before restoring this cloud snapshot into the live database.",
@@ -835,6 +839,9 @@
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
+    "deleteConfirm": "Are you sure you want to delete this? This action cannot be undone.",
+    "deleteWorkspace": "Delete Workspace",
+    "deleteWorkspaceConfirm": "Are you sure you want to delete this workspace? All saved cart items will be lost.",
     "edit": "Edit",
     "search": "Search",
     "noResults": "No results found",

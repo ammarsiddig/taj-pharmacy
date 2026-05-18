@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Toast from '../../components/ui/Toast';
+import Modal from '../../components/ui/Modal';
 
 export default function BackupTab() {
   const { t } = useTranslation();
@@ -16,25 +17,29 @@ export default function BackupTab() {
   const [cloudConfig, setCloudConfig] = useState<CloudConfig>({ cloud_endpoint: '', cloud_token: '', cloud_enabled: false });
   const [restoringRemoteId, setRestoringRemoteId] = useState<string | null>(null);
   const [deletingRemoteId, setDeletingRemoteId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [restorePreview, setRestorePreview] = useState<RestoreVerification | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [uploadingCloud, setUploadingCloud] = useState(false);
   const [restoreSource, setRestoreSource] = useState<'local' | 'cloud'>('cloud');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null);
+  const [autoBackup, setAutoBackup] = useState<BackupLogRow | null>(null);
 
   const cloudConnected = Boolean(cloudConfig.cloud_endpoint && cloudConfig.cloud_token);
 
   const load = useCallback(async () => {
     try {
-      const [localHistory, config, nextSyncStatus] = await Promise.all([
+      const [localHistory, config, nextSyncStatus, ab] = await Promise.all([
         api.getBackupHistory(),
         api.getCloudConfig(),
         api.getCloudSyncStatus(),
+        api.getAutoBackupStatus().catch(() => null),
       ]);
       setHistory(localHistory);
       setCloudConfig(config);
       setSyncStatus(nextSyncStatus);
+      setAutoBackup(ab);
       if (config.cloud_endpoint && config.cloud_token) {
         try { setCloudBackups(await api.getCloudBackups()); } catch { setCloudBackups([]); /* non-critical: backup list optional, shown only when cloud configured */ }
       } else {
@@ -145,6 +150,31 @@ export default function BackupTab() {
         </div>
       )}
 
+      {autoBackup && (
+        <div className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm ${
+          autoBackup.sync_status === 'synced' ? 'border-primary-200 bg-primary-50' :
+          autoBackup.sync_status === 'failed' ? 'border-red-200 bg-red-50' :
+          'border-ivory-border bg-surface-secondary'
+        }`}>
+          <span className={`h-2 w-2 rounded-full shrink-0 ${
+            autoBackup.sync_status === 'synced' ? 'bg-primary-600' :
+            autoBackup.sync_status === 'failed' ? 'bg-status-danger' :
+            'bg-amber-400'
+          }`} />
+          <span className="text-ink-muted">آخر نسخ احتياطي تلقائي:</span>
+          <span className="font-medium text-ink-main">{fmtDateTime(autoBackup.started_at)}</span>
+          {autoBackup.sync_status === 'synced' && (
+            <span className="ms-auto rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">مرفوعة</span>
+          )}
+          {autoBackup.sync_status === 'failed' && (
+            <span className="ms-auto rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-status-danger">فشل</span>
+          )}
+          {autoBackup.sync_status === 'pending' && (
+            <span className="ms-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">قيد الانتظار</span>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="app-panel space-y-3 p-4">
           <h3 className="text-sm font-bold text-ink-main">{t('settings.backup.localTab')}</h3>
@@ -242,7 +272,7 @@ export default function BackupTab() {
                       <Button variant="ghost" size="sm" onClick={() => handlePrepareRestore(backup.remote_id)} disabled={restoringRemoteId === backup.remote_id}>
                         {restoringRemoteId === backup.remote_id ? t('common.loading') : t('settings.backup.restore')}
                       </Button>
-                      <Button variant="danger" size="sm" onClick={() => handleDeleteCloudBackup(backup.remote_id)} disabled={deletingRemoteId === backup.remote_id}>
+                      <Button variant="danger" size="sm" onClick={() => setDeleteConfirmId(backup.remote_id)} disabled={deletingRemoteId === backup.remote_id}>
                         {deletingRemoteId === backup.remote_id ? t('common.loading') : t('settings.backup.delete')}
                       </Button>
                     </div>
@@ -292,5 +322,14 @@ export default function BackupTab() {
         )}
       </div>
     </div>
+
+    <Modal
+      open={!!deleteConfirmId}
+      title={t('settings.backup.deleteTitle')}
+      message={t('settings.backup.deleteConfirm')}
+      variant="danger"
+      onConfirm={() => { if (deleteConfirmId) { handleDeleteCloudBackup(deleteConfirmId); setDeleteConfirmId(null); } }}
+      onCancel={() => setDeleteConfirmId(null)}
+    />
   );
 }

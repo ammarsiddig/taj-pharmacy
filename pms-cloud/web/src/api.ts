@@ -579,6 +579,10 @@ export async function changePassword(current_password: string, new_password: str
   }
 }
 
+export async function updateTenantInfo(data: { pharmacy_name?: string }): Promise<void> {
+  return request('/v1/tenants/me', { method: 'PATCH', body: JSON.stringify(data) });
+}
+
 // ─── Download ─────────────────────────────────────────────────────────────────
 
 export interface LatestDownload {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSubscription, clearToken, changePassword, type SubscriptionInfo } from '../api';
+import { getSubscription, clearToken, changePassword, updateTenantInfo, type SubscriptionInfo } from '../api';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import InstallBanner from '../components/InstallBanner';
 
@@ -15,6 +15,10 @@ export default function OwnerSettings({ onLogout }: Props) {
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [pharmacyName, setPharmacyName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameMsg, setNameMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     getSubscription()
@@ -65,9 +69,49 @@ export default function OwnerSettings({ onLogout }: Props) {
             🏥
           </div>
           <div className="flex-1">
-            <p className="font-bold" style={{ color: 'var(--color-ink-main)' }}>
-              {subscription?.pharmacy_name || 'صيدليتك'}
-            </p>
+            {editingName ? (
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  placeholder="اسم الصيدلية"
+                  value={pharmacyName}
+                  onChange={(e) => setPharmacyName(e.target.value)}
+                  className="app-input px-3 py-2 text-sm"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!pharmacyName.trim()) return;
+                      setSavingName(true);
+                      try {
+                        await updateTenantInfo({ pharmacy_name: pharmacyName.trim() });
+                        setSubscription(s => s ? { ...s, pharmacy_name: pharmacyName.trim() } : null);
+                        setNameMsg({ text: 'تم حفظ اسم الصيدلية', ok: true });
+                        setEditingName(false);
+                      } catch {
+                        setNameMsg({ text: 'فشل حفظ الاسم', ok: false });
+                      } finally { setSavingName(false); }
+                    }}
+                    disabled={savingName || !pharmacyName.trim()}
+                    className="rounded-lg px-3 py-1 text-xs font-bold text-white disabled:opacity-50"
+                    style={{ background: 'var(--color-primary-600)' }}
+                  >
+                    {savingName ? '...' : 'حفظ'}
+                  </button>
+                  <button onClick={() => setEditingName(false)} className="rounded-lg px-3 py-1 text-xs font-bold" style={{ color: 'var(--color-ink-muted)' }}>إلغاء</button>
+                </div>
+                {nameMsg && <p className="text-xs" style={{ color: nameMsg.ok ? '#059669' : '#DC2626' }}>{nameMsg.text}</p>}
+              </div>
+            ) : (
+              <>
+                <p className="font-bold" style={{ color: 'var(--color-ink-main)' }}>
+                  {subscription?.pharmacy_name || 'صيدليتك'}
+                </p>
+                <button onClick={() => { setPharmacyName(subscription?.pharmacy_name || ''); setEditingName(true); setNameMsg(null); }} className="text-xs" style={{ color: 'var(--color-primary-600)' }}>
+                  ✏️ تعديل الاسم
+                </button>
+              </>
+            )}
             <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>الحساب نشط</p>
           </div>
         </div>
