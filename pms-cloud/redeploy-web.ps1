@@ -15,7 +15,7 @@ Write-Host "[3/4] Uploading to VPS..." -ForegroundColor Yellow
 ssh "$VPS_USER@$VPS_IP" "rm -rf $REMOTE_DIR/web-dist; mkdir -p $REMOTE_DIR/web-dist"
 scp -r "$PSScriptRoot\web\dist\*" "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/web-dist/"
 Write-Host "Upload OK" -ForegroundColor Green
-Write-Host "[4/4] Restarting Caddy..." -ForegroundColor Yellow
-ssh "$VPS_USER@$VPS_IP" "cd $REMOTE_DIR; docker compose restart caddy"
+Write-Host "[4/4] Reloading Nginx..." -ForegroundColor Yellow
+ssh "$VPS_USER@$VPS_IP" "systemctl reload nginx"
 Write-Host "=== Done! ===" -ForegroundColor Green
-Write-Host "PWA: http://${VPS_IP}/" -ForegroundColor Cyan
+Write-Host "PWA: https://taj.systems/" -ForegroundColor Cyan

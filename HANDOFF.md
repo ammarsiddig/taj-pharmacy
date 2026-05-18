@@ -1634,6 +1634,18 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** `cargo check` — Finished in 14.81s, no errors. All three functions now have transactional write blocks.
 - **Notes:** Used `conn.execute("BEGIN"/"COMMIT", [])` pattern (same as `pos_invoice.rs`). All three had exactly one write block each — no nested transactions needed.
 
+### 2026-05-18 — DeepSeek V4 (OpenCode) — Phase 2 VPS deployment
+- **Status:** DONE
+- **Files changed:** VPS-side: `/opt/pms-cloud/.env` (added PMS_JWT_SECRET, PMS_DB_PASSWORD), `/opt/pms-cloud/src/middleware/rate-limit.js` (uploaded — missing from deploy.ps1), migrations 010+011 applied
+- **Acceptance test result:**
+  - C1: `.env` updated with PMS_JWT_SECRET (fresh rotation), PMS_DB_PASSWORD=pms_secure_password (kept existing)
+  - C1b: Migrations 010 (owners.failed_login_attempts + locked_until) and 011 (refresh_tokens table + indexes) applied and verified
+  - C2: `deploy.ps1` ran successfully, Docker image built, containers restarted
+  - C2b: Rebuild needed — `src/middleware/rate-limit.js` was not in deploy script; manually created dir and uploaded file, then `docker compose up -d --build api`
+  - C3: `https://taj.systems/health` → 200 `{"status":"ok","database":{"healthy":true}}`
+  - C4: Rate limiter active — 1-10 calls returned 400 (body validation), 11-12 returned 429 (rate limited)
+- **Notes:** deploy.ps1 only uploads files explicitly listed — new directories/files must be added to the script. The middleware file was missed. Consider automating `COPY src/ ./src/` in Dockerfile instead of per-file scp (see backlog suggestion). JWT secret rotated — all existing PWA sessions invalidated (expected security fix). DB password unchanged (pms_secure_password), should be rotated in a separate task.
+
 ### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-206
 - **Status:** DONE (API side only; PWA piece deferred)
 - **Files changed:** `pms-cloud/src/routes/auth.js` (JWT_EXPIRES 30d→1h, added crypto import, login returns refresh_token, new POST /auth/refresh, new POST /auth/logout), `pms-cloud/migrations/011_refresh_tokens.sql` (new table refresh_tokens)
