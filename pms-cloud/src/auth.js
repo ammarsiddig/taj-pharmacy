@@ -1,7 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { query } from './db.js';
 
-const JWT_SECRET = process.env.PMS_JWT_SECRET || 'pms-jwt-dev-secret-change-in-production';
+const JWT_SECRET = process.env.PMS_JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('PMS_JWT_SECRET environment variable is required. Refusing to start with insecure default.');
+}
 
 /**
  * Async middleware: validate Bearer token from api_tokens table.
@@ -29,6 +32,18 @@ export async function requireAuth(req, res, next) {
     }
 
     req.tenantId = result.rows[0].tenant_id;
+
+    // TASK-201: check suspension before allowing sync requests
+    if (req.path && req.path.startsWith('/v1/sync')) {
+      const tenantResult = await query(
+        'SELECT is_suspended FROM tenants WHERE id = $1',
+        [req.tenantId]
+      );
+      if (tenantResult.rows.length > 0 && tenantResult.rows[0].is_suspended) {
+        return res.status(403).json({ error: 'Tenant is suspended. Please contact support.' });
+      }
+    }
+
     query('UPDATE api_tokens SET last_used_at = NOW() WHERE token = $1', [token]).catch(() => {});
     next();
   } catch (error) {

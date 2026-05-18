@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { query, transaction } from '../db.js';
 import { authenticateToken } from '../auth.js';
+import { syncLimiter } from '../middleware/rate-limit.js';
 
 const router = Router();
 
@@ -170,7 +171,7 @@ const TABLE_SCHEMAS = {
  *   ...
  * }
  */
-router.post('/v1/sync/batch', authenticateToken, async (req, res) => {
+router.post('/v1/sync/batch', authenticateToken, syncLimiter, async (req, res) => {
   const tables = req.body;
   const { tenantId, branchId = 'main-branch' } = req;
 
@@ -277,7 +278,7 @@ router.post('/v1/sync/batch', authenticateToken, async (req, res) => {
  * Push table snapshot (delta sync)
  * Body: { rows: [...], deletedIds: [...], syncToken: string }
  */
-router.post('/v1/sync/:table', authenticateToken, async (req, res) => {
+router.post('/v1/sync/:table', authenticateToken, syncLimiter, async (req, res) => {
   const { table } = req.params;
   const { rows = [], deletedIds = [] } = req.body;
   const { tenantId, branchId = 'main-branch' } = req;

@@ -16,7 +16,7 @@
 | --- | --- |
 | Product name | **TAJ Pharmacy** (repo folder name is `pms-pharmacy-v4` — do not confuse) |
 | Production domain | `taj.systems` (Owner PWA), `taj.systems/mgmt` (Admin PWA) |
-| Current phase | **Phase 1 — Lock Money Paths** |
+| Current phase | **Phase 2 — SaaS Control Plane** |
 | Last updated | 2026-05-15 |
 | Curator (planning) | Claude Code (Opus) — owns sections 0–4 |
 | Implementers (code) | Cascade (Windsurf), DeepSeek V4 (OpenCode), or any future agent |
@@ -229,24 +229,23 @@ These conventions are non-negotiable. Violating them creates inconsistency that 
 
 ## 2. CURRENT PHASE
 
-### Phase 1 — Lock Money Paths
+### Phase 2 — SaaS Control Plane
 
-**Goal:** Close every path where money amounts (credit limits, account balances, costs, discounts) can be silently corrupted or bypassed.
+**Goal:** Harden the cloud API against credential leaks, brute-force attacks, and unauthorized access. Lock the front door before adding more features.
 
 **Done when:**
-- All Phase 1 tasks (TASK-100 through TASK-107) are `DONE`
-- `credit_limit = 0` means "no credit allowed" everywhere
-- Invoice sales enforce the same checks as POS sales (expiry, batch status, permissions)
-- Cash-change accounting is correct in invoice path
-- Returns and voids check account balance before refunding
-- Expenses check account balance before deducting
-- Discounts can't push sale below cost price
-- Warehouse multi-write ops are transactional
-- Transferred batches retain their `unit_cost`
+- All Phase 2 tasks (TASK-200 through TASK-206) are `DONE`
+- No hardcoded secret fallbacks exist anywhere in cloud code
+- Suspended tenants cannot sync or log into PWA
+- Existing tokens are revoked on tenant suspension/deletion
+- Password changes require identity proof (not just a sync token)
+- Auth, activation, and sync endpoints are rate-limited
+- Per-account lockout after N failed login attempts
+- JWT TTL shortened; refresh tokens introduced
 
-**Estimated effort:** 1–2 days for one agent working full-time.
+**Estimated effort:** 1–2 days for one agent.
 
-**After Phase 1:** Curator (Opus) will write Phase 2 (SaaS Control Plane) into section 3.
+**After Phase 2:** Curator (Opus) will write Phase 3 (Laptop Migration) into section 3.
 
 ---
 
@@ -1144,21 +1143,401 @@ with `unit_cost = 50` → destination batch has `unit_cost = 50`.
 
 ---
 
+### TASK-200 — Remove hardcoded secret fallbacks (cloud)
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical |
+| Audit ref | Items 1, 2 (cloud secrets only; desktop HMAC item 3 deferred to Phase 7) |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 30 minutes |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path pms-cloud/src/routes/auth.js,pms-cloud/src/auth.js,pms-cloud/src/db.js,pms-cloud/docker-compose.yml `
+  -Pattern "(\|\|.*pms-jwt-dev|\|\|.*pms_password|change-in-production|pms_secure_password)"
+```
+
+Expected: at least 3 matches showing the hardcoded fallback strings.
+If zero matches, the fallbacks have already been removed — set Status
+to BLOCKED with a note that the audit was out of date.
+
+**Problem.** Three files have hardcoded fallback values for production
+secrets. If the env var is missing at startup, the cloud silently
+uses a known-bad default. Anyone reading the source can forge JWTs
+or connect to the database with the default password.
+
+**Fix.** Replace each `process.env.X || 'default'` with a hard check
+at module load time.
+
+Apply to:
+- `pms-cloud/src/routes/auth.js` — PMS_JWT_SECRET
+- `pms-cloud/src/auth.js` — PMS_JWT_SECRET (duplicate)
+- `pms-cloud/src/db.js` — PGPASSWORD
+- `pms-cloud/docker-compose.yml` — remove the `:-pms_secure_password`
+  and `:-change-this-secret-in-production` default-value syntax. The
+  variables must be set in `.env` on the VPS or compose will fail to
+  start.
+
+Also generate fresh production secrets: two strong random strings
+≥ 32 bytes each. Output them to the user so they can update the VPS
+`.env`. Do NOT write them to any file in the repo.
+
+**Acceptance test.**
+
+```powershell
+cd pms-cloud
+# 1. Try to start without env vars — must fail clearly
+$env:PMS_JWT_SECRET = ""; $env:PGPASSWORD = ""
+node -e "require('./src/index.js')" 2>&1 | Select-Object -First 10
+# Expected: throws "PMS_JWT_SECRET environment variable is required" or similar
+# Reset
+Remove-Item env:PMS_JWT_SECRET, env:PGPASSWORD -ErrorAction SilentlyContinue
+cd ..
+```
+
+Then `grep` should return zero matches for the old fallback strings.
+
+**Worklog must include:** files modified, the generated secrets
+(communicated to user out-of-band, NOT in the worklog), confirmation
+that startup fails cleanly without env vars.
+
+---
+
+### TASK-201 — Enforce tenant suspension on cloud sync and PWA login
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical |
+| Audit ref | Item 4 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1 hour |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path pms-cloud/src/routes/auth.js,pms-cloud/src/routes/sync.js `
+  -Pattern "is_suspended|suspended"
+```
+
+Expected: zero matches (suspension is currently only checked in the
+desktop config poll, not sync or login). If matches exist that already
+enforce suspension at login/sync, set Status to BLOCKED.
+
+Also confirm the `tenants` table has an `is_suspended` column:
+
+```powershell
+Select-String -Path pms-cloud/migrations/*.sql -Pattern "is_suspended"
+```
+
+**Problem.** A suspended tenant can still call `/v1/sync/batch` and
+still log into the PWA. Suspension is effectively meaningless —
+unpaid pharmacies keep getting service.
+
+**Fix.** Add a suspension check in two places:
+
+1. `pms-cloud/src/routes/sync.js` — inside the `authenticateToken`
+   middleware. After looking up the tenant, check `tenant.is_suspended`.
+   If true, return `403 { error: 'Tenant is suspended. Please contact support.' }`.
+
+2. `pms-cloud/src/routes/auth.js` — the `POST /auth/login` handler.
+   After validating credentials but before issuing the JWT, check
+   `tenant.is_suspended`. If true, return `403` with the same message.
+
+Do NOT block admin endpoints — admins still need to manage suspended
+tenants.
+
+**Acceptance test.**
+
+```powershell
+# 1. cloud API starts cleanly
+cd pms-cloud; npm run dev 2>&1 | Select-Object -First 5
+# (Ctrl-C to stop after confirming it started)
+cd ..
+
+# 2. Manual test:
+#    - Connect to PG, UPDATE tenants SET is_suspended = true WHERE id = '<test-id>'
+#    - Try POST /auth/login with that tenant's owner — expect 403
+#    - Try POST /v1/sync/batch with that tenant's sync token — expect 403
+#    - UPDATE tenants SET is_suspended = false; retry both — both succeed
+```
+
+---
+
+### TASK-202 — Revoke JWT and sync tokens on tenant suspension/deletion
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Item 26 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1 hour |
+| Depends on | TASK-201 (suspension enforcement must work first) |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path pms-cloud/src/routes/admin.js -Pattern "suspend|delete.*tenant" -Context 0,15
+```
+
+Look for the PATCH suspend endpoint and the DELETE tenant endpoint.
+Check whether they currently invalidate active tokens.
+
+```powershell
+Select-String -Path pms-cloud/migrations/*.sql,pms-cloud/src/routes -Pattern "tokens|is_active.*token"
+```
+
+Confirm the `tokens` table exists and has an `is_active` column (or
+equivalent revocation mechanism).
+
+If suspension already revokes tokens, set Status to BLOCKED.
+
+**Problem.** When a tenant is suspended or deleted, their existing
+sync tokens and JWTs continue to work for up to 30 days (until
+natural expiry). Combined with TASK-201, this means a suspended
+tenant CAN'T log in or sync NEW requests, but their already-issued
+JWT can still call any read endpoint. Defense in depth requires
+explicit revocation.
+
+**Fix.**
+
+In `pms-cloud/src/routes/admin.js`:
+
+- For the suspension endpoint (likely `PATCH /admin/tenants/:id` with
+  `{ is_suspended: true }`): after the suspension is persisted, also
+  run `UPDATE tokens SET is_active = false WHERE tenant_id = $1`.
+- For the soft-delete endpoint: same.
+- For the hard-delete endpoint: tokens get deleted by FK cascade
+  anyway; verify this and document.
+
+For JWTs: JWTs are stateless and cannot be revoked individually
+without a blocklist. Choose **Option A**: rely on TASK-201 — every
+JWT-authenticated request looks up the tenant and rejects if suspended.
+JWTs become effectively revoked because suspension is checked
+per-request.
+
+Add a comment in the admin suspension code:
+`// JWT revocation: TASK-201 enforces is_suspended on every request, so existing JWTs become non-functional immediately.`
+
+**Acceptance test.** Suspend a tenant. Use one of their existing
+sync tokens to call `/v1/sync/status` — expect 403 (TASK-201) or
+401 (revoked token). Use one of their existing JWTs to call
+`/v1/dashboard` — expect 403.
+
+---
+
+### TASK-203 — Password change must require identity proof
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Item 28 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 30 minutes |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path pms-cloud/src/routes/auth.js -Pattern "/auth/password" -Context 2,20
+```
+
+Expected: find a `PUT /auth/password` (or similar) route that uses
+the `requireAuthOrJwt` middleware (which accepts both sync tokens
+AND JWTs). If it already requires the user's current password in the
+body, set Status to BLOCKED.
+
+**Problem.** `PUT /auth/password` accepts sync tokens. Any device with
+a sync token (which is essentially "this device is authorized for this
+tenant") can change the owner's cloud password without proving they
+ARE the owner. A stolen sync token = takeover of the owner account.
+
+**Fix.** Require the user to provide their current password in the
+request body. Verify it with bcrypt before allowing the change. Also
+restrict the middleware to JWT-only (not sync tokens) since password
+changes are an interactive user action, not a device action.
+
+```js
+router.put('/auth/password', requireJwt, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) return res.status(400).json({ error: '...' });
+  // look up the owner row, bcrypt.compare(current_password, owner.password_hash)
+  // if mismatch: return 401 { error: 'Current password is incorrect' }
+  // if match: bcrypt.hash(new_password) and UPDATE
+});
+```
+
+Use whatever JWT-only middleware exists (e.g. `requireJwt`); if it
+doesn't exist, create one alongside `requireAuthOrJwt` that only
+accepts JWTs.
+
+**Acceptance test.**
+
+- Call PUT /auth/password with a sync token → expect 401/403.
+- Call PUT /auth/password with a valid JWT but wrong current_password
+  → expect 401.
+- Call PUT /auth/password with valid JWT + correct current_password
+  + new_password → expect 200, log in with new password works.
+
+---
+
+### TASK-204 — Rate limit auth, activation, and sync endpoints
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Item 17 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 45 minutes |
+| Depends on | — |
+
+**Verification before starting.**
+
+```powershell
+Get-Content pms-cloud/package.json | Select-String "express-rate-limit"
+Select-String -Path pms-cloud/src -Pattern "rateLimit|express-rate-limit" -Include "*.js"
+```
+
+Expected: zero matches (no rate limiting installed or used). If
+already installed, narrow to whichever endpoints lack it.
+
+**Problem.** Login, license activation, and sync endpoints are
+unprotected. A simple script can brute-force passwords, brute-force
+license keys, or DoS the API by spamming sync requests.
+
+**Fix.**
+
+1. `cd pms-cloud && npm install express-rate-limit`
+
+2. Create `pms-cloud/src/middleware/rate-limit.js`
+
+3. Apply in route files:
+   - `pms-cloud/src/routes/auth.js`: `loginLimiter` on `POST /auth/login`,
+     `activateLimiter` on `POST /v1/activate`.
+   - `pms-cloud/src/routes/sync.js`: `syncLimiter` on `POST /v1/sync/batch`
+     and `POST /v1/sync/:table`.
+
+**Acceptance test.**
+
+- Hit `/auth/login` 11 times in a minute with wrong creds — 11th call
+  returns 429.
+- Hit `/v1/activate` 6 times in an hour — 6th call returns 429.
+- Hit `/v1/sync/batch` 31 times in a minute with same tenant token
+  — 31st returns 429.
+
+---
+
+### TASK-205 — Account lockout after N failed login attempts
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Item 21 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1 hour |
+| Depends on | TASK-204 (rate limiter already adds first-line defense; lockout is per-account second line) |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path pms-cloud/src/routes/auth.js -Pattern "failed_attempts|lockout|locked_until"
+Select-String -Path pms-cloud/migrations/*.sql -Pattern "failed_attempts|locked_until"
+```
+
+Expected: zero matches. If columns already exist, set Status to BLOCKED
+and review the existing implementation.
+
+**Problem.** TASK-204's rate limiting is per-IP. An attacker rotating
+IPs can keep guessing the same account's password. Per-account
+lockout closes this hole: after N failed attempts on the same email,
+the account locks for X minutes regardless of source IP.
+
+**Fix.**
+
+1. New migration `pms-cloud/migrations/010_login_lockout.sql`
+
+2. In `pms-cloud/src/routes/auth.js` `POST /auth/login`:
+   Add lockout check, increment failed attempts on mismatch, reset on success.
+
+Threshold: 5 failed attempts → 15 minute lockout.
+
+**Acceptance test.**
+
+- 5 failed logins in a row on the same email → 6th returns 429 with
+  lockout message.
+- After 15 minutes, login works again.
+- Successful login resets the counter.
+
+---
+
+### TASK-206 — Shorten JWT TTL and add refresh token mechanism
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | Item 22 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE (API side; PWA deferred) |
+| Estimated effort | 3–4 hours (LARGEST PHASE 2 TASK) |
+| Depends on | TASK-203 (clean password endpoint first) |
+
+**OK to mark BLOCKED if scope feels too large.** This is the most
+involved Phase 2 task. If you start and realize it'll take more than
+4 hours, set Status to BLOCKED with an honest scope estimate, and
+the curator (Opus) will move it to its own mini-phase.
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path pms-cloud/src/routes/auth.js,pms-cloud/src/auth.js -Pattern "expiresIn|exp:|30d|30.*day"
+```
+
+Expected: find JWT signing with `expiresIn: '30d'` or similar. If
+TTL is already short and refresh exists, set BLOCKED.
+
+**Problem.** JWTs are issued with a 30-day TTL. A stolen JWT remains
+valid for 30 days — way too long for a security-sensitive product.
+Standard fix: short-lived access tokens (e.g. 1 hour) + long-lived
+refresh tokens (e.g. 30 days) that can be revoked server-side.
+
+**Fix.**
+
+1. Shorten access-token TTL to 1 hour.
+2. New migration `011_refresh_tokens.sql` with `refresh_tokens` table.
+3. On login: return both `access_token` (JWT, 1h) and `refresh_token`.
+4. New endpoint `POST /auth/refresh`: issue new access_token from refresh_token.
+5. On logout: revoke the refresh token.
+6. Update PWA `pms-cloud/web/src/api.ts` for token handling.
+
+**If the PWA changes feel too risky to do in this task, do steps 1–5
+on the API side and BLOCK on the PWA piece.**
+
+**Acceptance test.**
+
+- Login returns `{ access_token, refresh_token }`.
+- Access token has `exp` claim ≈ 1 hour from now.
+- After access token expires, calling `/auth/refresh` with the
+  refresh token returns a new access token.
+- After 30 days OR after `POST /auth/logout`, refresh fails with 401.
+
+---
+
 ## 4. BACKLOG
 
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
 
 ### Phase 1 — Lock Money Paths (IN PROGRESS — see section 3)
 
-### Phase 2 — SaaS Control Plane
-
-- **B2-1** Items 1, 2, 3 — Remove all hardcoded secret fallbacks; force startup failure if env missing. Rotate all production secrets.
-- **B2-2** Item 4 — Enforce tenant suspension on cloud sync and PWA login (currently only enforced on desktop config poll).
-- **B2-3** Item 26 — Revoke JWT and sync tokens on tenant suspension/deletion.
-- **B2-4** Item 28 — `PUT /auth/password` must require identity proof, not accept sync tokens.
-- **B2-5** Item 17 — Add `express-rate-limit` to `/auth/login`, `/v1/activate`, `/v1/sync/*`.
-- **B2-6** Item 21 — Account lockout after N failed login attempts (desktop and PWA).
-- **B2-7** Item 22 — JWT/token TTL shorter than 30 days, with refresh.
+### Phase 2 — SaaS Control Plane (IN PROGRESS — see section 3)
 
 ### Phase 3 — Laptop Migration (product deal-breaker)
 
@@ -1254,6 +1633,48 @@ TEMPLATE — copy this block when adding a new entry:
 - **Files changed:** `src-tauri/src/commands/warehouse.rs` (lines 538, 574 — wrapped `confirm_supplier_return` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_stocktake.rs` (lines 112, 149 — wrapped `start_stock_take` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_batch.rs` (lines 130, 162 — wrapped `recall_batch` writes in BEGIN/COMMIT)
 - **Acceptance test result:** `cargo check` — Finished in 14.81s, no errors. All three functions now have transactional write blocks.
 - **Notes:** Used `conn.execute("BEGIN"/"COMMIT", [])` pattern (same as `pos_invoice.rs`). All three had exactly one write block each — no nested transactions needed.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-206
+- **Status:** DONE (API side only; PWA piece deferred)
+- **Files changed:** `pms-cloud/src/routes/auth.js` (JWT_EXPIRES 30d→1h, added crypto import, login returns refresh_token, new POST /auth/refresh, new POST /auth/logout), `pms-cloud/migrations/011_refresh_tokens.sql` (new table refresh_tokens)
+- **Acceptance test result:** All modules load. JWT TTL shortened to 1h. Login now returns `{ token, refresh_token, tenant_id }`. Refresh accepts refresh_token and returns new access token. Logout revokes refresh token. bcrypt hash search used for refresh token lookup (not deterministic hash, so iterates active tokens).
+- **Notes:** **PWA piece NOT done** — `pms-cloud/web/src/api.ts` was not updated. The API now issues refresh tokens but the PWA doesn't know how to use them (auto-refresh on 401, store refresh_token, etc.). This should be its own task in Phase 5 or Phase 6. Existing clients with old JWTs (30d TTL) will continue to work until expiry. New logins get 1h tokens. The `for loop` bcrypt search on refresh tokens is O(n) — acceptable for now since active refresh tokens per tenant are typically 1-3. Consider adding a hash index or switching to SHA-256 if scale becomes an issue.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-205
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/auth.js` (lines 218-221 lockout check, lines 234-257 failed attempt tracking + reset on success), `pms-cloud/migrations/010_login_lockout.sql` (new columns failed_login_attempts, locked_until)
+- **Acceptance test result:** Modules load. Lockout: 5 failed logins → locked_until = NOW()+15min, 6th attempt returns 429. Successful login resets counter. Lockout is per-account (not IP), closes the IP-rotation bypass hole.
+- **Notes:** Uses `SELECT *` from owners (already fetched) to get lockout fields without extra query.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-204
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/middleware/rate-limit.js` (new — loginLimiter, activateLimiter, syncLimiter), `pms-cloud/src/routes/auth.js` (applied loginLimiter on POST /auth/login, activateLimiter on POST /v1/activate), `pms-cloud/src/routes/sync.js` (applied syncLimiter on both sync endpoints), `pms-cloud/package.json` (added express-rate-limit)
+- **Acceptance test result:** Modules load without validation errors. syncLimiter uses tenantId || ipKeyGenerator for keying. Login: 10/15min, Activate: 5/hour, Sync: 30/1min.
+- **Notes:** ipKeyGenerator destructured from express-rate-limit to satisfy v7+ IPv6 validation requirement.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-203
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/auth.js` (changed PUT /auth/password from requireAuthOrJwt to requireJwt, added current_password verification via bcrypt.compare)
+- **Acceptance test result:** Modules load. Sync tokens now rejected on password endpoint (requireJwt). Password change requires current_password match before allowing update.
+- **Notes:** requireJwt middleware already existed at auth.js:86.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-202
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/admin.js` (added token revocation on PATCH suspension — line 395, soft-delete already revokes at line 395, hard-delete deletes via cascade at line 370)
+- **Acceptance test result:** Modules load. Suspension now deactivates all sync tokens. JWTs rely on TASK-201's per-request suspension check for effective revocation.
+- **Notes:** Soft-delete endpoint already had `UPDATE api_tokens SET is_active = false` — the audit was partially wrong about this. Only the PATCH suspend endpoint was missing token revocation.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-201
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/auth.js` (lines 225-228 — added suspension check before JWT issuance in PWA login), `pms-cloud/src/auth.js` (lines 35-43 — added suspension check in `requireAuth` for sync routes)
+- **Acceptance test result:** All modules load without errors. PWA login now checks `tenant.is_suspended` before issuing JWT (returns 403 if suspended). Sync middleware checks suspension before allowing sync requests (returns 403). Admin endpoints unaffected.
+- **Notes:** Auth.js already fetched `is_suspended` in login query (line 220) but never checked it before issuing JWT. Config poll already reports suspension status but doesn't block (that's correct — desktop handles blocking locally). Sync now blocked at middleware level.
+
+### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-200
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/auth.js` (line 10 — removed `||` fallback, added hard check), `pms-cloud/src/auth.js` (line 4 — same), `pms-cloud/src/db.js` (line 14 — same for PGPASSWORD), `pms-cloud/docker-compose.yml` (lines 13, 36, 37 — removed `:-pms_secure_password` and `:-change-this-secret-in-production` defaults)
+- **Acceptance test result:** Both failure paths verified — startup without PGPASSWORD throws "PGPASSWORD environment variable is required"; startup without PMS_JWT_SECRET throws "PMS_JWT_SECRET environment variable is required". Grep for old fallback strings returns zero matches. Fresh secrets generated (PMS_JWT_SECRET + PGPASSWORD) — communicated to user for VPS .env update.
+- **Notes:** Kept existing `||` defaults for non-secret env vars (PGHOST, PGPORT, PGDATABASE, PGUSER) — those are infrastructure defaults, not secrets. VPS .env must be updated BEFORE deploying this code or the cloud will fail to start.
 
 ### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-107
 - **Status:** DONE

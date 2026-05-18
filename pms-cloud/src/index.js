@@ -10,6 +10,7 @@ import adminRouter from './routes/admin.js';
 import backupsRouter from './routes/backups.js';
 import authRouter from './routes/auth.js';
 import syncRouter from './routes/sync.js';
+import downloadRouter from './routes/download.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -37,6 +38,7 @@ app.use(syncRouter);  // New table-snapshot sync
 app.use(dashboardRouter);
 app.use(adminRouter);
 app.use(backupsRouter);
+app.use(downloadRouter);
 
 // 404
 app.use((req, res) => {

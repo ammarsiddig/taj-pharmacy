@@ -10,7 +10,7 @@ services:
     environment:
       - POSTGRES_DB=pms_cloud
       - POSTGRES_USER=pms
-      - POSTGRES_PASSWORD=${PMS_DB_PASSWORD:-pms_secure_password}
+      - POSTGRES_PASSWORD=${PMS_DB_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pms -d pms_cloud"]
       interval: 5s
@@ -22,7 +22,8 @@ services:
     container_name: pms-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Keep private behind host-level Nginx. Do not change to public 3000:3000.
+      - "127.0.0.1:3000:3000"
     volumes:
       - pms-data:/data
     environment:
@@ -32,14 +33,17 @@ services:
       - PGPORT=5432
       - PGDATABASE=pms_cloud
       - PGUSER=pms
-      - PGPASSWORD=${PMS_DB_PASSWORD:-pms_secure_password}
-      - PMS_JWT_SECRET=${PMS_JWT_SECRET:-change-this-secret-in-production}
+      - PGPASSWORD=${PMS_DB_PASSWORD}
+      - PMS_JWT_SECRET=${PMS_JWT_SECRET}
       - PMS_ADMIN_TOKEN=${PMS_ADMIN_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy
 
   caddy:
+    # Legacy rollback profile only. Production uses host-level Nginx on 80/443.
+    profiles:
+      - legacy-caddy
     image: caddy:2-alpine
     container_name: pms-caddy
     restart: unless-stopped

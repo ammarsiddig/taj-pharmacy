@@ -6,12 +6,15 @@ import { fileURLToPath } from 'url';
 const { Pool } = pg;
 
 // Database connection config
+if (!process.env.PGPASSWORD) {
+  throw new Error('PGPASSWORD environment variable is required. Refusing to start with insecure default.');
+}
 const pool = new Pool({
   host: process.env.PGHOST || 'localhost',
   port: parseInt(process.env.PGPORT || '5432', 10),
   database: process.env.PGDATABASE || 'pms_cloud',
   user: process.env.PGUSER || 'pms',
-  password: process.env.PGPASSWORD || 'pms_password',
+  password: process.env.PGPASSWORD,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,

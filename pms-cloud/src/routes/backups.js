@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../auth.js';
+import { requireAuthOrJwt } from '../auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -20,7 +20,7 @@ if (!fs.existsSync(BACKUPS_DIR)) {
  * Content-Type: application/octet-stream
  * Max size: 100MB
  */
-router.post('/v1/backups', requireAuth, (req, res) => {
+router.post('/v1/backups', requireAuthOrJwt, (req, res) => {
   const tenantId = req.tenantId;
   const backupId = uuidv4();
   const tenantDir = path.join(BACKUPS_DIR, tenantId);
@@ -99,7 +99,7 @@ router.post('/v1/backups', requireAuth, (req, res) => {
  * GET /v1/backups
  * List backups for the authenticated tenant.
  */
-router.get('/v1/backups', requireAuth, async (req, res) => {
+router.get('/v1/backups', requireAuthOrJwt, async (req, res) => {
   try {
     const result = await query(`
       SELECT id, file_size, created_at
@@ -119,7 +119,7 @@ router.get('/v1/backups', requireAuth, async (req, res) => {
  * GET /v1/backups/:id
  * Download a specific backup file.
  */
-router.get('/v1/backups/:id', requireAuth, async (req, res) => {
+router.get('/v1/backups/:id', requireAuthOrJwt, async (req, res) => {
   try {
     const result = await query(`
       SELECT id, tenant_id, file_path, file_size
@@ -152,7 +152,7 @@ router.get('/v1/backups/:id', requireAuth, async (req, res) => {
  * DELETE /v1/backups/:id
  * Delete a specific backup.
  */
-router.delete('/v1/backups/:id', requireAuth, async (req, res) => {
+router.delete('/v1/backups/:id', requireAuthOrJwt, async (req, res) => {
   try {
     const result = await query(`
       SELECT id, file_path FROM backups

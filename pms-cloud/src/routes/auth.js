@@ -2,13 +2,19 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { query, transaction } from '../db.js';
-import { requireAuth, requireAuthOrJwt } from '../auth.js';
+import { requireAuth, requireAuthOrJwt, requireJwt } from '../auth.js';
+import { loginLimiter, activateLimiter } from '../middleware/rate-limit.js';
 
 const router = Router();
 
-const JWT_SECRET = process.env.PMS_JWT_SECRET || 'pms-jwt-dev-secret-change-in-production';
-const JWT_EXPIRES = '30d';
+const JWT_SECRET = process.env.PMS_JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('PMS_JWT_SECRET environment variable is required. Refusing to start with insecure default.');
+}
+const JWT_EXPIRES = '1h';
+const REFRESH_TOKEN_DAYS = 30;
 const BCRYPT_ROUNDS = 10;
 
 /**
@@ -17,7 +23,7 @@ const BCRYPT_ROUNDS = 10;
  * Body: { key, email, password, pharmacy_name }
  * Returns: { sync_token, tenant_id, expires_at }
  */
-router.post('/v1/activate', async (req, res) => {
+router.post('/v1/activate', activateLimiter, async (req, res) => {
   try {
     const { key, email, password, pharmacy_name } = req.body;
     if (!key || !email || !password) {
@@ -34,6 +40,53 @@ router.post('/v1/activate', async (req, res) => {
     const licenseKey = licenseResult.rows[0];
 
     const normalizedEmail = email.toLowerCase().trim();
+    const tenantOwnerResult = await query(
+      'SELECT id, email FROM owners WHERE tenant_id = $1 ORDER BY created_at ASC LIMIT 1',
+      [licenseKey.tenant_id]
+    );
+
+    if (tenantOwnerResult.rows.length > 0) {
+      const tenantOwner = tenantOwnerResult.rows[0];
+      if (tenantOwner.email !== normalizedEmail) {
+        return res.status(400).json({ error: 'This tenant already has an owner account' });
+      }
+
+      const retryTokenResult = await query(
+        'SELECT token FROM api_tokens WHERE tenant_id = $1 AND is_active = true LIMIT 1',
+        [licenseKey.tenant_id]
+      );
+      if (retryTokenResult.rows.length === 0) {
+        return res.status(500).json({ error: 'No sync token configured for this license' });
+      }
+
+      await transaction(async (client) => {
+        await client.query(
+          "UPDATE license_keys SET status = 'used' WHERE key = $1",
+          [key.trim()]
+        );
+        if (pharmacy_name) {
+          await client.query(
+            'UPDATE tenants SET pharmacy_name = $1, expires_at = $2 WHERE id = $3',
+            [pharmacy_name.trim(), licenseKey.expires_at, licenseKey.tenant_id]
+          );
+        } else {
+          await client.query(
+            'UPDATE tenants SET expires_at = $1 WHERE id = $2',
+            [licenseKey.expires_at, licenseKey.tenant_id]
+          );
+        }
+      });
+
+      return res.json({
+        sync_token: retryTokenResult.rows[0].token,
+        tenant_id: licenseKey.tenant_id,
+        expires_at: licenseKey.expires_at,
+        plan: licenseKey.plan || 'basic',
+        max_users: licenseKey.max_users || 5,
+        max_branches: licenseKey.max_branches || 3,
+      });
+    }
+
     const existingResult = await query('SELECT id, tenant_id FROM owners WHERE email = $1', [normalizedEmail]);
     if (existingResult.rows.length > 0) {
       const existingOwner = existingResult.rows[0];
@@ -150,7 +203,7 @@ router.post('/v1/renew', requireAuth, async (req, res) => {
  * PWA owner login with email + password → JWT.
  * Body: { email, password }
  */
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -166,6 +219,11 @@ router.post('/auth/login', async (req, res) => {
     }
     const owner = ownerResult.rows[0];
 
+    // TASK-205: check account lockout
+    if (owner.locked_until && new Date(owner.locked_until) > new Date()) {
+      return res.status(429).json({ error: 'Account temporarily locked. Try again later.' });
+    }
+
     const tenantResult = await query(
       'SELECT id, is_suspended, expires_at FROM tenants WHERE id = $1',
       [owner.tenant_id]
@@ -173,10 +231,30 @@ router.post('/auth/login', async (req, res) => {
     if (tenantResult.rows.length === 0) {
       return res.status(401).json({ error: 'Account not found' });
     }
+    const tenant = tenantResult.rows[0];
+
+    if (tenant.is_suspended) {
+      return res.status(403).json({ error: 'Tenant is suspended. Please contact support.' });
+    }
 
     if (!bcrypt.compareSync(password, owner.password_hash)) {
+      const attempts = (owner.failed_login_attempts || 0) + 1;
+      if (attempts >= 5) {
+        await query(
+          "UPDATE owners SET failed_login_attempts = $1, locked_until = NOW() + INTERVAL '15 minutes' WHERE id = $2",
+          [attempts, owner.id]
+        );
+      } else {
+        await query(
+          'UPDATE owners SET failed_login_attempts = $1 WHERE id = $2',
+          [attempts, owner.id]
+        );
+      }
       return res.status(401).json({ error: 'Invalid email or password' });
     }
+
+    // Successful login: reset lockout counter
+    await query('UPDATE owners SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [owner.id]);
 
     const token = jwt.sign(
       { tenant_id: owner.tenant_id, email: owner.email },
@@ -184,9 +262,96 @@ router.post('/auth/login', async (req, res) => {
       { expiresIn: JWT_EXPIRES }
     );
 
-    res.json({ token, tenant_id: owner.tenant_id });
+    // TASK-206: generate refresh token
+    const refreshTokenRaw = crypto.randomBytes(32).toString('hex');
+    const refreshTokenHash = bcrypt.hashSync(refreshTokenRaw, BCRYPT_ROUNDS);
+    await query(
+      "INSERT INTO refresh_tokens (tenant_id, owner_id, token_hash, expires_at) VALUES ($1, $2, $3, NOW() + INTERVAL '30 days')",
+      [owner.tenant_id, owner.id, refreshTokenHash]
+    );
+
+    res.json({ token, refresh_token: refreshTokenRaw, tenant_id: owner.tenant_id });
   } catch (err) {
     console.error('[auth] login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /auth/refresh
+ * Issue a new access token from a valid refresh token.
+ * Body: { refresh_token }
+ * Returns: { token }
+ */
+router.post('/auth/refresh', async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    if (!refresh_token) {
+      return res.status(400).json({ error: 'refresh_token is required' });
+    }
+
+    const result = await query(
+      "SELECT id, tenant_id, owner_id, token_hash, expires_at FROM refresh_tokens WHERE revoked_at IS NULL AND expires_at > NOW()"
+    );
+    let found = null;
+    for (const row of result.rows) {
+      if (bcrypt.compareSync(refresh_token, row.token_hash)) {
+        found = row;
+        break;
+      }
+    }
+
+    if (!found) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    const ownerResult = await query('SELECT email FROM owners WHERE id = $1', [found.owner_id]);
+    if (ownerResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Owner not found' });
+    }
+
+    const token = jwt.sign(
+      { tenant_id: found.tenant_id, email: ownerResult.rows[0].email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES }
+    );
+
+    res.json({ token });
+  } catch (err) {
+    console.error('[auth] refresh error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /auth/logout
+ * Revoke the refresh token. Body: { refresh_token }
+ */
+router.post('/auth/logout', async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    if (!refresh_token) {
+      return res.status(400).json({ error: 'refresh_token is required' });
+    }
+
+    const result = await query(
+      "SELECT id, token_hash FROM refresh_tokens WHERE revoked_at IS NULL AND expires_at > NOW()"
+    );
+    let found = null;
+    for (const row of result.rows) {
+      if (bcrypt.compareSync(refresh_token, row.token_hash)) {
+        found = row;
+        break;
+      }
+    }
+
+    if (found) {
+      await query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1', [found.id]);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[auth] logout error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -232,26 +397,38 @@ router.get('/v1/config', requireAuthOrJwt, async (req, res) => {
 
 /**
  * PUT /auth/password
- * Update cloud password hash (desktop calls after owner changes password).
- * Auth: Bearer sync_token
- * Body: { new_password }
+ * Update cloud password hash (requires current password for identity proof).
+ * Auth: Bearer JWT only (not sync tokens)
+ * Body: { current_password, new_password }
  */
-router.put('/auth/password', requireAuthOrJwt, async (req, res) => {
+router.put('/auth/password', requireJwt, async (req, res) => {
   try {
-    const { new_password } = req.body;
-    if (!new_password || new_password.length < 6) {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: 'current_password and new_password are required' });
+    }
+    if (new_password.length < 6) {
       return res.status(400).json({ error: 'new_password must be at least 6 characters' });
     }
 
+    const ownerResult = await query(
+      'SELECT password_hash FROM owners WHERE tenant_id = $1',
+      [req.tenantId]
+    );
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No owner account found for this tenant' });
+    }
+    const owner = ownerResult.rows[0];
+
+    if (!bcrypt.compareSync(current_password, owner.password_hash)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
     const passwordHash = bcrypt.hashSync(new_password, BCRYPT_ROUNDS);
-    const result = await query(
+    await query(
       'UPDATE owners SET password_hash = $1 WHERE tenant_id = $2',
       [passwordHash, req.tenantId]
     );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'No owner account found for this tenant' });
-    }
 
     res.json({ ok: true });
   } catch (err) {
