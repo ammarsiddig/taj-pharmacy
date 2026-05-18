@@ -1,4 +1,4 @@
-import { invoke } from '../lib/tauri';
+﻿import { invoke } from '../lib/tauri';
 import type {
   TenantSettings, TenantSettingsUpdate, BranchRow, BranchData,
   NotificationSettingRow, NotificationSettingUpdate,
@@ -8,7 +8,7 @@ import type {
 } from '../types';
 import { getTenantId } from './core';
 
-// ====== Tenant ======
+// ---
 
 export async function getTenantSettings(): Promise<TenantSettings> {
   return invoke('get_tenant_settings', { tenantId: getTenantId() });
@@ -26,7 +26,7 @@ export async function getPharmacyLogo(): Promise<string | null> {
   return invoke('get_pharmacy_logo', { tenantId: getTenantId() });
 }
 
-// ====== Branches ======
+// ---
 
 export async function getBranchesFull(): Promise<BranchRow[]> {
   return invoke('get_branches_full', { tenantId: getTenantId() });
@@ -44,7 +44,7 @@ export async function toggleBranchActive(branchId: string): Promise<void> {
   return invoke('toggle_branch_active', { tenantId: getTenantId(), branchId });
 }
 
-// ====== Notification Settings ======
+// ---
 
 export async function getNotificationSettings(): Promise<NotificationSettingRow[]> {
   return invoke('get_notification_settings', { tenantId: getTenantId() });
@@ -54,7 +54,7 @@ export async function updateNotificationSetting(data: NotificationSettingUpdate)
   return invoke('update_notification_setting', { tenantId: getTenantId(), data });
 }
 
-// ====== Backup & Cloud ======
+// ---
 
 export async function createBackup(userId: string): Promise<BackupLogRow> {
   return invoke('create_backup', { tenantId: getTenantId(), userId });
@@ -62,6 +62,10 @@ export async function createBackup(userId: string): Promise<BackupLogRow> {
 
 export async function getBackupHistory(limit = 20): Promise<BackupLogRow[]> {
   return invoke('get_backup_history', { tenantId: getTenantId(), limit });
+}
+
+export async function getAutoBackupStatus(): Promise<BackupLogRow | null> {
+  return invoke('get_auto_backup_status', { tenantId: getTenantId() });
 }
 
 export async function getCloudConfig(): Promise<CloudConfig> {

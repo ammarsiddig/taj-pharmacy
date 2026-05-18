@@ -1,4 +1,4 @@
-import { invoke } from '../lib/tauri';
+﻿import { invoke } from '../lib/tauri';
 import type {
   PosSession, PosProduct, SaleCreateData, Sale,
   SessionRow, Account, SessionSaleRow, ProductSummaryRow,
@@ -9,7 +9,7 @@ import type {
 } from '../types';
 import { getTenantId, getBranchId } from './core';
 
-// ====== Purchases ======
+// ---
 
 export async function getPurchaseInvoices(
   branchId: string,
@@ -98,7 +98,7 @@ export async function deletePaymentSchedule(scheduleId: string): Promise<void> {
   return invoke('delete_payment_schedule', { tenantId: getTenantId(), scheduleId });
 }
 
-// ====== POS Sessions ======
+// ---
 
 export async function getActiveSession(branchId: string, userId: string): Promise<PosSession | null> {
   return invoke('get_active_session', { tenantId: getTenantId(), branchId, userId });
@@ -136,7 +136,7 @@ export async function getSessionHistory(
   });
 }
 
-// ====== POS Sales ======
+// ---
 
 export async function searchProductsPos(branchId: string, query: string): Promise<PosProduct[]> {
   return invoke('search_products_pos', { tenantId: getTenantId(), branchId, query });

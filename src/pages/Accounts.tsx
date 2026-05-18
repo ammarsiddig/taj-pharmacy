@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Landmark, ArrowLeftRight, Plus, Wallet, CalendarDays } from 'lucide-react';
+import { Landmark, ArrowLeftRight, Plus, Wallet, CalendarDays, Pencil, Power } from 'lucide-react';
 import * as api from '../api';
-import type { AccountRow, AccountData, AccountLedger, AccountsSummary, TransferData } from '../types';
+import type { AccountRow, AccountData, AccountLedger, AccountsSummary, TransferData, TransferFeePreview, UpdateAccountData } from '../types';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
@@ -23,6 +23,8 @@ export default function Accounts() {
   const [dateTo, setDateTo] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<AccountRow | null>(null);
+  const [quickUpdatingId, setQuickUpdatingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null);
   const showToast = (type: 'success' | 'danger', msg: string) => setToast({ msg, type });
 
@@ -74,6 +76,28 @@ export default function Accounts() {
     if (selectedAccount) loadLedger(selectedAccount);
   };
 
+  const handleAccountUpdated = () => {
+    setEditingAccount(null);
+    showToast('success', t('accounts.accountSaved'));
+    loadSummary();
+    if (selectedAccount) loadLedger(selectedAccount);
+  };
+
+  const handleToggleActive = async (account: AccountRow) => {
+    setQuickUpdatingId(account.id);
+    try {
+      const auth = api.getAuthState();
+      await api.updateAccount(auth.user!.id, account.id, { is_active: !account.is_active });
+      showToast('success', t('accounts.accountSaved'));
+      await loadSummary();
+      if (selectedAccount === account.id) await loadLedger(account.id);
+    } catch (err) {
+      showToast('danger', String(err));
+    } finally {
+      setQuickUpdatingId(null);
+    }
+  };
+
   return (
     <div className="h-full space-y-5">
       {/* Header */}
@@ -88,11 +112,11 @@ export default function Accounts() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => setShowTransferModal(true)} disabled={isBlocked} title={isBlocked ? 'License expired' : undefined}>
+          <Button variant="ghost" onClick={() => setShowTransferModal(true)} disabled={isBlocked} title={isBlocked ? t('license.licenseExpired') : undefined}>
             <ArrowLeftRight size={16} />
             {t('accounts.transfer')}
           </Button>
-          <Button onClick={() => setShowAddModal(true)} disabled={isBlocked} title={isBlocked ? 'License expired' : undefined}>
+          <Button onClick={() => setShowAddModal(true)} disabled={isBlocked} title={isBlocked ? t('license.licenseExpired') : undefined}>
             <Plus size={16} />
             {t('accounts.addAccount')}
           </Button>
@@ -123,6 +147,7 @@ export default function Accounts() {
                 <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('accounts.currentBalance')}</th>
                 <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('accounts.default')}</th>
                 <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.status')}</th>
+                <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('warehouse.locations.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -136,9 +161,17 @@ export default function Accounts() {
                 >
                   <td className="px-4 py-2.5 font-medium text-ink-main">{a.name_ar || a.name}</td>
                   <td className="px-4 py-2.5">
-                    <Badge variant={a.account_type === 'cash' ? 'success' : 'neutral'}>
-                      {a.account_type === 'cash' ? t('accounts.cash') : t('accounts.bank')}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={a.account_type === 'cash' ? 'success' : 'neutral'}>
+                        {a.account_type === 'cash' ? t('accounts.cash') : t('accounts.bank')}
+                      </Badge>
+                      {a.bank_provider && (
+                        <span className="text-[10px] text-ink-muted">
+                          {bankProviderLabel(a.bank_provider, t)}
+                          {a.phone_label ? ` · ${a.phone_label}` : ''}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 tabular-nums font-medium text-ink-main">{api.formatMoney(a.current_balance)}</td>
                   <td className="px-4 py-2.5">
@@ -150,6 +183,30 @@ export default function Accounts() {
                     ) : (
                       <Badge variant="neutral">{t('suppliers.inactive')}</Badge>
                     )}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        type="button"
+                        variant="icon"
+                        size="sm"
+                        onClick={() => setEditingAccount(a)}
+                        disabled={isBlocked}
+                        title={t('common.edit')}
+                      >
+                        <Pencil size={15} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="icon"
+                        size="sm"
+                        onClick={() => handleToggleActive(a)}
+                        disabled={isBlocked || quickUpdatingId === a.id}
+                        title={a.is_active ? t('suppliers.inactive') : t('suppliers.active')}
+                      >
+                        <Power size={15} />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -264,9 +321,28 @@ export default function Accounts() {
         />
       )}
 
+      {editingAccount && (
+        <EditAccountModal
+          account={editingAccount}
+          onClose={() => setEditingAccount(null)}
+          onSaved={handleAccountUpdated}
+          onError={(msg) => showToast('danger', msg)}
+        />
+      )}
+
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
+}
+
+function bankProviderLabel(provider: string, t: (key: string) => string): string {
+  const labels: Record<string, string> = {
+    bok: t('accounts.bankProviderBok'),
+    fib: t('accounts.bankProviderFib'),
+    onb: t('accounts.bankProviderOnb'),
+    other: t('accounts.bankProviderOther'),
+  };
+  return labels[provider] ?? provider;
 }
 
 function SummaryCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
@@ -308,6 +384,10 @@ function AddAccountModal({ onClose, onSaved, onError }: AddAccountModalProps) {
     account_type: 'cash',
     opening_balance: 0,
     is_default: false,
+    bank_provider: '',
+    internal_fee: 0,
+    external_fee: 0,
+    phone_label: '',
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -320,7 +400,12 @@ function AddAccountModal({ onClose, onSaved, onError }: AddAccountModalProps) {
       await api.createAccount(
         api.getBranchId(),
         auth.user!.id,
-        { ...form, opening_balance: Math.round((form.opening_balance || 0) * 100) },
+        {
+          ...form,
+          opening_balance: Math.round((form.opening_balance || 0) * 100),
+          internal_fee: Math.round((form.internal_fee || 0) * 100),
+          external_fee: Math.round((form.external_fee || 0) * 100),
+        },
       );
       onSaved();
     } catch (err) {
@@ -359,6 +444,42 @@ function AddAccountModal({ onClose, onSaved, onError }: AddAccountModalProps) {
             onChange={(e) => setForm((prev) => ({ ...prev, account_type: e.target.value }))}
             options={typeOptions}
           />
+          {form.account_type === 'bank' && (
+            <>
+              <Select
+                label={t('accounts.bankProvider')}
+                value={form.bank_provider || ''}
+                onChange={(e) => setForm((prev) => ({ ...prev, bank_provider: e.target.value }))}
+                options={[
+                  { value: '', label: '—' },
+                  { value: 'bok', label: t('accounts.bankProviderBok') },
+                  { value: 'fib', label: t('accounts.bankProviderFib') },
+                  { value: 'onb', label: t('accounts.bankProviderOnb') },
+                  { value: 'other', label: t('accounts.bankProviderOther') },
+                ]}
+              />
+              <Input
+                label={t('accounts.phoneLabel')}
+                value={form.phone_label || ''}
+                onChange={(e) => setForm((prev) => ({ ...prev, phone_label: e.target.value }))}
+                placeholder={t('accounts.phoneLabelPlaceholder')}
+              />
+              <NumericInput
+                label={t('accounts.internalFee') + ' (' + t('common.currency') + ')'}
+                value={form.internal_fee || 0}
+                onChange={(v) => setForm((prev) => ({ ...prev, internal_fee: v }))}
+                step={0.01}
+                min={0}
+              />
+              <NumericInput
+                label={t('accounts.externalFee') + ' (' + t('common.currency') + ')'}
+                value={form.external_fee || 0}
+                onChange={(v) => setForm((prev) => ({ ...prev, external_fee: v }))}
+                step={0.01}
+                min={0}
+              />
+            </>
+          )}
           <NumericInput
             label={t('accounts.openingBalance') + ' (' + t('common.currency') + ')'}
             value={form.opening_balance || 0}
@@ -388,6 +509,143 @@ function AddAccountModal({ onClose, onSaved, onError }: AddAccountModalProps) {
   );
 }
 
+interface EditAccountModalProps {
+  account: AccountRow;
+  onClose: () => void;
+  onSaved: () => void;
+  onError: (msg: string) => void;
+}
+
+function EditAccountModal({ account, onClose, onSaved, onError }: EditAccountModalProps) {
+  const { t } = useTranslation();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: account.name,
+    name_ar: account.name_ar || '',
+    is_active: account.is_active,
+    is_default: account.is_default,
+    bank_provider: account.bank_provider || '',
+    internal_fee: account.internal_fee / 100,
+    external_fee: account.external_fee / 100,
+    phone_label: account.phone_label || '',
+  });
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) { onError(t('common.required')); return; }
+
+    const data: UpdateAccountData = {
+      name: form.name.trim(),
+      name_ar: form.name_ar.trim() || undefined,
+      is_active: form.is_active,
+      bank_provider: account.account_type === 'bank' ? form.bank_provider : undefined,
+      phone_label: account.account_type === 'bank' ? form.phone_label.trim() : undefined,
+      internal_fee: account.account_type === 'bank' ? Math.round(form.internal_fee * 100) : undefined,
+      external_fee: account.account_type === 'bank' ? Math.round(form.external_fee * 100) : undefined,
+    };
+    if (account.account_type === 'cash') data.is_default = form.is_default;
+
+    setSaving(true);
+    try {
+      const auth = api.getAuthState();
+      await api.updateAccount(auth.user!.id, account.id, data);
+      onSaved();
+    } catch (err) {
+      onError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="app-card mx-4 w-full max-w-md overflow-hidden p-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-ivory-border bg-ivory-app px-6 py-4">
+          <h3 className="text-lg font-bold text-ink-main">{t('accounts.editAccount')}</h3>
+          <button onClick={onClose} className="rounded-lg border border-ivory-border px-2 py-1 text-xs text-ink-muted hover:bg-white">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5">
+          <Input
+            label={t('accounts.name') + '*'}
+            value={form.name}
+            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+          />
+          <Input
+            label={t('accounts.nameAr')}
+            value={form.name_ar}
+            onChange={(e) => setForm((prev) => ({ ...prev, name_ar: e.target.value }))}
+          />
+          <div className="rounded-lg border border-ivory-border bg-ivory-app px-3 py-2 text-sm text-ink-muted">
+            {t('accounts.type')}: {account.account_type === 'cash' ? t('accounts.cash') : t('accounts.bank')}
+          </div>
+          {account.account_type === 'bank' && (
+            <>
+              <Select
+                label={t('accounts.bankProvider')}
+                value={form.bank_provider}
+                onChange={(e) => setForm((prev) => ({ ...prev, bank_provider: e.target.value }))}
+                options={[
+                  { value: '', label: '—' },
+                  { value: 'bok', label: t('accounts.bankProviderBok') },
+                  { value: 'fib', label: t('accounts.bankProviderFib') },
+                  { value: 'onb', label: t('accounts.bankProviderOnb') },
+                  { value: 'other', label: t('accounts.bankProviderOther') },
+                ]}
+              />
+              <Input
+                label={t('accounts.phoneLabel')}
+                value={form.phone_label}
+                onChange={(e) => setForm((prev) => ({ ...prev, phone_label: e.target.value }))}
+                placeholder={t('accounts.phoneLabelPlaceholder')}
+              />
+              <NumericInput
+                label={t('accounts.internalFee') + ' (' + t('common.currency') + ')'}
+                value={form.internal_fee}
+                onChange={(v) => setForm((prev) => ({ ...prev, internal_fee: v }))}
+                step={0.01}
+                min={0}
+              />
+              <NumericInput
+                label={t('accounts.externalFee') + ' (' + t('common.currency') + ')'}
+                value={form.external_fee}
+                onChange={(v) => setForm((prev) => ({ ...prev, external_fee: v }))}
+                step={0.01}
+                min={0}
+              />
+            </>
+          )}
+          {account.account_type === 'cash' && (
+            <label className="flex items-center gap-2 text-sm text-ink-main cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.is_default}
+                onChange={(e) => setForm((prev) => ({ ...prev, is_default: e.target.checked }))}
+                className="rounded-md border-ivory-border text-primary-600 focus:ring-primary-500"
+              />
+              {t('accounts.setDefault')}
+            </label>
+          )}
+          <label className="flex items-center gap-2 text-sm text-ink-main cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) => setForm((prev) => ({ ...prev, is_active: e.target.checked }))}
+              className="rounded-md border-ivory-border text-primary-600 focus:ring-primary-500"
+            />
+            {t('suppliers.active')}
+          </label>
+          <div className="flex gap-3 justify-end border-t border-ivory-border pt-4">
+            <Button type="button" variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? t('common.loading') : t('common.save')}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 interface TransferModalProps {
   accounts: AccountRow[];
   onClose: () => void;
@@ -398,12 +656,38 @@ interface TransferModalProps {
 function TransferModal({ accounts, onClose, onDone, onError }: TransferModalProps) {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<TransferFeePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [form, setForm] = useState<TransferData>({
     from_account_id: accounts[0]?.id ?? '',
     to_account_id: '',
     amount: 0,
     notes: '',
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    const amount = Math.round(form.amount * 100);
+
+    if (!form.from_account_id || !form.to_account_id || form.from_account_id === form.to_account_id || amount <= 0) {
+      setPreview(null);
+      return;
+    }
+
+    setPreviewLoading(true);
+    api.getTransferFeePreview(form.from_account_id, form.to_account_id, amount)
+      .then((data) => {
+        if (!cancelled) setPreview(data);
+      })
+      .catch(() => {
+        if (!cancelled) setPreview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [form.amount, form.from_account_id, form.to_account_id]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -460,6 +744,28 @@ function TransferModal({ accounts, onClose, onDone, onError }: TransferModalProp
             min={0}
             className="tabular-nums"
           />
+          {(previewLoading || preview) && (
+            <div className="rounded-lg border border-ivory-border bg-ivory-app px-3 py-2 text-sm">
+              {previewLoading ? (
+                <div className="text-ink-muted">{t('common.loading')}</div>
+              ) : preview && (
+                <div className="grid gap-1 text-ink-main">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-ink-muted">{t('accounts.transferFee')} ({t(`accounts.fee_${preview.fee_type}`)})</span>
+                    <span className="tabular-nums">{api.formatMoney(preview.fee)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-ink-muted">{t('accounts.transferNetAmount')}</span>
+                    <span className="tabular-nums">{api.formatMoney(preview.net_amount)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-ivory-border pt-1 font-semibold">
+                    <span>{t('accounts.transferDebitTotal')}</span>
+                    <span className="tabular-nums">{api.formatMoney(preview.net_amount + preview.fee)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-ink-main">{t('suppliers.notes')}</label>
             <textarea

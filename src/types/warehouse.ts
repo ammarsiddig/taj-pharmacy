@@ -100,3 +100,18 @@ export interface BatchRow {
   unit_cost: number;
   status: string;
 }
+
+export interface LowStockProduct {
+  product_id: string;
+  product_name: string;
+  product_name_ar: string | null;
+  barcode: string | null;
+  category: string | null;
+  unit: string;
+  current_qty: number;
+  min_stock_level: number;
+  deficit: number;
+  last_purchase_price: number | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
+}

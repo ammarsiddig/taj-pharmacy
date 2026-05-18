@@ -1,4 +1,4 @@
-import { invoke } from '../lib/tauri';
+﻿import { invoke } from '../lib/tauri';
 import type {
   DashboardStats, SalesReport, SalesReportFilters, InventoryReport,
   ExpiryReport, ProfitLossReport, SupplierAgingReport,
@@ -56,7 +56,7 @@ export async function getTaxReport(
   });
 }
 
-// ====== Invoice Sales ======
+// ---
 
 export async function getInvoiceSales(
   branchId: string,

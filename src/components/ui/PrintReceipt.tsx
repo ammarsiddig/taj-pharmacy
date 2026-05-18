@@ -73,6 +73,7 @@ export default function PrintReceipt({
     if (method === 'cash') return t('pos.cash');
     if (method === 'bank_transfer') return t('pos.bankTransfer');
     if (method === 'credit') return t('pos.credit');
+    if (method === 'partial') return t('pos.splitPayment');
     return method;
   }
 
@@ -83,7 +84,7 @@ export default function PrintReceipt({
       {/* Header */}
       <div className="text-center mb-2">
         {showLogo && logoUrl && (
-          <img src={logoUrl} alt="Logo" className="mx-auto mb-1" style={{ maxHeight: '40px', maxWidth: '60mm' }} />
+          <img src={logoUrl} alt={t('common.logo')} className="mx-auto mb-1" style={{ maxHeight: '40px', maxWidth: '60mm' }} />
         )}
         <div className="text-sm font-bold">{pharmacyName}</div>
         {pharmacyNameAr && <div className="text-xs">{pharmacyNameAr}</div>}
@@ -179,7 +180,7 @@ export default function PrintReceipt({
           <span className="tabular-nums">{api.formatMoney(payment.amount)}</span>
         </div>
       ))}
-      {paymentMethod === 'cash' && changeAmount !== undefined && changeAmount > 0 && (
+      {changeAmount !== undefined && changeAmount > 0 && (
         <div className="flex justify-between text-[10px]">
           <span>{t('pos.change')}</span>
           <span className="tabular-nums">{api.formatMoney(changeAmount)}</span>

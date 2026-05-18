@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "notes": "Release notes go here.",
+  "pub_date": "2026-05-09T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "INSERT_SIGNATURE_HERE",
+      "url": "https://github.com/ammarsiddig/pms-pharmacy-v4/releases/download/v0.1.0/TAJ.Pharmacy_0.1.0_x64-setup.exe"
+    }
+  }
+}

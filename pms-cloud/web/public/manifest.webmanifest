@@ -1,0 +1,27 @@
+{
+  "id": "taj-pharmacy-pwa",
+  "name": "TAJ Pharmacy - لوحة المالك",
+  "short_name": "TAJ Owner",
+  "description": "لوحة تحكم مالك الصيدلية - متابعة المبيعات والمخزون والنشاط",
+  "start_url": "/",
+  "scope": "/",
+  "lang": "ar",
+  "dir": "rtl",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "theme_color": "#1C5F6F",
+  "background_color": "#F4FBFB",
+  "categories": ["business", "productivity", "medical"],
+  "orientation": "any",
+  "shortcuts": [
+    { "name": "المبيعات", "short_name": "مبيعات", "url": "/?page=sales", "icons": [{ "src": "/icons/sales-96.png", "sizes": "96x96" }] },
+    { "name": "المخزون", "short_name": "مخزون", "url": "/?page=stock", "icons": [{ "src": "/icons/stock-96.png", "sizes": "96x96" }] },
+    { "name": "الأرصدة", "short_name": "أرصدة", "url": "/?page=balances", "icons": [{ "src": "/icons/balances-96.png", "sizes": "96x96" }] }
+  ],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -67,7 +67,7 @@ export default function SuppliersTab() {
           <option value="active">{t('suppliers.active')}</option>
           <option value="inactive">{t('suppliers.inactive')}</option>
         </select>
-        <Button onClick={handleAdd} disabled={isBlocked} title={isBlocked ? 'License expired' : undefined}>
+        <Button onClick={handleAdd} disabled={isBlocked} title={isBlocked ? t('license.licenseExpired') : undefined}>
           {t('suppliers.addSupplier')}
         </Button>
       </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Plus, Trash2, Save, PackagePlus, Truck, ReceiptText } from 'lucide-react';
 
@@ -31,8 +31,10 @@ let itemKeyCounter = 0;
 export default function PurchaseNew() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id: editId } = useParams<{ id?: string }>();
   const isEdit = !!editId;
+  const prefilledProduct = (location.state as { productId?: string; productName?: string; supplierName?: string }) ?? {};
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<LocalProduct[]>([]);
   const [supplierId, setSupplierId] = useState('');
@@ -70,6 +72,22 @@ export default function PurchaseNew() {
           cost_price: item.unit_cost,
           sell_price: item.sale_price,
         })));
+      } else if (!isEdit && prefilledProduct.productId) {
+        // Pre-fill from reorder alerts
+        if (prefilledProduct.supplierName) {
+          const match = sup.find(s => s.name === prefilledProduct.supplierName);
+          if (match) setSupplierId(match.id);
+        }
+        setItems([{
+          key: ++itemKeyCounter,
+          product_id: prefilledProduct.productId,
+          product_name: prefilledProduct.productName || '',
+          batch_number: '',
+          expiry_date: '',
+          quantity: 1,
+          cost_price: 0,
+          sell_price: 0,
+        }]);
       }
     } catch (e: unknown) {
       setToast({ msg: api.errMsg(e, t('common.error')), type: 'danger' });

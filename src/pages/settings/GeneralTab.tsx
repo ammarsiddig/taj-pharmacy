@@ -111,7 +111,7 @@ export default function GeneralTab() {
             <label className="block text-xs font-medium text-ink-muted mb-1">{t('settings.general.pharmacyLogo')}</label>
             <div className="flex items-center gap-4">
               {logoPreview && (
-                <img src={logoPreview} alt="Logo" className="h-14 w-14 rounded-lg border border-ivory-border object-contain bg-white" />
+                <img src={logoPreview} alt={t('common.logo')} className="h-14 w-14 rounded-lg border border-ivory-border object-contain bg-white" />
               )}
               <div className="flex gap-2">
                 <button type="button" onClick={() => logoInputRef.current?.click()} className="rounded-xl bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100">

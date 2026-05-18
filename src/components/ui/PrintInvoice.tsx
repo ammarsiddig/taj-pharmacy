@@ -114,24 +114,24 @@ export default function PrintInvoice({
           {subtotal !== undefined && (
             <div className="flex justify-between py-1 border-b border-gray-200">
               <span>{t('pos.subtotal')}</span>
-              <span className="tabular-nums">{api.formatMoney(subtotal)} SDG</span>
+              <span className="tabular-nums">{api.formatMoney(subtotal)} {t('common.currency')}</span>
             </div>
           )}
           {discount !== undefined && discount > 0 && (
             <div className="flex justify-between py-1 border-b border-gray-200">
               <span>{t('purchases.discount')}</span>
-              <span className="tabular-nums">-{api.formatMoney(discount)} SDG</span>
+              <span className="tabular-nums">-{api.formatMoney(discount)} {t('common.currency')}</span>
             </div>
           )}
           {taxAmount !== undefined && taxAmount > 0 && (
             <div className="flex justify-between py-1 border-b border-gray-200">
               <span>{t('purchases.vat')}</span>
-              <span className="tabular-nums">{api.formatMoney(taxAmount)} SDG</span>
+              <span className="tabular-nums">{api.formatMoney(taxAmount)} {t('common.currency')}</span>
             </div>
           )}
           <div className="flex justify-between py-1.5 font-bold text-sm border-t-2 border-black">
             <span>{t('purchases.grandTotal')}</span>
-            <span className="tabular-nums">{api.formatMoney(total)} SDG</span>
+            <span className="tabular-nums">{api.formatMoney(total)} {t('common.currency')}</span>
           </div>
         </div>
       </div>

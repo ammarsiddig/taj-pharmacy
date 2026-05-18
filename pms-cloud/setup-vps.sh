@@ -28,20 +28,22 @@ else
     apt-get install -y -qq docker-compose-plugin
 fi
 
-# 4. Configure firewall
-echo "[4/6] Configuring firewall..."
-apt-get install -y -qq ufw
+# 4. Configure firewall and host reverse proxy packages
+echo "[4/6] Configuring firewall and installing Nginx/Certbot..."
+apt-get install -y -qq ufw nginx certbot python3-certbot-nginx
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp    # SSH
 ufw allow 80/tcp    # HTTP
 ufw allow 443/tcp   # HTTPS
 ufw --force enable
+systemctl enable nginx
 echo "Firewall configured: SSH(22), HTTP(80), HTTPS(443)"
 
-# 5. Create app directory
-echo "[5/6] Setting up app directory..."
+# 5. Create app directories
+echo "[5/6] Setting up app directories..."
 mkdir -p /opt/pms-cloud
+mkdir -p /var/www/taj/bin /var/www/taj/data/pharmacies /var/www/taj/data/clinics /var/www/taj/data/labs
 echo "App directory: /opt/pms-cloud"
 
 # 6. Generate admin token
@@ -58,5 +60,6 @@ echo "Your admin token (SAVE THIS):"
 echo "  ${ADMIN_TOKEN}"
 echo ""
 echo "Next step: upload your pms-cloud files to /opt/pms-cloud"
-echo "Then run: cd /opt/pms-cloud && docker compose up -d --build"
+echo "Then configure /etc/nginx/sites-available/taj_suite per docs/AGENT-HANDOFF.md"
+echo "Then run: cd /opt/pms-cloud && docker compose up -d --build postgres api"
 echo ""

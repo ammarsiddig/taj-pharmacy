@@ -81,7 +81,7 @@ export default function CustomersTab() {
           />
           {t('customers.hasBalance')}
         </label>
-        <Button onClick={handleAdd} disabled={isBlocked} title={isBlocked ? 'License expired' : undefined}>
+        <Button onClick={handleAdd} disabled={isBlocked} title={isBlocked ? t('license.licenseExpired') : undefined}>
           {t('customers.addCustomer')}
         </Button>
       </div>

@@ -330,7 +330,7 @@ function NewInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
                       <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="app-input w-full px-3 py-3 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
                         {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({fmt(account.current_balance)})</option>)}
                       </select>
-                      {selectedAccount && <div className="text-xs text-ink-muted">{fmt(selectedAccount.current_balance)} SDG</div>}
+                      {selectedAccount && <div className="text-xs text-ink-muted">{fmt(selectedAccount.current_balance)} {t('common.currency')}</div>}
                     </div>
                   )}
                   {paymentMethod === 'partial' && (

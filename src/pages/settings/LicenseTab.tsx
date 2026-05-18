@@ -245,7 +245,7 @@ export default function LicenseTab() {
             className="app-input w-full px-3 py-2.5 text-sm font-mono text-ink-main focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             value={licKey}
             onChange={e => setLicKey(e.target.value)}
-            placeholder="PMS-XXXX-XXXX-XXXX"
+            placeholder={t('settings.license.licenseKeyPlaceholder')}
             dir="ltr"
           />
         </div>
@@ -260,7 +260,7 @@ export default function LicenseTab() {
                 className="app-input w-full px-3 py-2.5 text-sm text-ink-main focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="owner@example.com"
+                placeholder={t('settings.license.emailPlaceholder')}
                 dir="ltr"
               />
             </div>

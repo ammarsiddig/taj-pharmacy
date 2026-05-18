@@ -81,6 +81,18 @@ export default function CloudSyncTab() {
     return `منذ ${Math.floor(diff / 86400)} يوم`;
   }
 
+  function syncHealth(status: CloudSyncStatus | null): { color: string; bg: string; label: string; icon: string } {
+    if (!status || (!status.last_synced_at && !status.last_attempt_at)) {
+      return { color: 'text-ink-placeholder', bg: 'bg-surface-secondary', label: 'غير مهيأ', icon: '●' };
+    }
+    const last = status.last_synced_at || status.last_attempt_at || '';
+    const diff = Math.floor((Date.now() - new Date(last).getTime()) / 1000);
+    if (diff < 3600)       return { color: 'text-status-success', bg: 'bg-green-50', label: 'ممتاز — نشط', icon: '●' };
+    if (diff < 86400)      return { color: 'text-amber-600', bg: 'bg-amber-50', label: 'تحذير — آخر مزامنة قديمة', icon: '●' };
+    if (status.last_error) return { color: 'text-status-danger', bg: 'bg-red-50', label: 'خطأ — فشل آخر مزامنة', icon: '●' };
+    return { color: 'text-status-danger', bg: 'bg-red-50', label: 'منقطع — المزامنة متوقفة', icon: '●' };
+  }
+
   if (loading) {
     return <div className="app-card py-12 text-center text-ink-muted">جاري التحميل...</div>;
   }
@@ -100,7 +112,7 @@ export default function CloudSyncTab() {
               className={inp}
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
-              placeholder="http://178.104.158.147"
+              placeholder="https://taj.systems"
               dir="ltr"
             />
           </div>
@@ -167,17 +179,44 @@ export default function CloudSyncTab() {
 
       {syncStatus && (
         <div className="app-panel p-4">
-          <p className="text-sm font-medium text-ink-muted">حالة المزامنة</p>
-          <div className="mt-3 flex items-center gap-3">
-            <div className={`h-2.5 w-2.5 rounded-full ${syncStatus.last_synced_at ? 'bg-status-success' : 'bg-ink-placeholder'}`} />
-            <span className="text-sm text-ink-main">
-              آخر مزامنة: {relativeTime(syncStatus.last_synced_at ?? null)}
+          <div className="flex items-center gap-3">
+            <div className={`h-3 w-3 rounded-full ${syncHealth(syncStatus).color}`} />
+            <span className={`text-sm font-semibold ${syncHealth(syncStatus).color}`}>
+              {syncHealth(syncStatus).label}
             </span>
           </div>
-          <p className="mt-1 text-xs text-ink-muted">
-            آخر حالة: {syncStatus.last_run_synced} مُزامَن · {syncStatus.last_run_failed} فشل
-          </p>
-          <p className="mt-2 text-xs text-ink-muted">
+          <div className={`mt-2 rounded-xl px-4 py-3 text-sm ${syncHealth(syncStatus).bg}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-ink-muted">آخر مزامنة:</span>
+              <span className="font-medium text-ink-main">
+                {relativeTime(syncStatus.last_synced_at ?? null)}
+              </span>
+            </div>
+            {syncStatus.last_auto_run_at && (
+              <div className="mt-1 flex items-center justify-between text-xs">
+                <span className="text-ink-muted">آخر مزامنة تلقائية:</span>
+                <span className="text-ink-main">{relativeTime(syncStatus.last_auto_run_at)}</span>
+              </div>
+            )}
+            <div className="mt-1 flex items-center justify-between text-xs">
+              <span className="text-ink-muted">آخر دورة:</span>
+              <span className="text-ink-main">
+                {syncStatus.last_run_synced} منجح · {syncStatus.last_run_failed} فشل
+              </span>
+            </div>
+            {syncStatus.pending_count > 0 && (
+              <div className="mt-1 flex items-center justify-between text-xs">
+                <span className="text-amber-600">معلق:</span>
+                <span className="font-medium text-amber-700">{syncStatus.pending_count} سجل</span>
+              </div>
+            )}
+            {syncStatus.last_error && (
+              <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-status-danger">
+                آخر خطأ: {syncStatus.last_error}
+              </div>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-ink-muted">
             🔄 المزامنة تتم تلقائياً كل 5 دقائق — لا حاجة لأي إجراء يدوي
           </p>
         </div>

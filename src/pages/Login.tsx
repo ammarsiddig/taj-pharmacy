@@ -44,9 +44,7 @@ export default function Login() {
         <div className="bg-ivory-surface rounded-sm shadow-lg p-8 border border-ivory-border">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-[#1C5F6F] rounded-sm mx-auto mb-4 flex items-center justify-center">
-              <span className="text-white text-2xl font-bold">TAJ</span>
-            </div>
+            <img src="/taj-logo.svg" alt="TAJ Pharmacy" className="mx-auto mb-4 h-28 w-28 object-contain" />
             <h1 className="text-xl font-bold text-ink-main">TAJ Pharmacy</h1>
             <p className="text-sm text-ink-muted mt-1">{t('app.title')}</p>
           </div>

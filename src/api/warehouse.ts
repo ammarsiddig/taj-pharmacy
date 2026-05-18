@@ -1,7 +1,7 @@
 import { invoke } from '../lib/tauri';
 import type {
   StorageLocationFull, StorageLocationData, StockMovementRow,
-  StockTakeRow, StockTakeItemRow, SupplierReturnRow, SupplierReturnCreateData, BatchRow, BatchSaleRow, RecalledBatch,
+  StockTakeRow, StockTakeItemRow, SupplierReturnRow, SupplierReturnCreateData, BatchRow, BatchSaleRow, RecalledBatch, LowStockProduct,
 } from '../types';
 import { getTenantId } from './core';
 
@@ -137,4 +137,8 @@ export async function recallBatch(
     batchNumber,
     reason: reason ?? null,
   });
+}
+
+export async function getLowStockProducts(branchId: string): Promise<LowStockProduct[]> {
+  return invoke('get_low_stock_products', { tenantId: getTenantId(), branchId });
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as api from '../../api';
 import type { UnitMeasure, UnitMeasureData } from '../../types';
 import Button from '../../components/ui/Button';
@@ -6,6 +7,7 @@ import Badge from '../../components/ui/Badge';
 import Toast from '../../components/ui/Toast';
 
 export default function UnitManagementTab() {
+  const { t } = useTranslation();
   const [units, setUnits] = useState<UnitMeasure[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -44,39 +46,39 @@ export default function UnitManagementTab() {
     catch (e: unknown) { setToast({ msg: String(e), type: 'danger' }); }
   };
 
-  if (loading) return <div className="py-12 text-center text-ink-muted">Loading...</div>;
+  if (loading) return <div className="py-12 text-center text-ink-muted">{t('common.loading')}</div>;
 
   const inp = "app-input w-full px-3 py-2.5 text-sm text-ink-main focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100";
 
   return (
     <div className="app-card space-y-4 p-5">
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-      <h3 className="text-base font-bold text-ink-main">Unit Management</h3>
+      <h3 className="text-base font-bold text-ink-main">{t('settings.units.title')}</h3>
       <div className="grid grid-cols-2 gap-3">
-        <input className={inp} placeholder="Unit Name" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-        <input className={inp} placeholder="Arabic Unit Name" value={form.name_ar || ''} onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))} />
+        <input className={inp} placeholder={t('settings.units.unitName')} value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+        <input className={inp} placeholder={t('settings.units.unitNameAr')} value={form.name_ar || ''} onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))} />
       </div>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />Active</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />{t('settings.units.active')}</label>
       <div className="flex gap-2">
-        <Button onClick={save}>{editingId ? 'Update' : 'Add'}</Button>
-        {editingId && <Button variant="ghost" onClick={resetForm}>Cancel</Button>}
+        <Button onClick={save}>{editingId ? t('common.save') : t('common.add')}</Button>
+        {editingId && <Button variant="ghost" onClick={resetForm}>{t('common.cancel')}</Button>}
       </div>
 
       <div className="app-card overflow-hidden">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-ivory-border bg-surface-secondary">
-            <th className="px-4 py-2.5 text-right font-medium text-ink-muted">Unit</th>
-            <th className="px-4 py-2.5 text-right font-medium text-ink-muted">Status</th>
-            <th className="px-4 py-2.5 text-right font-medium text-ink-muted">Actions</th>
+            <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('settings.units.unit')}</th>
+            <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('settings.units.status')}</th>
+            <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('common.actions')}</th>
           </tr></thead>
           <tbody>
             {units.map(u => (
               <tr key={u.id} className="border-b border-ivory-border bg-white">
                 <td className="px-4 py-2.5">{u.name_ar || u.name}</td>
-                <td className="px-4 py-2.5">{u.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="neutral">Disabled</Badge>}</td>
+                <td className="px-4 py-2.5">{u.is_active ? <Badge variant="success">{t('settings.units.active')}</Badge> : <Badge variant="neutral">{t('settings.units.disabled')}</Badge>}</td>
                 <td className="px-4 py-2.5 flex gap-2">
-                  <button className="text-xs text-primary-600 hover:underline" onClick={() => edit(u)}>Edit</button>
-                  <button className="text-xs text-status-danger hover:underline" onClick={() => remove(u.id)}>Delete</button>
+                  <button className="text-xs text-primary-600 hover:underline" onClick={() => edit(u)}>{t('common.edit')}</button>
+                  <button className="text-xs text-status-danger hover:underline" onClick={() => remove(u.id)}>{t('common.delete')}</button>
                 </td>
               </tr>
             ))}

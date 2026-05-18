@@ -1,4 +1,4 @@
-import { invoke } from '../lib/tauri';
+﻿import { invoke } from '../lib/tauri';
 import type {
   AuditLogRow, AuditLogEntry, LicenseInfo, LicenseHistoryRow,
   OnboardingStatus, OnboardingData, ActivateLicenseCloudData, ActivateLicenseCloudResult,
@@ -10,7 +10,7 @@ import type {
 } from '../types';
 import { getTenantId } from './core';
 
-// ====== Audit Log ======
+// ---
 
 export async function writeAuditLog(userId: string, entry: AuditLogEntry): Promise<void> {
   return invoke('write_audit_log', { tenantId: getTenantId(), userId, entry });
@@ -28,7 +28,7 @@ export async function getAuditLog(
   });
 }
 
-// ====== License ======
+// ---
 
 export async function getLicenseInfo(): Promise<LicenseInfo> {
   return invoke('get_license_info', { tenantId: getTenantId() });
@@ -46,7 +46,7 @@ export async function checkLicenseOnline(): Promise<{ checked: boolean; revoked:
   return invoke('check_license_online', { tenantId: getTenantId() });
 }
 
-// ====== Auto-Update ======
+// ---
 
 export interface UpdateCheckResult {
   configured: boolean;
@@ -65,10 +65,14 @@ export async function installUpdate(): Promise<{ success: boolean; message: stri
   return invoke('install_update', {});
 }
 
-// ====== Onboarding ======
+// ---
 
 export async function checkOnboarding(): Promise<OnboardingStatus> {
   return invoke('check_onboarding', {});
+}
+
+export async function getDbTenantId(): Promise<{ tenant_id: string; branch_id: string }> {
+  return invoke('get_db_tenant_id', {});
 }
 
 export async function completeOnboarding(data: OnboardingData): Promise<void> {
@@ -91,7 +95,7 @@ export async function getCloudRemoteConfigCached(): Promise<CloudRemoteConfig> {
   return invoke('get_cloud_remote_config_cached', {});
 }
 
-// ====== Assets & Depreciation ======
+// ---
 
 export async function getAssetCategories(): Promise<AssetCategory[]> {
   return invoke('get_asset_categories', { tenantId: getTenantId() });
@@ -129,7 +133,7 @@ export async function getAssetsSummary(branchId?: string): Promise<AssetSummary>
   return invoke('get_assets_summary', { tenantId: getTenantId(), branchId: branchId || null });
 }
 
-// ====== Cloud Sync (Table Snapshot) ======
+// ---
 
 export interface TableSyncResult {
   table: string;
@@ -146,7 +150,7 @@ export async function syncAllTablesNow(branchId?: string): Promise<TableSyncResu
   });
 }
 
-// ====== Pharmacy Switcher (Multi-Pharmacy Admin Mode) ======
+// ---
 
 export async function listPharmacies(): Promise<PharmacyConfig[]> {
   return invoke('list_pharmacies', {});

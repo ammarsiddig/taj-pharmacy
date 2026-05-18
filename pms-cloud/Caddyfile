@@ -1,9 +1,16 @@
-# For IP-only access (no domain yet), use HTTP on port 80
-# When you get a domain, replace :80 with your domain name e.g. api.yourdomain.com
-# Caddy will auto-provision HTTPS via Let's Encrypt
+# LEGACY ONLY - NOT ACTIVE IN PRODUCTION
+#
+# Current production uses host-level Nginx, not this Caddyfile.
+# Source of truth: docs/AGENT-HANDOFF.md, section
+# "Production Domain and Reverse Proxy Setup".
+#
+# Do not run pms-caddy on ports 80/443 while Nginx is active.
+# The production backend must stay private at 127.0.0.1:3000.
+#
+# This file is retained only for rollback/reference under the
+# docker-compose `legacy-caddy` profile.
 
 :80 {
-    # API routes → Node.js backend
     handle /v1/* {
         reverse_proxy api:3000
     }
@@ -17,7 +24,6 @@
         reverse_proxy api:3000
     }
 
-    # PWA static files (SPA fallback)
     handle {
         root * /srv/web
         try_files {path} /index.html

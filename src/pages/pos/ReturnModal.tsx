@@ -8,7 +8,7 @@ import Button from '../../components/ui/Button';
 interface Props {
   session: PosSession | null;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
 }
 
 function formatDateTime(isoString: string): string {
@@ -36,9 +36,12 @@ export default function ReturnModal({ session, onClose, onSuccess }: Props) {
     if (session) {
       api.getSessionSales(session.id)
         .then(setReturnSaleResults)
-        .catch(() => setReturnSaleResults(/* non-critical: if fails, user can still search by sale number */[]));
+        .catch((e: unknown) => {
+          setReturnSaleResults([]);
+          setError(e instanceof Error ? e.message : t('common.error'));
+        });
     }
-  }, [session]);
+  }, [session, t]);
 
   const searchSaleByNumber = async () => {
     if (!returnSaleSearch.trim()) return;
@@ -89,7 +92,7 @@ export default function ReturnModal({ session, onClose, onSuccess }: Props) {
         reason: returnReason || undefined,
         items: itemsToReturn,
       }, auth.user!.id);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('common.error'));

@@ -6,6 +6,10 @@ export interface AccountRow {
   current_balance: number;
   is_default: boolean;
   is_active: boolean;
+  bank_provider?: string;
+  internal_fee: number;
+  external_fee: number;
+  phone_label?: string;
 }
 
 export interface AccountData {
@@ -14,6 +18,21 @@ export interface AccountData {
   account_type: string;
   opening_balance?: number;
   is_default?: boolean;
+  bank_provider?: string;
+  internal_fee?: number;
+  external_fee?: number;
+  phone_label?: string;
+}
+
+export interface UpdateAccountData {
+  name?: string;
+  name_ar?: string;
+  is_active?: boolean;
+  is_default?: boolean;
+  bank_provider?: string;
+  internal_fee?: number;
+  external_fee?: number;
+  phone_label?: string;
 }
 
 export interface LedgerRow {
@@ -48,4 +67,10 @@ export interface TransferData {
   to_account_id: string;
   amount: number;
   notes?: string;
+}
+
+export interface TransferFeePreview {
+  fee: number;
+  net_amount: number;
+  fee_type: string;
 }

@@ -1,7 +1,23 @@
 import type { AuthState } from '../types';
+import { invoke } from '../lib/tauri';
 
 const DEFAULT_TENANT_ID = 'default-tenant';
 const DEFAULT_BRANCH_ID = 'main-branch';
+
+let _cachedDbTenantId: string | null = null;
+let _cachedDbBranchId: string | null = null;
+
+async function resolveDbIdentity() {
+  if (_cachedDbTenantId !== null) return;
+  try {
+    const result = await invoke<{ tenant_id: string; branch_id: string }>('get_db_tenant_id', {});
+    _cachedDbTenantId = result.tenant_id;
+    _cachedDbBranchId = result.branch_id;
+  } catch {
+    _cachedDbTenantId = DEFAULT_TENANT_ID;
+    _cachedDbBranchId = DEFAULT_BRANCH_ID;
+  }
+}
 
 function getStoredAuthState(): AuthState | null {
   const stored = localStorage.getItem('pms-auth');
@@ -13,12 +29,22 @@ function getStoredAuthState(): AuthState | null {
   }
 }
 
+function getAuthenticatedState(): AuthState | null {
+  const state = getStoredAuthState();
+  if (!state?.isAuthenticated || !state.user || !state.token) return null;
+  return state;
+}
+
 export function getTenantId() {
-  return getStoredAuthState()?.tenant_id || DEFAULT_TENANT_ID;
+  return getAuthenticatedState()?.tenant_id || _cachedDbTenantId || DEFAULT_TENANT_ID;
 }
 
 export function getBranchId() {
-  return getStoredAuthState()?.user?.branch_id || DEFAULT_BRANCH_ID;
+  return getAuthenticatedState()?.user?.branch_id || _cachedDbBranchId || DEFAULT_BRANCH_ID;
+}
+
+export async function initTenantId() {
+  await resolveDbIdentity();
 }
 
 export function getAuthState(): AuthState {

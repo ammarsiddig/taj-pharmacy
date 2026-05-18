@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { LicenseProvider, useLicense } from './hooks/useLicense';
 import { AppModeProvider } from './hooks/useAppMode';
@@ -14,16 +15,20 @@ import PurchaseDetail from './pages/PurchaseDetail';
 import PurchaseNew from './pages/PurchaseNew';
 import POS from './pages/POS';
 import Expenses from './pages/Expenses';
+import Accounts from './pages/Accounts';
 import CustomerDetail from './pages/CustomerDetail';
+import CustomerNew from './pages/CustomerNew';
 import SupplierDetail from './pages/SupplierDetail';
 import Reports from './pages/Reports';
 import Warehouse from './pages/Warehouse';
 import Sales from './pages/Sales';
 import Onboarding from './pages/Onboarding';
-import { checkOnboarding, syncAllTablesNow } from './api';
+import { checkOnboarding, syncAllTablesNow, initTenantId } from './api';
+import { checkPendingUpdate } from './api';
 import './i18n';
 
 const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function useAutoSync(enabled: boolean) {
   useEffect(() => {
@@ -35,6 +40,17 @@ function useAutoSync(enabled: boolean) {
   }, [enabled]);
 }
 
+function useUpdateCheck(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    checkPendingUpdate().catch(() => { /* silent */ });
+    const id = setInterval(() => {
+      checkPendingUpdate().catch(() => { /* silent */ });
+    }, UPDATE_CHECK_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [enabled]);
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -42,6 +58,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function UpgradeRequired() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-6 text-center">
@@ -52,17 +69,16 @@ function UpgradeRequired() {
         </svg>
       </div>
       <div className="space-y-1.5">
-        <h2 className="text-xl font-bold text-ink-main">Feature Not Available</h2>
+        <h2 className="text-xl font-bold text-ink-main">{t('license.featureNotAvailable')}</h2>
         <p className="max-w-sm text-sm text-ink-muted">
-          This feature is not included in your current subscription plan.
-          Upgrade your license to unlock access.
+          {t('license.featureNotAvailableDesc')}
         </p>
       </div>
       <button
         onClick={() => navigate('/settings', { state: { tab: 'license' } })}
         className="rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-primary-700 transition-colors"
       >
-        View Upgrade Options
+        {t('license.viewUpgradeOptions')}
       </button>
     </div>
   );
@@ -76,6 +92,7 @@ function FeatureGate({ flag, children }: { flag: number; children: React.ReactNo
 }
 
 function BlockedScreen() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-6 text-center">
@@ -86,17 +103,16 @@ function BlockedScreen() {
         </svg>
       </div>
       <div className="space-y-1.5">
-        <h2 className="text-xl font-bold text-ink-main">License Expired</h2>
+        <h2 className="text-xl font-bold text-ink-main">{t('license.expired')}</h2>
         <p className="max-w-sm text-sm text-ink-muted">
-          Your license has expired. The system is in read-only mode.
-          Renew your license to restore full access.
+          {t('license.expiredDesc')}
         </p>
       </div>
       <button
         onClick={() => navigate('/settings', { state: { tab: 'license' } })}
         className="rounded-xl bg-status-danger px-6 py-2.5 text-sm font-semibold text-white shadow hover:opacity-90 transition-opacity"
       >
-        Renew License
+        {t('license.renewButton')}
       </button>
     </div>
   );
@@ -105,17 +121,18 @@ function BlockedScreen() {
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
   useAutoSync(isAuthenticated);
+  useUpdateCheck(isAuthenticated);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(true);
 
   useEffect(() => {
-    checkOnboarding()
+    initTenantId()
+      .then(() => checkOnboarding())
       .then((status) => {
         setOnboardingCompleted(status.completed);
         setOnboardingChecked(true);
       })
       .catch(() => {
-        // Fail open — if we can't check, proceed to normal app
         setOnboardingChecked(true);
       });
   }, []);
@@ -150,6 +167,8 @@ function AppRoutes() {
         <Route path="/purchases/:id" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseDetail /></FeatureGate>} />
         <Route path="/pos" element={<FeatureGate flag={FEATURE_FLAGS.POS}><POS /></FeatureGate>} />
         <Route path="/expenses" element={<FeatureGate flag={FEATURE_FLAGS.EXPENSES}><Expenses /></FeatureGate>} />
+        <Route path="/accounts" element={<FeatureGate flag={FEATURE_FLAGS.ACCOUNTS}><Accounts /></FeatureGate>} />
+        <Route path="/customers/new" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerNew /></FeatureGate>} />
         <Route path="/customers/:id" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerDetail /></FeatureGate>} />
         <Route path="/suppliers/:id" element={<FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate>} />
         <Route path="/reports" element={<FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate>} />

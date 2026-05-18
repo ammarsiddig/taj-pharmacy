@@ -14,6 +14,8 @@ import {
   type AdminTenantDetail as TenantDetail,
   type LicenseKey,
 } from '../api';
+import Modal from '../components/ui/Modal';
+import Button from '../components/ui/Button';
 
 interface Props {
   tenantId: string;
@@ -186,6 +188,8 @@ export default function AdminTenantDetail({ tenantId, onBack }: Props) {
   const [savingName, setSavingName] = useState(false);
 
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
 
   const [licenseKeys, setLicenseKeys] = useState<LicenseKey[]>([]);
   const [generatingLicense, setGeneratingLicense] = useState(false);
@@ -219,13 +223,17 @@ export default function AdminTenantDetail({ tenantId, onBack }: Props) {
   };
 
   const handleDelete = async () => {
-    if (!confirm('⚠️ هل أنت متأكد؟ سيتم حذف الصيدلية وجميع بياناتها نهائياً.')) return;
-    if (!confirm('تأكيد أخير: هذا الإجراء لا يمكن التراجع عنه.')) return;
+    setShowDeleteConfirm(false);
     setDeleting(true);
     try {
       await deleteTenant(tenantId);
       onBack();
     } catch { alert('تعذر حذف الصيدلية'); setDeleting(false); }
+  };
+
+  const openDeleteConfirm = () => {
+    setDeleteInput('');
+    setShowDeleteConfirm(true);
   };
 
   const tenant = detail?.tenant;
@@ -306,12 +314,12 @@ export default function AdminTenantDetail({ tenantId, onBack }: Props) {
 
               {/* ── Delete Pharmacy ── */}
               <button
-                onClick={handleDelete}
+                onClick={openDeleteConfirm}
                 disabled={deleting}
                 className="w-full rounded-xl py-2 text-xs font-bold"
                 style={{ background: 'transparent', color: 'var(--color-status-danger)', border: '1px solid var(--color-status-danger)' }}
               >
-                {deleting ? '...' : '🗑️ حذف الصيدلية نهائياً'}
+                {deleting ? '...' : '🗑️ حذف الصيدلية'}
               </button>
 
               {/* Suspend toggle */}
@@ -656,6 +664,30 @@ export default function AdminTenantDetail({ tenantId, onBack }: Props) {
           </>
         )}
       </div>
+
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="تأكيد حذف الصيدلية" size="sm">
+        <div className="flex flex-col gap-3">
+          <p className="text-sm" style={{ color: 'var(--color-status-danger)' }}>
+            هذا الإجراء لا يمكن التراجع عنه. سيتم حذف جميع بيانات الصيدلية.
+          </p>
+          <p className="text-sm" style={{ color: 'var(--color-ink-muted)' }}>
+            اكتب اسم الصيدلية للتأكيد:
+          </p>
+          <input
+            value={deleteInput}
+            onChange={(e) => setDeleteInput(e.target.value)}
+            placeholder={tenant?.pharmacy_name || tenant?.id}
+            className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+            style={{ background: 'var(--color-ivory-muted)', borderColor: 'var(--color-ivory-border)' }}
+          />
+          <div className="flex gap-2">
+            <Button onClick={handleDelete} loading={deleting} disabled={deleteInput !== (tenant?.pharmacy_name || tenant?.id)} variant="danger">
+              حذف نهائي
+            </Button>
+            <Button onClick={() => setShowDeleteConfirm(false)} variant="ghost">إلغاء</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

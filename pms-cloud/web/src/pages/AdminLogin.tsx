@@ -39,12 +39,7 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
     >
       <div className="app-card w-full max-w-sm p-8">
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div
-            className="flex h-16 w-16 items-center justify-center rounded-2xl text-white text-2xl"
-            style={{ background: 'var(--color-primary-700)' }}
-          >
-            🔐
-          </div>
+          <img src="/taj-logo.svg" alt="TAJ Pharmacy" className="h-24 w-24 object-contain" />
           <div className="text-center">
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-ink-main)' }}>
               لوحة إدارة النظام

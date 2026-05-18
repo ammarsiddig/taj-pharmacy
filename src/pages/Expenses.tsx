@@ -344,7 +344,7 @@ function NewTemplateForm({ categories, accounts, onSave, onCancel }: NewTemplate
         <option value="">{t('expenses.noCategory')}</option>
         {categories.map(c => <option key={c.id} value={c.id}>{c.name_ar || c.name}</option>)}
       </select>
-      <input type="number" className={inp} style={{ width: 90 }} placeholder="0.00" value={form.default_amount / 100 || ''} onChange={e => setForm(f => ({ ...f, default_amount: Math.round(Number(e.target.value) * 100) }))} />
+      <input type="number" className={inp} style={{ width: 90 }} placeholder={t('common.amount')} value={form.default_amount / 100 || ''} onChange={e => setForm(f => ({ ...f, default_amount: Math.round(Number(e.target.value) * 100) }))} />
       <div className="flex gap-1">
         <button onClick={async () => { setSaving(true); await onSave(form).finally(() => setSaving(false)); }} disabled={saving || !form.name.trim()} className="rounded-lg bg-primary-600 px-3 py-1 text-xs text-white disabled:opacity-50">{saving ? t('common.loading') : t('common.save')}</button>
         <button onClick={onCancel} className="rounded-lg border border-ivory-border px-3 py-1 text-xs text-ink-muted">{t('common.cancel')}</button>
@@ -461,7 +461,7 @@ function ExpensePanel({ expense, prefillTemplate, categories, accounts, onSave, 
       <form onSubmit={handleSubmit} className="sales-form-panel-body space-y-4">
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.3fr_0.9fr]">
           <section className="app-panel p-4">
-            <h4 className={sectionTitle}>Amount / Date</h4>
+            <h4 className={sectionTitle}>{t('expenses.amountDate')}</h4>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-muted">{t('expenses.amount')} ({t('common.currency')})*</label>
@@ -490,7 +490,7 @@ function ExpensePanel({ expense, prefillTemplate, categories, accounts, onSave, 
           </section>
 
           <section className="app-panel p-4">
-            <h4 className={sectionTitle}>Category / Notes</h4>
+            <h4 className={sectionTitle}>{t('expenses.categoryNotes')}</h4>
             <div className="space-y-3">
               <div>
                 <div className="mb-1 flex items-center justify-between">

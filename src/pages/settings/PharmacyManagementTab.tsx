@@ -17,7 +17,7 @@ export default function PharmacyManagementTab() {
     tenant_id: '',
     name: '',
     name_ar: '',
-    cloud_endpoint: 'http://178.104.158.147',
+    cloud_endpoint: 'https://taj.systems',
     cloud_token: '',
   });
 
@@ -52,7 +52,7 @@ export default function PharmacyManagementTab() {
         tenant_id: '',
         name: '',
         name_ar: '',
-        cloud_endpoint: 'http://178.104.158.147',
+        cloud_endpoint: 'https://taj.systems',
         cloud_token: '',
       });
       await loadPharmacies();
@@ -202,7 +202,7 @@ export default function PharmacyManagementTab() {
                   className={inp}
                   value={newPharmacy.cloud_endpoint}
                   onChange={(e) => setNewPharmacy({ ...newPharmacy, cloud_endpoint: e.target.value })}
-                  placeholder="http://178.104.158.147"
+                  placeholder="https://taj.systems"
                   dir="ltr"
                 />
               </div>

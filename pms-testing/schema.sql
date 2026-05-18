@@ -199,6 +199,18 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (sub_unit_id) REFERENCES unit_measures(id)
 );
 
+CREATE TABLE IF NOT EXISTS product_substitutes (
+    id            TEXT PRIMARY KEY,
+    tenant_id     TEXT NOT NULL,
+    product_id    TEXT NOT NULL,
+    substitute_id TEXT NOT NULL,
+    notes         TEXT,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE(tenant_id, product_id, substitute_id),
+    FOREIGN KEY (product_id)   REFERENCES products(id),
+    FOREIGN KEY (substitute_id) REFERENCES products(id)
+);
+
 CREATE TABLE IF NOT EXISTS storage_locations (
     id          TEXT PRIMARY KEY,
     tenant_id   TEXT NOT NULL,
@@ -786,6 +798,15 @@ CREATE TABLE IF NOT EXISTS cloud_sync_state (
     last_run_failed     INTEGER NOT NULL DEFAULT 0,
     last_run_retried    INTEGER NOT NULL DEFAULT 0,
     updated_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);
+
+CREATE TABLE IF NOT EXISTS cloud_sync_table_state (
+    tenant_id    TEXT NOT NULL,
+    table_name   TEXT NOT NULL,
+    last_sync_at TEXT,
+    row_count    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (tenant_id, table_name),
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 

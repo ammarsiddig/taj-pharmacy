@@ -1,140 +1,160 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getOwnerProducts, type OwnerProduct } from '../api';
+import Icon from '../components/ui/Icon';
+import Skeleton from '../components/ui/Skeleton';
+import EmptyState from '../components/ui/EmptyState';
+import Modal from '../components/ui/Modal';
 
-function fmt(fils: number): string {
-  return (fils / 100).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+function fmt(fils: number): string { return (fils / 100).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 const EXPIRY_WARN_DAYS = 60;
 
-function expiryBadge(iso: string | null): { text: string; bg: string; color: string } | null {
+function expiryBadge(iso: string | null) {
   if (!iso) return null;
   const days = Math.round((new Date(iso).getTime() - Date.now()) / 86_400_000);
-  if (days < 0) return { text: 'منتهي', bg: '#fee2e2', color: 'var(--color-status-danger)' };
-  if (days <= EXPIRY_WARN_DAYS) return { text: `${days} يوم`, bg: '#FFF7ED', color: '#C2410C' };
+  if (days < 0) return { text: 'منتهي', color: 'var(--color-status-danger)' };
+  if (days <= EXPIRY_WARN_DAYS) return { text: `${days} يوم`, color: '#C2410C' };
   return null;
 }
 
-interface ProductsProps {
-  branch: string;
-}
+const FILTERS = [
+  { key: '', label: 'الكل' },
+  { key: 'out', label: 'نفد' },
+  { key: 'low', label: 'منخفض' },
+  { key: 'expiring', label: 'قارب الانتهاء' },
+];
 
-export default function Products({ branch }: ProductsProps) {
+interface Props { branch: string; }
+
+export default function Products({ branch }: Props) {
   const [products, setProducts] = useState<OwnerProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [selectedPid, setSelectedPid] = useState<string | null>(null);
+  const observerRef = useRef<HTMLDivElement | null>(null);
 
-  const load = useCallback((q: string, p: number) => {
+  const selected = products.find(p => p.id === selectedPid);
+
+  const load = (q: string, p: number) => {
     setLoading(true);
     getOwnerProducts(branch, q || undefined, p)
-      .then((r) => {
-        setProducts(p === 1 ? r.products : (prev) => [...prev, ...r.products]);
+      .then(r => {
+        setProducts(p === 1 ? r.products : prev => [...prev, ...r.products]);
         setTotal(r.total);
         setHasMore(p * r.limit < r.total);
       })
       .catch(() => setError('تعذر تحميل المنتجات'))
       .finally(() => setLoading(false));
-  }, [branch]);
+  };
 
   useEffect(() => {
-    const t = setTimeout(() => { setPage(1); load(search, 1); }, 300);
+    setPage(1);
+    const t = setTimeout(() => load(search, 1), 300);
     return () => clearTimeout(t);
-  }, [search, load]);
+  }, [search, branch]);
 
-  const handleLoadMore = () => {
-    const next = page + 1;
-    setPage(next);
-    load(search, next);
-  };
+  useEffect(() => {
+    if (!observerRef.current || !hasMore || loading) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setPage(p => p + 1); load(search, page + 1); } }, { threshold: 0.1 });
+    obs.observe(observerRef.current);
+    return () => obs.disconnect();
+  }, [hasMore, loading, page]);
+
+  const filtered = (() => {
+    switch (filter) {
+      case 'out': return products.filter(p => p.current_stock <= 0);
+      case 'low': return products.filter(p => p.current_stock > 0 && p.current_stock <= p.min_stock);
+      case 'expiring': return products.filter(p => p.nearest_expiry && new Date(p.nearest_expiry).getTime() - Date.now() < EXPIRY_WARN_DAYS * 86_400_000);
+      default: return products;
+    }
+  })();
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {/* Search */}
       <div className="relative">
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="بحث عن منتج، باركود..."
+        <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث في المنتجات..."
           className="w-full rounded-xl border px-4 py-3 text-sm outline-none pe-10"
-          style={{ background: 'var(--color-surface-secondary)', borderColor: 'var(--color-ivory-border)', color: 'var(--color-ink-main)' }}
-        />
-        <span className="absolute end-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-ink-muted)' }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </span>
+          style={{ background: 'var(--color-ivory-surface)', borderColor: 'var(--color-ivory-border)' }} />
+        <span className="absolute end-3 top-1/2 -translate-y-1/2"><Icon name="search" size={16} style={{ color: 'var(--color-ink-muted)' }} /></span>
       </div>
 
-      {/* Total count */}
-      {!loading && !error && (
-        <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>{total.toLocaleString('en')} منتج</p>
-      )}
+      <div className="flex gap-1 flex-wrap">
+        {FILTERS.map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${filter === f.key ? 'bg-primary-600 text-white' : ''}`}
+            style={{ background: filter === f.key ? 'var(--color-primary-600)' : 'var(--color-ivory-muted)', color: filter === f.key ? 'white' : 'var(--color-ink-muted)' }}>
+            {f.label}
+          </button>
+        ))}
+      </div>
 
-      {error && <p className="py-8 text-center text-sm" style={{ color: 'var(--color-status-danger)' }}>{error}</p>}
-
-      {!error && products.length === 0 && !loading && (
-        <div className="py-10 text-center">
-          <p className="text-4xl">💊</p>
-          <p className="mt-2 font-medium" style={{ color: 'var(--color-ink-main)' }}>لا توجد منتجات</p>
-        </div>
-      )}
+      {loading && products.length === 0 && <div className="flex flex-col gap-3">{[...Array(5)].map((_, i) => <Skeleton key={i} height="60px" rounded="md" />)}</div>}
+      {error && !loading && <EmptyState icon="exclamation" title={error} />}
+      {!loading && !error && filtered.length === 0 && <EmptyState icon="package" title={search ? 'لا توجد نتائج' : 'لا توجد منتجات'} />}
 
       <div className="flex flex-col gap-2">
-        {products.map((p) => {
-          const badge = expiryBadge(p.nearest_expiry);
-          const outOfStock = p.total_stock <= 0;
-          const lowStock = !outOfStock && p.total_stock <= p.min_stock;
+        {filtered.map(p => {
+          const exp = expiryBadge(p.nearest_expiry);
           return (
-            <div key={p.id} className="app-card p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm leading-tight" style={{ color: 'var(--color-ink-main)' }}>{p.name}</p>
-                  {p.name_ar && <p className="text-xs mt-0.5" style={{ color: 'var(--color-ink-muted)' }}>{p.name_ar}</p>}
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-ink-muted)' }}>
-                    {p.category || '—'} {p.barcode ? `· ${p.barcode}` : ''}
-                  </p>
-                </div>
-                <div className="text-end shrink-0 flex flex-col items-end gap-1">
-                  <p className="font-bold tabular-nums text-sm" style={{ color: 'var(--color-ink-main)' }}>{fmt(p.sale_price)} SDG</p>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-xs font-bold"
-                    style={{
-                      background: outOfStock ? '#fee2e2' : lowStock ? 'var(--color-status-warning-bg)' : 'var(--color-status-success-bg)',
-                      color: outOfStock ? 'var(--color-status-danger)' : lowStock ? 'var(--color-status-warning)' : 'var(--color-status-success)',
-                    }}
-                  >
-                    {p.total_stock.toLocaleString('en')} وحدة
-                  </span>
-                  {badge && (
-                    <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: badge.bg, color: badge.color }}>
-                      {badge.text}
-                    </span>
-                  )}
-                </div>
+            <div key={p.id} onClick={() => setSelectedPid(p.id)} className="app-card flex items-center gap-3 p-3 cursor-pointer">
+              <div className="w-1 h-10 rounded-full shrink-0" style={{ background: p.current_stock <= 0 ? 'var(--color-status-danger)' : p.current_stock <= p.min_stock ? 'var(--color-status-warning)' : 'var(--color-primary-400)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: 'var(--color-ink-main)' }}>{p.name_ar || p.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-ink-muted)' }}>
+                  {p.barcode || '—'} · {fmt(p.sale_price)} SDG · المخزون: <span style={{ color: p.current_stock <= p.min_stock ? 'var(--color-status-danger)' : 'inherit' }}>{p.current_stock}</span>
+                </p>
+              </div>
+              <div className="text-end shrink-0">
+                {exp && <span className="text-[10px] rounded-full px-2 py-0.5 font-bold" style={{ background: exp.color === 'var(--color-status-danger)' ? '#FEF2F2' : '#FFF7ED', color: exp.color }}>{exp.text}</span>}
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-ink-placeholder)' }}>{p.category || ''}</p>
               </div>
             </div>
           );
         })}
       </div>
 
-      {loading && (
-        <div className="flex justify-center py-4">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent" style={{ borderTopColor: 'var(--color-primary-600)' }} />
-        </div>
+      {loading && products.length > 0 && <Skeleton height="40px" rounded="sm" />}
+      <div ref={observerRef} style={{ height: 1 }} />
+
+      {/* Product detail bottom sheet */}
+      {selected && (
+        <Modal open={!!selectedPid} onClose={() => setSelectedPid(null)} size="sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-2 h-12 rounded-full" style={{ background: 'var(--color-primary-500)' }} />
+            <div>
+              <h3 className="font-bold text-lg" style={{ color: 'var(--color-ink-main)' }}>{selected.name_ar || selected.name}</h3>
+              {selected.barcode && <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>{selected.barcode}</p>}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="rounded-xl p-3" style={{ background: 'var(--color-ivory-muted)' }}>
+              <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>السعر</p>
+              <p className="font-bold tabular-nums" style={{ color: 'var(--color-ink-main)' }}>{fmt(selected.sale_price)}</p>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: 'var(--color-ivory-muted)' }}>
+              <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>المخزون</p>
+              <p className="font-bold tabular-nums" style={{ color: selected.current_stock <= selected.min_stock ? 'var(--color-status-danger)' : 'var(--color-ink-main)' }}>{selected.current_stock}</p>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: 'var(--color-ivory-muted)' }}>
+              <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>الحد الأدنى</p>
+              <p className="font-bold" style={{ color: 'var(--color-ink-main)' }}>{selected.min_stock}</p>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: 'var(--color-ivory-muted)' }}>
+              <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>انتهاء الصلاحية</p>
+              <p className="font-bold text-sm" style={{ color: selected.nearest_expiry && new Date(selected.nearest_expiry) < new Date() ? 'var(--color-status-danger)' : 'var(--color-ink-main)' }}>
+                {selected.nearest_expiry ? new Date(selected.nearest_expiry).toLocaleDateString('ar') : '—'}
+              </p>
+            </div>
+          </div>
+        </Modal>
       )}
 
-      {hasMore && !loading && (
-        <button
-          onClick={handleLoadMore}
-          className="w-full rounded-xl py-3 text-sm font-bold"
-          style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-ink-muted)' }}
-        >
-          تحميل المزيد
-        </button>
-      )}
+      <p className="text-center text-xs" style={{ color: 'var(--color-ink-placeholder)' }}>{total} منتج</p>
     </div>
   );
 }
