@@ -37,33 +37,13 @@ foreach ($file in $files) {
     scp "$PSScriptRoot\$file" "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/$file"
 }
 
+# Upload src directory (all files + subdirs)
+Write-Host "  -> src/"
+scp -r "$PSScriptRoot\src\*" "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/src/"
+
 # Upload migrations
-$migrationFiles = Get-ChildItem -Path "$PSScriptRoot\migrations" -File
-foreach ($file in $migrationFiles) {
-    Write-Host "  -> migrations/$($file.Name)"
-    scp $file.FullName "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/migrations/$($file.Name)"
-}
-
-# Upload src files
-$srcFiles = Get-ChildItem -Path "$PSScriptRoot\src" -File
-foreach ($file in $srcFiles) {
-    Write-Host "  -> src/$($file.Name)"
-    scp $file.FullName "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/src/$($file.Name)"
-}
-
-# Upload route files
-$routeFiles = Get-ChildItem -Path "$PSScriptRoot\src\routes" -File
-foreach ($file in $routeFiles) {
-    Write-Host "  -> src/routes/$($file.Name)"
-    scp $file.FullName "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/src/routes/$($file.Name)"
-}
-
-# Upload middleware files
-$middlewareFiles = Get-ChildItem -Path "$PSScriptRoot\src\middleware" -File -ErrorAction SilentlyContinue
-foreach ($file in $middlewareFiles) {
-    Write-Host "  -> src/middleware/$($file.Name)"
-    scp $file.FullName "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/src/middleware/$($file.Name)"
-}
+Write-Host "  -> migrations/"
+scp -r "$PSScriptRoot\migrations\*" "${VPS_USER}@${VPS_IP}:${REMOTE_DIR}/migrations/"
 
 # Clean and rebuild PWA
 Write-Host ""

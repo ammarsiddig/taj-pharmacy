@@ -96,6 +96,11 @@ pub(crate) fn cloud_sync_token() -> Option<String> {
 
 pub(crate) fn build_cloud_sync_client() -> Result<Client, String> {
     Client::builder()
+        .default_headers({
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("X-PMS-Client-Version", "1".parse().unwrap());
+            headers
+        })
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("فشل إنشاء عميل المزامنة السحابية: {}", e))

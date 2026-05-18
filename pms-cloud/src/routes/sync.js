@@ -10,8 +10,11 @@ import { Router } from 'express';
 import { query, transaction } from '../db.js';
 import { authenticateToken } from '../auth.js';
 import { syncLimiter } from '../middleware/rate-limit.js';
+import versionCheck from '../middleware/version-check.js';
 
 const router = Router();
+
+router.use('/v1/sync', versionCheck);
 
 /**
  * Recompute dashboard_summaries for a tenant+branch from snapshot tables.
