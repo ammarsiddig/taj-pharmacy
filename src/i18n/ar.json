@@ -842,7 +842,13 @@
     "emptyTopProductsTip": "ستظهر المنتجات الأكثر مبيعاً بعد تسجيل المبيعات",
     "emptyRecentSalesTip": "ستظهر أحدث الفواتير هنا",
     "emptyActivityTip": "ستظهر هنا عمليات المستخدم والأحداث المهمة",
-    "emptySalesTrendTip": "سجل مبيعات لعرض اتجاه المبيعات لآخر 7 أيام"
+    "emptySalesTrendTip": "سجل مبيعات لعرض اتجاه المبيعات لآخر 7 أيام",
+    "lastCloudBackup": "آخر نسخة احتياطية سحابية",
+    "backupNow": "نسخ احتياطي الآن",
+    "backupNever": "لا توجد نسخة احتياطية",
+    "backupFailed": "فشلت النسخة الاحتياطية",
+    "backupAgoHours": "قبل {hours} ساعة",
+    "backupAgoDays": "قبل {days} يوم"
   },
   "common": {
     "loading": "جاري التحميل...",

@@ -357,6 +357,89 @@ router.post('/auth/logout', async (req, res) => {
 });
 
 /**
+ * POST /auth/recover
+ * Recover cloud credentials for a new device using license key + owner email + password.
+ * Applies TASK-204 rate limiting (loginLimiter) and TASK-205 account lockout.
+ * Body: { license_key, email, password }
+ * Returns: { tenant_id, sync_token, owner_id, pharmacy_name }
+ */
+router.post('/auth/recover', loginLimiter, async (req, res) => {
+  try {
+    const { license_key, email, password } = req.body;
+    if (!license_key || !email || !password) {
+      return res.status(400).json({ error: 'license_key, email, and password are required' });
+    }
+
+    const key = license_key.trim();
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const licenseResult = await query(
+      "SELECT tenant_id, status FROM license_keys WHERE key = $1",
+      [key]
+    );
+    if (licenseResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid recovery credentials' });
+    }
+    const lic = licenseResult.rows[0];
+    if (lic.status === 'revoked') {
+      return res.status(401).json({ error: 'Invalid recovery credentials' });
+    }
+
+    const ownerResult = await query(
+      'SELECT id, password_hash, failed_login_attempts, locked_until FROM owners WHERE tenant_id = $1 AND email = $2',
+      [lic.tenant_id, normalizedEmail]
+    );
+    if (ownerResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid recovery credentials' });
+    }
+    const owner = ownerResult.rows[0];
+
+    if (owner.locked_until && new Date(owner.locked_until) > new Date()) {
+      return res.status(429).json({ error: 'Account temporarily locked. Try again later.' });
+    }
+
+    if (!bcrypt.compareSync(password, owner.password_hash)) {
+      const attempts = (owner.failed_login_attempts || 0) + 1;
+      if (attempts >= 5) {
+        await query(
+          "UPDATE owners SET failed_login_attempts = $1, locked_until = NOW() + INTERVAL '15 minutes' WHERE id = $2",
+          [attempts, owner.id]
+        );
+      } else {
+        await query(
+          'UPDATE owners SET failed_login_attempts = $1 WHERE id = $2',
+          [attempts, owner.id]
+        );
+      }
+      return res.status(401).json({ error: 'Invalid recovery credentials' });
+    }
+
+    await query('UPDATE owners SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [owner.id]);
+
+    const syncToken = crypto.randomBytes(32).toString('hex');
+    await query(
+      "INSERT INTO api_tokens (token, tenant_id, label, is_active) VALUES ($1, $2, 'device-recovery', true)",
+      [syncToken, lic.tenant_id]
+    );
+
+    const tenantResult = await query(
+      'SELECT pharmacy_name FROM tenants WHERE id = $1',
+      [lic.tenant_id]
+    );
+
+    res.json({
+      tenant_id: lic.tenant_id,
+      sync_token: syncToken,
+      owner_id: owner.id,
+      pharmacy_name: tenantResult.rows[0]?.pharmacy_name || '',
+    });
+  } catch (err) {
+    console.error('[auth] recover error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * GET /v1/config
  * Desktop polls this on startup + every sync cycle.
  * Auth: Bearer sync_token

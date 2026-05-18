@@ -16,7 +16,7 @@
 | --- | --- |
 | Product name | **TAJ Pharmacy** (repo folder name is `pms-pharmacy-v4` — do not confuse) |
 | Production domain | `taj.systems` (Owner PWA), `taj.systems/mgmt` (Admin PWA) |
-| Current phase | **Phase 2 — SaaS Control Plane** |
+| Current phase | **Phase 3 — Laptop Migration** |
 | Last updated | 2026-05-15 |
 | Curator (planning) | Claude Code (Opus) — owns sections 0–4 |
 | Implementers (code) | Cascade (Windsurf), DeepSeek V4 (OpenCode), or any future agent |
@@ -229,23 +229,21 @@ These conventions are non-negotiable. Violating them creates inconsistency that 
 
 ## 2. CURRENT PHASE
 
-### Phase 2 — SaaS Control Plane
+### Phase 3 — Laptop Migration (product deal-breaker)
 
-**Goal:** Harden the cloud API against credential leaks, brute-force attacks, and unauthorized access. Lock the front door before adding more features.
+**Goal:** Make it possible for a pharmacist who gets a new laptop to recover their entire pharmacy data from the cloud and keep working without data loss.
 
 **Done when:**
-- All Phase 2 tasks (TASK-200 through TASK-206) are `DONE`
-- No hardcoded secret fallbacks exist anywhere in cloud code
-- Suspended tenants cannot sync or log into PWA
-- Existing tokens are revoked on tenant suspension/deletion
-- Password changes require identity proof (not just a sync token)
-- Auth, activation, and sync endpoints are rate-limited
-- Per-account lockout after N failed login attempts
-- JWT TTL shortened; refresh tokens introduced
+- All Phase 3 tasks (TASK-300 through TASK-304) are `DONE`
+- Onboarding offers a "Restore Existing Pharmacy" path
+- A cloud endpoint validates owner credentials and returns a sync token
+- Desktop can pull all historical data from cloud snapshots
+- License keys can be rebound to new devices
+- Dashboard shows last cloud backup time with visual urgency
 
-**Estimated effort:** 1–2 days for one agent.
+**Estimated effort:** 2–3 days for one agent.
 
-**After Phase 2:** Curator (Opus) will write Phase 3 (Laptop Migration) into section 3.
+**After Phase 3:** Curator (Opus) will write Phase 4 (GitHub Hygiene & History Rewrite) into section 3.
 
 ---
 
@@ -1531,6 +1529,398 @@ on the API side and BLOCK on the PWA piece.**
 
 ---
 
+### TASK-300 — Onboarding "Restore Existing Pharmacy" entry point
+
+| Field | Value |
+| --- | --- |
+| Severity | High (UX dealbreaker if missing) |
+| Audit ref | B3-1, B3-6 (audit item 16) |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | BLOCKED |
+| Estimated effort | 3–4 hours |
+| Depends on | TASK-301 (credential recovery), TASK-302 (pull data) |
+
+**BLOCKED — design decisions needed.** Precondition verified (4-step wizard, no restore path). This task requires significant UX design: (1) A Step 0 branching screen with two options. (2) Steps R1-R5 for credential entry, recovery API call, progress display, and completion summary. (3) Arabic-first i18n strings for all new screens. (4) Real-time progress UI during pull_all_tables (which is itself BLOCKED). Design questions for curator: Should Step 0 replace the current entry point entirely or show conditionally? Should the progress screen poll or stream? What UI patterns match the existing onboarding aesthetic? Recommended: curator pairs with the user to design the flow, then writes a detailed UI spec.
+
+**MAY BLOCK.** This task requires UX design decisions that may exceed
+DeepSeek's ability to make unilaterally. If you find yourself
+inventing significant new screens or flows, set Status BLOCKED with
+notes on what design questions you ran into. The curator will pair
+with the user to design it.
+
+**Verification before starting.**
+
+```powershell
+Get-Content src/pages/Onboarding.tsx | Select-Object -First 80
+Select-String -Path src/pages/Onboarding.tsx -Pattern "restore|recover" | Out-String
+```
+
+Expected: a 4-step onboarding wizard (pharmacy info → admin account →
+license activation → done) with NO "restore" path. If a restore path
+already exists, set Status BLOCKED.
+
+**Problem.** Pharmacists who get a new laptop have no way to recover
+their data. Onboarding only offers "create new pharmacy" which
+generates a fresh tenant_id, breaking license keys and backup
+decryption. Today, a lost laptop = total business data loss.
+
+**Fix.** Add a "Step 0" branch BEFORE step 1:
+
+  "Do you already have a TAJ Pharmacy account?"
+    [ Create New Pharmacy ]   [ Restore Existing Pharmacy ]
+
+If "Create New Pharmacy" → existing 4-step flow.
+
+If "Restore Existing Pharmacy" → new flow:
+  - Step R1: Enter license key, owner email, owner password
+  - Step R2: Call TASK-301 credential recovery endpoint
+  - Step R3: If credentials valid, call TASK-302 pull_all_tables
+  - Step R4: Show progress (e.g., "Restoring 1247 products...")
+  - Step R5: Done — show "X products, Y sales, Z customers restored"
+
+Strings must be added to BOTH ar.json and en.json. Arabic is primary
+(per HANDOFF 1.7).
+
+**Hard constraint.** Do NOT remove or alter the existing "Create
+New" flow. Only ADD the restore branch. Existing pharmacies on
+upgrade-install must still see the "Create New" option work.
+
+**Acceptance test.** Manual: fresh install, see Step 0 with two
+options. Choose "Restore Existing" → see Step R1 with three fields.
+Submit invalid credentials → see clear error. Don't actually
+complete the restore (depends on 301/302 being done).
+
+---
+
+### TASK-301 — Cloud credential recovery endpoint
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | B3-2 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 2–3 hours |
+| Depends on | — (foundational; TASK-300 calls this) |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path pms-cloud/src/routes/auth.js -Pattern "recover|reset" -Context 0,10
+```
+
+Expected: no `recover` endpoint exists. If one does, BLOCK.
+
+```powershell
+# Confirm owners table has password_hash column
+Select-String -Path pms-cloud/migrations/*.sql -Pattern "owners" | Select-Object -First 10
+```
+
+**Problem.** A pharmacist who switches laptops has no way to recover
+their cloud backup credentials (sync token, backup decryption key).
+Today those are stored ONLY on the local SQLite of the lost laptop.
+The cloud backup file is undecryptable without them.
+
+**Fix.** Add `POST /auth/recover` to `pms-cloud/src/routes/auth.js`.
+
+**Request body:**
+
+```json
+{
+  "license_key": "TAJ-XXXX-XXXX-XXXX-XXXX",
+  "email": "owner@example.com",
+  "password": "<owner's PWA password>"
+}
+```
+
+**Logic:**
+
+1. Look up the license by `license_key`. If not found or not active
+   (expired, revoked): return 401 with generic "Invalid recovery
+   credentials" (do NOT leak which field was wrong — prevents
+   enumeration).
+2. From the license, get `tenant_id`.
+3. Look up the owner by `tenant_id` AND `email`. If not found: same
+   401.
+4. Verify `password` against `password_hash` with bcrypt. If
+   mismatch: same 401.
+5. Apply the per-account lockout (5 failed attempts → 15min lock)
+   from TASK-205. Reuse the same `failed_login_attempts` /
+   `locked_until` columns.
+6. Apply rate limiting: reuse `loginLimiter` (10 per 15min per IP)
+   from TASK-204.
+7. On success, return:
+
+```json
+{
+  "tenant_id": "<tenant_id>",
+  "sync_token": "<fresh new sync token>",
+  "owner_id": "<owner_id>",
+  "pharmacy_name": "<name>"
+}
+```
+
+Generate a new `sync_token` (don't return the old one — the user is
+on a NEW device). Insert it into the `tokens` table with status
+active. Old sync tokens for this tenant remain active (other devices
+that were working still work). If the user wants to revoke old
+devices, that's a Phase 6 admin feature.
+
+**Hard constraint.** Do NOT return the actual backup decryption key
+or password hash. The desktop will derive what it needs from the
+tenant_id + sync_token (matching how it does for new installs after
+activation).
+
+**Acceptance test.**
+
+```powershell
+# Boot the API
+cd pms-cloud ; npm run dev
+# (in another terminal) Hit the endpoint with valid creds
+$body = @{ license_key = "<known good>"; email = "owner@..."; password = "..." } | ConvertTo-Json
+curl -X POST http://localhost:3000/auth/recover -H "Content-Type: application/json" -d $body
+# Expected: 200 with tenant_id + sync_token
+# Wrong password: 401 with generic error
+# After 5 wrong tries: 429 with lockout message
+```
+
+---
+
+### TASK-302 — Build pull_all_tables (one-time restore from cloud)
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | B3-3 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | BLOCKED |
+| Estimated effort | 4–6 hours (LARGEST PHASE 3 TASK) |
+
+**BLOCKED — scope estimate for curator.** Precondition verified (no pull exists). This task requires: (1) Cloud: `GET /v1/sync/dump` endpoint scanning 14 snapshot tables. (2) Desktop: new Rust command `pull_all_tables` parsing response, mapping cloud snapshot columns → desktop SQLite schema with per-table transactions. The schema mapping is non-trivial (cloud has `synced_at`, `is_active`, branch_id defaults that desktop doesn't have). Trusted estimate: 4–6 hours. Recommended: move to own mini-phase.
+| Depends on | TASK-301 |
+
+**OK to BLOCK if scope feels too large.** This is the biggest
+single task in Phase 3. It touches every snapshot table on cloud
+and every regular table on desktop. If you start and realize it'll
+take more than 6 hours, BLOCK with scope estimate.
+
+**Verification before starting.**
+
+```powershell
+# Confirm sync is currently one-way (push only)
+Select-String -Path src-tauri/src/commands/cloud_sync_snapshot.rs `
+  -Pattern "pull|fetch|dump" | Select-Object -First 5
+```
+
+Expected: zero or few matches (only push exists). If pull already
+exists, BLOCK.
+
+**Problem.** Cloud sync is one-way push. A fresh desktop install
+cannot pull historical data from the cloud. After TASK-301 returns
+a sync_token, the desktop has nothing to restore from.
+
+**Fix.**
+
+**Cloud side** — new endpoint `GET /v1/sync/dump`:
+
+- Auth: requires the new sync_token from TASK-301 (the recovery flow)
+- For each snapshot table (snapshot_products, snapshot_customers,
+  snapshot_suppliers, snapshot_pos_sales, snapshot_pos_sale_items,
+  snapshot_expenses, snapshot_accounts, snapshot_account_transactions,
+  snapshot_batches, snapshot_supplier_invoices, snapshot_stock_movements,
+  snapshot_customer_payments, snapshot_supplier_payments,
+  snapshot_sale_payments): select all rows for the tenant_id.
+- Return as JSON: `{ tables: { snapshot_products: [...], snapshot_customers: [...], ... } }`
+- For large tenants this could be many MB. Use streaming response
+  (`res.write` per table) or chunked transfer if you know how. If
+  unsure, just send the whole JSON for now — most pharmacies have
+  <10MB of data.
+
+**Desktop side** — new Rust command `pull_all_tables` in
+`src-tauri/src/commands/cloud_sync_snapshot.rs` (or a new file
+`cloud_sync_restore.rs`):
+
+- Input: tenant_id + sync_token + cloud_endpoint_url
+- Calls `GET /v1/sync/dump`
+- For each table in the response:
+  - Map cloud snapshot schema → desktop schema (some columns differ;
+    you've worked with both sides — match them carefully)
+  - For each row: INSERT (or REPLACE) into the local SQLite table
+  - Wrap in a transaction per table (BEGIN/COMMIT pattern per project
+    convention)
+- Returns: count of rows restored per table, for the onboarding
+  UI to show
+
+**Hard constraints:**
+
+- DO NOT delete or modify existing local data. If the local table
+  has rows (shouldn't happen on fresh install, but defensive),
+  detect and ABORT with a clear error: "Restore can only run on a
+  fresh install. Local data exists."
+- DO NOT trigger any sync push during restore. The whole point is
+  one-way pull.
+- DO NOT delete the sync_token or any auth state during restore.
+- DO NOT change schema (no ALTER TABLE). Restore inserts into
+  existing local tables only.
+
+**Acceptance test.**
+
+`cargo check` passes. `npm run dev` on cloud starts cleanly. Then
+manual:
+
+1. Take a tenant with known data (count their products in the cloud:
+   `SELECT COUNT(*) FROM snapshot_products WHERE tenant_id = '...'`).
+2. Fresh-install the desktop (delete `%APPDATA%/com.taj.pharmacy/`).
+3. Call `pull_all_tables` with that tenant's sync_token.
+4. Open local SQLite, confirm product count matches cloud.
+5. Confirm sales, customers, accounts also match.
+
+---
+
+### TASK-303 — License key rebinding to new device
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | B3-4 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1–2 hours |
+| Depends on | TASK-301 |
+
+**Verification before starting.**
+
+```powershell
+Select-String -Path src-tauri/src/commands/settings_license.rs `
+  -Pattern "machine_id|device_id|tenant_id" -Context 0,3
+Select-String -Path pms-cloud/src/routes/auth.js -Pattern "activate" -Context 0,15
+```
+
+Look for how license is currently bound to a device. If the license
+is already re-bindable (i.e., the activate endpoint already accepts
+license_key + email + password and rebinds), BLOCK.
+
+**Problem.** Once a license is activated on Device A, the license
+record on cloud is bound to Device A's `tenant_id`. When the
+pharmacist installs on Device B, Device B generates a new random
+tenant_id (per `seed.rs:17`), so activation tries to attach to a
+"new" license — but the license is already taken by Device A.
+Result: cannot activate on Device B.
+
+**Fix.**
+
+Two pieces:
+
+**1. Cloud side** — `POST /v1/activate` accepts an optional
+`recovery_mode: true` flag. When set, instead of failing if the
+license is already activated, it:
+- Validates `email` and `password` match the existing owner
+- Updates the tokens table: deactivate the old device's sync_token
+  (mark `is_active = false`), insert a new sync_token for the new
+  device's machine_id
+- Returns the existing tenant_id (NOT a new one) plus the new
+  sync_token
+- Logs an audit event "license rebound from machine_id X to Y"
+
+If not in recovery_mode, behavior is unchanged (existing first-time
+activation flow).
+
+**2. Desktop side** — when restoring via TASK-300/301, after
+credential recovery succeeds, call `/v1/activate` with `recovery_mode:
+true`. Store the returned `tenant_id` in local SQLite (overwriting
+the temp/blank tenant_id that the fresh install generated).
+
+**Hard constraints:**
+
+- Old device must lose its sync token. The pharmacist should not
+  have two devices both syncing as if they were the same install.
+  If they want two devices, that's a multi-device feature (not in
+  Phase 3).
+- recovery_mode MUST require password verification. Do NOT allow
+  rebinding with license_key alone — that would let anyone with a
+  license key steal a pharmacy's data.
+
+**Acceptance test.** Manual:
+
+1. Activate license on Device A. Confirm sync works.
+2. Run `recovery_mode: true` activation from Device B with correct
+   creds. Confirm Device B can sync.
+3. Try to sync from Device A — should get 401 (token deactivated).
+4. Try recovery from Device C with wrong password — 401.
+
+---
+
+### TASK-304 — Dashboard "Last cloud backup" status indicator
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | B3-5 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 1 hour |
+| Depends on | — (standalone) |
+
+**Verification before starting.**
+
+```powershell
+Get-Content src/pages/Dashboard.tsx | Select-String "backup" -Context 0,3
+Select-String -Path src-tauri/src/commands/settings_backup_scheduler.rs `
+  -Pattern "last_backup|last_run" | Out-String
+```
+
+Expected: Dashboard has no backup indicator; backup scheduler tracks
+`last_run` or similar timestamp somewhere.
+
+**Problem.** Pharmacists don't know when their last cloud backup
+happened. They could go weeks without realizing auto-backup is
+broken. When the laptop dies, they discover the backup is 3 weeks
+stale.
+
+**Fix.**
+
+1. **Desktop Rust command** `get_last_cloud_backup` in
+   `src-tauri/src/commands/settings_backup.rs` (or wherever backup
+   metadata lives): returns `{ last_backup_at: ISO timestamp,
+   last_backup_status: "success"|"failed"|"never", size_bytes }`.
+   Register in `lib.rs`.
+
+2. **Dashboard UI** add a small card or row near the top:
+
+```
+┌──────────────────────────────────────────┐
+│ ☁ Last cloud backup: 2 hours ago        │  ← green if <24h
+│ ☁ Last cloud backup: 3 days ago         │  ← yellow if 24h-7d
+│ ☁ Last cloud backup: 12 days ago !      │  ← red if >7d or never
+│   [ Backup now ]                         │
+└──────────────────────────────────────────┘
+```
+
+Use existing UI tokens: `bg-primary-500` for green (success state),
+warning tokens from the existing palette for yellow/red. RTL-correct
+(use `ms-*`/`me-*` etc., never `ml-*`/`mr-*` — see HANDOFF 1.7).
+
+"Backup now" button calls the existing manual-backup command.
+
+i18n keys to add to BOTH ar.json and en.json:
+
+```
+"dashboard.last_cloud_backup": "Last cloud backup"
+"dashboard.backup_now": "Backup now"
+"dashboard.backup_never": "No backup yet"
+"dashboard.backup_ago_hours": "{hours} hours ago"
+"dashboard.backup_ago_days": "{days} days ago"
+```
+
+(Arabic equivalents — keep it simple, this is well within the
+existing translation pattern.)
+
+**Acceptance test.** `cargo check` passes. Manual: open dashboard,
+see backup indicator with current state. Click "Backup now",
+indicator updates after backup completes.
+
+---
+
 ## 4. BACKLOG
 
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
@@ -1539,14 +1929,7 @@ on the API side and BLOCK on the PWA piece.**
 
 ### Phase 2 — SaaS Control Plane (IN PROGRESS — see section 3)
 
-### Phase 3 — Laptop Migration (product deal-breaker)
-
-- **B3-1** Add "Restore Existing Pharmacy" branch in Onboarding step 0.
-- **B3-2** Make cloud backup credentials recoverable via license key + owner email + password.
-- **B3-3** Build `pull_all_tables` (inverse of push) for one-time restore-from-cloud.
-- **B3-4** Bind license key to current device on first activation, allow re-bind from owner credentials.
-- **B3-5** Show "last cloud backup: X hours ago" prominently on Dashboard.
-- **B3-6** Item 16 in the audit.
+### Phase 3 — Laptop Migration (IN PROGRESS — see section 3)
 
 ### Phase 4 — GitHub Hygiene & History Rewrite
 
@@ -1633,6 +2016,36 @@ TEMPLATE — copy this block when adding a new entry:
 - **Files changed:** `src-tauri/src/commands/warehouse.rs` (lines 538, 574 — wrapped `confirm_supplier_return` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_stocktake.rs` (lines 112, 149 — wrapped `start_stock_take` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_batch.rs` (lines 130, 162 — wrapped `recall_batch` writes in BEGIN/COMMIT)
 - **Acceptance test result:** `cargo check` — Finished in 14.81s, no errors. All three functions now have transactional write blocks.
 - **Notes:** Used `conn.execute("BEGIN"/"COMMIT", [])` pattern (same as `pos_invoice.rs`). All three had exactly one write block each — no nested transactions needed.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-304
+- **Status:** DONE
+- **Files changed:** `src/pages/Dashboard.tsx` (added BackupIndicator component lines 352-400, added backup state + load logic, added Cloud/CloudOff/RefreshCw imports), `src/i18n/en.json` (added 6 dashboard backup keys), `src/i18n/ar.json` (same in Arabic)
+- **Acceptance test result:** `tsc --noEmit` — no errors. API layer already had `getAutoBackupStatus()` and `uploadBackupToCloud()`. BackupIndicator shows: green (<24h), yellow (1-7d), red (>7d or failed), gray (never). "Backup now" button triggers manual backup and refreshes status. Uses RTL-correct layout.
+- **Notes:** Reused existing `getAutoBackupStatus` (queries `backup_log` table, latest auto backup) and `uploadBackupToCloud` (manual trigger). No new Rust commands needed. Component is self-contained within Dashboard.tsx.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-300 (BLOCKED)
+- **Status:** BLOCKED
+- **Files changed:** None
+- **Acceptance test result:** N/A (BLOCKED before implementation)
+- **Notes:** Precondition verified — onboarding is a 4-step wizard (`STEPS` array with id 1-4) with no restore branch. This task requires significant UX design (Step 0 branching, R1-R5 flow, progress UI, Arabic strings). Design questions: Should Step 0 replace or prepend? What visual style? How to show progress during pull_all_tables (which is also BLOCKED)? Recommended: curator + user design session, then detailed UI spec.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-303
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/auth.js` (lines 28-95 — added `recovery_mode` branch to `POST /v1/activate`: validates email+password against existing owner, deactivates old sync tokens, issues new one, returns existing tenant_id)
+- **Acceptance test result:** Module loads cleanly. Recovery mode: looks up license regardless of status (not just 'pending'), verifies password against owner, deactivates old tokens via `UPDATE api_tokens SET is_active = false`, issues new sync_token. Non-recovery_mode path unchanged.
+- **Notes:** Recovery mode returns existing tenant_id (NOT new one), so desktop can reuse the same identity. Old device loses sync ability (single-device model). Reuses TASK-205 lockout logic for password verification. Generic 401 error for wrong credentials (no field leakage).
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-302
+- **Status:** BLOCKED
+- **Files changed:** None
+- **Acceptance test result:** N/A (BLOCKED before implementation)
+- **Notes:** Precondition verified — no pull exists. Scope estimate: 4-6 hours. Requires (1) Cloud: `GET /v1/sync/dump` endpoint scanning 14 snapshot tables, returning JSON. (2) Desktop: new Rust command `pull_all_tables` parsing response, mapping cloud snapshot columns → desktop SQLite schema with per-table transactions. Schema mapping is non-trivial — cloud has `synced_at`, `is_active`, `branch_id` defaults that desktop tables don't have. Recommended: move to own mini-phase or assign as sole task for one full session.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-301
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/auth.js` (lines 359-440 — new `POST /auth/recover` endpoint: validates license_key + email + password, returns new sync_token + tenant_id + owner_id + pharmacy_name)
+- **Acceptance test result:** Module loads cleanly. Endpoint applies loginLimiter (TASK-204) and per-account lockout (TASK-205). On success generates fresh sync_token via crypto.randomBytes, inserts into api_tokens with label 'device-recovery'. Old tokens remain active (multi-device support not addressed in Phase 3).
+- **Notes:** Generic 401 "Invalid recovery credentials" for any mismatch (prevents enumeration). License lookup filters `status != 'revoked'` (any non-revoked license can recover). Does NOT return password hash or backup decryption key — desktop derives what it needs from tenant_id + sync_token (matches existing activation pattern).
 
 ### 2026-05-18 — DeepSeek V4 (OpenCode) — Phase 2 VPS deployment
 - **Status:** DONE

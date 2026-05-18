@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { PackageOpen, TrendingUp, DollarSign, Activity, ShoppingCart, CreditCard, Banknote, CalendarX } from 'lucide-react';
+import { PackageOpen, TrendingUp, DollarSign, Activity, ShoppingCart, CreditCard, Banknote, CalendarX, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import * as api from '../api';
 import type { DashboardStats, AuditLogRow } from '../types';
 import Badge from '../components/ui/Badge';
@@ -14,18 +14,22 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [backupStatus, setBackupStatus] = useState<api.BackupLogRow | null>(null);
+  const [backingUp, setBackingUp] = useState(false);
   const isRtl = i18n.dir() === 'rtl';
   const salesTrend = useMemo(() => (data?.last_7_days_sales ?? []).map((d) => d.total), [data?.last_7_days_sales]);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [stats, logs] = await Promise.all([
+      const [stats, logs, backup] = await Promise.all([
         api.getDashboardStats(api.getBranchId()),
         api.getAuditLog(undefined, undefined, undefined, 10),
+        api.getAutoBackupStatus().catch(() => null),
       ]);
       setData(stats);
       setActivity(logs);
+      setBackupStatus(backup);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -75,6 +79,22 @@ export default function Dashboard() {
           accent="danger"
         />
       </div>
+
+      {/* Cloud Backup Indicator — TASK-304 */}
+      <BackupIndicator
+        status={backupStatus}
+        backingUp={backingUp}
+        onBackupNow={async () => {
+          setBackingUp(true);
+          try {
+            await api.uploadBackupToCloud(api.getUserId());
+            const updated = await api.getAutoBackupStatus();
+            setBackupStatus(updated);
+          } catch { /* ignore */ }
+          setBackingUp(false);
+        }}
+        rtl={isRtl}
+      />
 
       {/* Stock Alerts */}
       {((data?.low_stock_count ?? 0) > 0 || (data?.out_of_stock_count ?? 0) > 0 ||
@@ -249,7 +269,7 @@ function KpiCard({ label, value, sub, change, changeLabel, accent, trendValues, 
   return (
     <div className={`app-card border-t-2 p-4 ${borderColor}`}>
       <p className="text-sm text-ink-muted mb-1">{label}</p>
-      <p className="text-2xl font-bold text-ink-main tabular-nums">{value} <span className="text-sm font-normal text-ink-muted">SDG</span></p>
+      <p className="text-2xl font-bold text-ink-main tabular-nums">{value} <span className="text-sm font-normal text-ink-muted">{t('common.currency')}</span></p>
       {sub && <p className="text-sm text-ink-muted mt-1">{sub}</p>}
       {trendValues && trendValues.length > 0 && (
         <div className="mt-2 flex items-center gap-2">
@@ -322,6 +342,51 @@ function DailySalesChart({ days, rtl }: { days: { date: string; total: number }[
           <span className="text-xs text-ink-muted">{d.date.slice(5)}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function BackupIndicator({ status, backingUp, onBackupNow, rtl }: { status: api.BackupLogRow | null; backingUp: boolean; onBackupNow: () => void; rtl?: boolean }) {
+  const { t } = useTranslation();
+  const now = Date.now();
+  const lastAt = status?.completed_at ? new Date(status.completed_at).getTime() : null;
+  const hoursAgo = lastAt ? Math.round((now - lastAt) / 3600000) : null;
+  const daysAgo = hoursAgo ? Math.round(hoursAgo / 24) : null;
+  const isSuccess = status?.status === 'success' || status?.status === 'completed';
+  const isFailed = status?.status === 'failed' || status?.status === 'error';
+
+  let colorClass = 'text-ink-muted bg-ivory-surface border-ivory-border';
+  let icon = CloudOff;
+  let label = t('dashboard.backupNever');
+  let detail = '';
+  if (isSuccess && hoursAgo !== null) {
+    if (hoursAgo < 24) { colorClass = 'text-primary-700 bg-primary-50 border-primary-300'; icon = Cloud; }
+    else if (daysAgo && daysAgo < 7) { colorClass = 'text-yellow-700 bg-yellow-50 border-yellow-300'; icon = Cloud; }
+    else { colorClass = 'text-red-700 bg-red-50 border-red-300'; icon = CloudOff; }
+    label = daysAgo && daysAgo >= 1 ? t('dashboard.backupAgoDays', { days: daysAgo }) : t('dashboard.backupAgoHours', { hours: hoursAgo });
+    detail = status.file_size ? `${(status.file_size / 1024).toFixed(0)} KB` : '';
+  } else if (isFailed) {
+    colorClass = 'text-red-700 bg-red-50 border-red-300';
+    label = t('dashboard.backupFailed');
+  }
+
+  return (
+    <div className={`flex items-center justify-between rounded-xl border px-4 py-3 ${colorClass}`}>
+      <div className="flex items-center gap-3" dir={rtl ? 'rtl' : 'ltr'}>
+        <icon size={20} />
+        <div>
+          <p className="text-sm font-semibold">{t('dashboard.lastCloudBackup')}</p>
+          <p className="text-xs opacity-80">{label}{detail ? ` • ${detail}` : ''}</p>
+        </div>
+      </div>
+      <button
+        onClick={onBackupNow}
+        disabled={backingUp}
+        className="flex items-center gap-1 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-semibold shadow-sm hover:bg-white disabled:opacity-50"
+      >
+        <RefreshCw size={14} className={backingUp ? 'animate-spin' : ''} />
+        {backingUp ? '...' : t('dashboard.backupNow')}
+      </button>
     </div>
   );
 }

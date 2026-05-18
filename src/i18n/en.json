@@ -812,7 +812,13 @@
     "emptyTopProductsTip": "Top products will appear after recording sales",
     "emptyRecentSalesTip": "Your latest invoices will be listed here",
     "emptyActivityTip": "User actions and key events will show up here",
-    "emptySalesTrendTip": "Record sales to unlock the 7-day trend chart"
+    "emptySalesTrendTip": "Record sales to unlock the 7-day trend chart",
+    "lastCloudBackup": "Last cloud backup",
+    "backupNow": "Backup now",
+    "backupNever": "No backup yet",
+    "backupFailed": "Backup failed",
+    "backupAgoHours": "{hours} hours ago",
+    "backupAgoDays": "{days} days ago"
   },
   "common": {
     "loading": "Loading...",
