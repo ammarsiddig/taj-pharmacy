@@ -2079,7 +2079,7 @@ BLOCK any sub-feature whose API endpoint is missing.
 | Severity | High (Ammar uses admin daily to manage tenants) |
 | Audit ref | Item 38, B6-1 |
 | Owner | DeepSeek V4 (OpenCode) |
-| Status | BLOCKED |
+| Status | DONE |
 | Estimated effort | 4–6 hours |
 | Depends on | — |
 
@@ -2442,6 +2442,12 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** <exact command run, key output line(s) proving success>
 - **Notes:** <surprises, follow-ups, edge cases — anything the curator should see>
 -->
+
+### 2026-05-19 — Devin (Cognition) — TASK-600
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/admin.js` (added GET /admin/renewals), `pms-cloud/web/src/hooks/admin.ts` (added useRenewals), `pms-cloud/web/src/pages/AdminLicenses.tsx` (new), `pms-cloud/web/src/pages/AdminRenewals.tsx` (new), `pms-cloud/web/src/pages/AdminTrash.tsx` (new), `pms-cloud/web/src/pages/AdminAudit.tsx` (new), `pms-cloud/web/src/pages/AdminPanel.tsx` (replaced 4 Coming Soon blocks)
+- **Acceptance test result:** `cd pms-cloud/web && npx tsc --noEmit` — exit 0, no errors.
+- **Notes:** /admin/licenses, /admin/trash, /admin/audit existed in admin.js; only /admin/renewals was new. All 4 views use correct EmptyState (icon+title), Skeleton (height prop), Button (string children) APIs.
 
 ### 2026-05-19 — Gemini 3.1 Pro (Code Assist) — TASK-704a (users + branches)
 - **Status:** DONE

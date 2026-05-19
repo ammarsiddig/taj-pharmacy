@@ -934,4 +934,29 @@ router.get('/admin/stats', requireAdmin, async (req, res) => {
   }
 });
 
+// --- Renewals (licenses expiring within N days) ---
+
+router.get('/admin/renewals', requireAdmin, async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const result = await query(
+      `SELECT t.id, t.pharmacy_name, t.expires_at, t.current_plan,
+              EXTRACT(DAY FROM (t.expires_at - NOW()))::int AS days_remaining
+       FROM tenants t
+       WHERE t.deleted_at IS NULL
+         AND t.is_suspended = false
+         AND t.expires_at IS NOT NULL
+         AND t.expires_at > NOW()
+         AND t.expires_at < NOW() + ($1::int || ' days')::INTERVAL
+       ORDER BY t.expires_at ASC`,
+      [days]
+    );
+    res.json({ tenants: result.rows, days });
+  } catch (err) {
+    console.error('[admin] Renewals error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
+

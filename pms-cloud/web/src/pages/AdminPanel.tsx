@@ -4,6 +4,10 @@ import AdminShell from './admin/AdminShell';
 import TenantsView from './admin/TenantsView';
 import CreatePharmacyDialog from './admin/CreatePharmacyDialog';
 import AdminTenantDetail from './AdminTenantDetail';
+import AdminLicenses from './AdminLicenses';
+import AdminRenewals from './AdminRenewals';
+import AdminTrash from './AdminTrash';
+import AdminAudit from './AdminAudit';
 
 type AdminView = 'tenants' | 'licenses' | 'renewals' | 'trash' | 'audit';
 
@@ -38,34 +42,10 @@ export default function AdminPanel({ onLogout }: Props) {
           onCreateClick={() => setShowCreate(true)}
         />
       )}
-      {view === 'licenses' && (
-        <div className="text-center py-10" style={{ color: 'var(--color-ink-muted)' }}>
-          <p className="text-4xl mb-3">🔑</p>
-          <p className="font-medium">مفاتيح الترخيص</p>
-          <p className="text-sm mt-1">قريباً</p>
-        </div>
-      )}
-      {view === 'renewals' && (
-        <div className="text-center py-10" style={{ color: 'var(--color-ink-muted)' }}>
-          <p className="text-4xl mb-3">📅</p>
-          <p className="font-medium">التجديدات</p>
-          <p className="text-sm mt-1">قريباً</p>
-        </div>
-      )}
-      {view === 'trash' && (
-        <div className="text-center py-10" style={{ color: 'var(--color-ink-muted)' }}>
-          <p className="text-4xl mb-3">🗑️</p>
-          <p className="font-medium">المحذوفات</p>
-          <p className="text-sm mt-1">قريباً</p>
-        </div>
-      )}
-      {view === 'audit' && (
-        <div className="text-center py-10" style={{ color: 'var(--color-ink-muted)' }}>
-          <p className="text-4xl mb-3">📋</p>
-          <p className="font-medium">سجل التدقيق</p>
-          <p className="text-sm mt-1">قريباً</p>
-        </div>
-      )}
+      {view === 'licenses' && <AdminLicenses />}
+      {view === 'renewals' && <AdminRenewals />}
+      {view === 'trash' && <AdminTrash />}
+      {view === 'audit' && <AdminAudit />}
 
       <CreatePharmacyDialog open={showCreate} onClose={() => setShowCreate(false)} />
     </AdminShell>

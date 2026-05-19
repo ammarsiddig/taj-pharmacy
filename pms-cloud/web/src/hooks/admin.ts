@@ -53,6 +53,20 @@ export function useLicenses() {
   });
 }
 
+export function useRenewals(days = 30) {
+  return useQuery({
+    queryKey: ['renewals', days],
+    queryFn: async () => {
+      const res = await fetch(`/admin/renewals?days=${days}`, {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('pms_admin_token') || ''}` },
+      });
+      if (!res.ok) throw new Error('Failed');
+      return res.json() as Promise<{ tenants: AdminTenant[]; days: number }>;
+    },
+    staleTime: 30_000,
+  });
+}
+
 export function useTrash() {
   return useQuery({
     queryKey: ['trash'],
