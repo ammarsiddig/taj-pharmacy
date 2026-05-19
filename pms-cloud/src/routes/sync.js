@@ -509,4 +509,39 @@ router.get('/v1/sync/changes', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /v1/sync/dump
+ * Full snapshot dump for onboarding restore (TASK-302).
+ * Returns every row from each snapshot table for this tenant.
+ * Auth: same sync_token used for regular sync.
+ */
+router.get('/v1/sync/dump', authenticateToken, async (req, res) => {
+  const { tenantId } = req;
+  const RESTORE_TABLES = [
+    'products', 'customers', 'suppliers', 'pos_sales', 'pos_sale_items',
+    'expenses', 'accounts', 'account_transactions', 'batches',
+    'supplier_invoices', 'stock_movements', 'customer_payments',
+    'supplier_payments', 'sale_payments',
+  ];
+  try {
+    const tables = {};
+    for (const t of RESTORE_TABLES) {
+      const result = await query(
+        `SELECT * FROM snapshot_${t} WHERE tenant_id = $1`,
+        [tenantId]
+      );
+      tables[t] = result.rows;
+    }
+    res.json({
+      ok: true,
+      tables,
+      tenant_id: tenantId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[sync] Dump error:', err.message);
+    res.status(500).json({ error: 'Failed to dump tables' });
+  }
+});
+
 export default router;

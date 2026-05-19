@@ -48,3 +48,4 @@ pub mod cloud_sync_outbox;
 pub mod cloud_sync_outbox_helpers;
 pub mod cloud_sync_scheduler;
 pub mod cloud_sync_snapshot;
+pub mod cloud_sync_restore;
