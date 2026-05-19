@@ -1199,6 +1199,14 @@ pub fn run(conn: &Connection) -> Result<(), String> {
         [],
     ).map_err(|e| e.to_string())?;
 
+    // TASK-702: missing indexes
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id) WHERE customer_id IS NOT NULL;
+         CREATE INDEX IF NOT EXISTS idx_expenses_account_id ON expenses(account_id) WHERE account_id IS NOT NULL;
+         CREATE INDEX IF NOT EXISTS idx_customer_payments_tenant ON customer_payments(tenant_id);
+         CREATE INDEX IF NOT EXISTS idx_account_transactions_tenant ON account_transactions(tenant_id);"
+    ).map_err(|e| e.to_string())?;
+
     log::info!("Database migrations completed successfully");
     Ok(())
 }

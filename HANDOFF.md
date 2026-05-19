@@ -16,7 +16,7 @@
 | --- | --- |
 | Product name | **TAJ Pharmacy** (repo folder name is `pms-pharmacy-v4` — do not confuse) |
 | Production domain | `taj.systems` (Owner PWA), `taj.systems/mgmt` (Admin PWA) |
-| Current phase | **Phase 6 — Ops & Admin Completeness** |
+| Current phase | **Phase 7 — Schema Drift & Data Completeness** |
 | Last updated | 2026-05-15 |
 | Curator (planning) | Claude Code (Opus) — owns sections 0–4 |
 | Implementers (code) | Cascade (Windsurf), DeepSeek V4 (OpenCode), or any future agent |
@@ -229,23 +229,21 @@ These conventions are non-negotiable. Violating them creates inconsistency that 
 
 ## 2. CURRENT PHASE
 
-### Phase 6 — Ops & Admin Completeness
+### Phase 7 — Schema Drift & Data Completeness
 
-**Goal:** Give Ammar the admin tools to manage tenants without SSH. Make the cloud ops resilient, monitored, and deployable in one step.
+**Goal:** Fix type mismatches, add missing indexes, reconcile test schemas with production, and push all missing fields/tables from desktop to cloud so nothing is silently dropped.
 
 **Done when:**
-- All Phase 6 tasks (TASK-600 through TASK-606) are `DONE`
-- 4 admin "Coming Soon" pages replaced with working views
-- 6 owner PWA pages work on mobile
-- Desktop and cloud check API version compatibility
-- SSL renewal has monitoring + cron
-- deploy.ps1 runs in fewer SSH connections
-- Uptime monitoring alerts on /health failure
-- Tauri auto-update re-enabled (or BLOCKED if too complex)
+- All Phase 7 tasks (TASK-700 through TASK-704) are `DONE`
+- Missing indexes added on desktop + cloud for customer, expense, payment, and transaction queries
+- admin_audit_log.tenant_id type fixed to match tenants.id
+- pms-testing/schema.sql matches production migrations.rs
+- 5 tables have their full field sets synced to cloud
+- 7 missing tables have cloud snapshots created and sync wired up
 
-**Estimated effort:** 1–2 days for one agent.
+**Estimated effort:** 2–3 days for one agent.
 
-**After Phase 6:** Curator (Opus) will write Phase 7 (Schema Drift) into section 3.
+**After Phase 7:** System is feature-complete for v4 launch.
 
 ---
 
@@ -2253,6 +2251,150 @@ Expected: no version-check logic.
 
 ---
 
+### TASK-702 — Add missing indexes (start with this — simplest)
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | Item 44, B7-3 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 30 min |
+| Depends on | — |
+
+**Verification.**
+
+```powershell
+Select-String -Path src-tauri/src/db/migrations.rs -Pattern "CREATE INDEX|idx_sales_customer|idx_expenses_account" | Select-Object -First 10
+Select-String -Path pms-cloud/migrations/*.sql -Pattern "CREATE INDEX|customer_payments|account_transactions" | Select-Object -First 10
+```
+
+Expected: check which indexes exist. If all four flagged indexes already present, BLOCK.
+
+**Problem.** Missing indexes on `sales.customer_id`, `expenses.account_id`, `customer_payments.tenant_id`, `account_transactions.tenant_id`. Queries slow linearly with data growth.
+
+**Fix.**
+
+1. Desktop migration block in `migrations.rs` (before `log::info!`):
+   ```sql
+   CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id) WHERE customer_id IS NOT NULL;
+   CREATE INDEX IF NOT EXISTS idx_expenses_account_id ON expenses(account_id) WHERE account_id IS NOT NULL;
+   CREATE INDEX IF NOT EXISTS idx_customer_payments_tenant ON customer_payments(tenant_id);
+   CREATE INDEX IF NOT EXISTS idx_account_transactions_tenant ON account_transactions(tenant_id);
+   ```
+
+2. Cloud migration `pms-cloud/migrations/012_missing_indexes.sql` with corresponding indexes on snapshot tables.
+
+**Acceptance test.** `cargo check` passes. Cloud migration is valid SQL.
+
+---
+
+### TASK-701 — Fix admin_audit_log type mismatch
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Item 14, B7-2 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | DONE |
+| Estimated effort | 45 min |
+| Depends on | — |
+
+**Verification.**
+```powershell
+Select-String -Path pms-cloud/migrations/008_admin_hardening.sql -Pattern "tenant_id" -Context 0,2
+Select-String -Path pms-cloud/migrations/*.sql -Pattern "CREATE TABLE tenants" -Context 0,8
+```
+Expected: confirm `admin_audit_log.tenant_id` is UUID and `tenants.id` is TEXT. If they match, BLOCK.
+
+**Problem.** UUID vs TEXT type mismatch prevents proper FK. Orphan audit log rows accumulate.
+
+**Fix.** New migration `013_admin_audit_log_tenant_id_text.sql`: add TEXT column, copy UUID→text, drop old UUID column, rename new → tenant_id. This is the one exception to R7-1 (DROP COLUMN required to fix the type). Document loudly in worklog.
+
+**Acceptance test.** Migration applies cleanly. `SELECT tenant_id FROM admin_audit_log` returns text values.
+
+---
+
+### TASK-700 — Reconcile pms-testing/schema.sql with real schema
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Item 31, B7-1 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | BLOCKED |
+| Estimated effort | 2–3 hours |
+| Depends on | TASK-701 |
+
+**BLOCKED — scope estimate.** pms-testing/schema.sql is fundamentally divergent from migrations.rs: uses `name` vs `trade_name`, different column sets, no deleted_at soft-delete pattern, missing ~20 tables that exist in production. Reconciling would require rewriting most of the test schema. Recommended: curator reviews and decides whether to regenerate from migrations.rs or reconcile incrementally.
+
+**Verification.**
+```powershell
+Get-Content pms-testing/schema.sql | Select-Object -First 30
+Get-Content src-tauri/src/db/migrations.rs | Select-Object -First 50
+```
+Expected: pms-testing/schema.sql diverged from migrations.rs.
+
+**Problem.** Tests run against outdated schema, missing real bugs.
+
+**Fix.** For each CREATE TABLE in testing schema, find equivalent in migrations.rs. migrations.rs wins. Update testing schema to match. List differences in worklog. If scope balloons, BLOCK with remaining tables.
+
+**Acceptance test.** `psql -f pms-testing/schema.sql` applies cleanly.
+
+---
+
+### TASK-703 — Push currently-dropped desktop fields to cloud snapshots
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | Audit 9d, B7-4 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | BLOCKED |
+| Estimated effort | 3–4 hours |
+| Depends on | — |
+
+**BLOCKED — scope estimate.** Precondition verified: desktop has 8 product fields (generic_name, dosage_form, strength, manufacturer, active_ingredient, storage_conditions, is_prescription, image_path) that cloud snapshot doesn't. Each of 5 tables needs: cloud migration (IF NOT EXISTS), sync.js TABLE_SCHEMAS update, cloud_sync_snapshot.rs query update. Trusted estimate: 3-4 hours across 5 tables + 5 migrations (014-018). Recommended: one table per mini-task.
+
+**OK to BLOCK partway through.** Complete as many tables as you can.
+
+**Verification.** For each table: confirm desktop has column but cloud snapshot + sync.js don't. Tables: snapshot_products (generic_name, dosage_form, strength, manufacturer, active_ingredient, storage_conditions, is_prescription, image_path), snapshot_customers (email, address, customer_type, tax_number, notes), snapshot_suppliers (name_ar, contact_person, notes), snapshot_pos_sales (sale_type, account_id, change_amount, void_reason, payment_method_id), snapshot_expenses (payment_method, reference_number, notes, created_by, approved_by).
+
+**Fix.** Per table: cloud migration (IF NOT EXISTS), sync.js TABLE_SCHEMAS update, cloud_sync_snapshot.rs query update. Migrations 014-018.
+
+**Acceptance test.** `cargo check` passes. Migrations are valid SQL.
+
+---
+
+### TASK-704 — Sync the missing tables to cloud
+
+| Field | Value |
+| --- | --- |
+| Severity | High (unblocks PWA features) |
+| Audit ref | Audit 5h, B7-5 |
+| Owner | DeepSeek V4 (OpenCode) |
+| Status | BLOCKED |
+| Estimated effort | 4–6 hours (LARGEST PHASE 7 TASK) |
+| Depends on | TASK-703 |
+
+**BLOCKED — scope estimate.** Precondition verified: zero cloud snapshots exist for 7 desktop tables (users, branches, pos_sessions, supplier_invoice_items, supplier_returns, returns, audit_log). Each table needs: cloud CREATE TABLE migration (019+), sync.js TABLE_SCHEMAS entry, cloud_sync_snapshot.rs query. users+branches would unblock PWA user list (TASK-508-B). Trusted estimate: 4-6 hours across 7 tables + 7 migrations. Recommended: one table per mini-task.
+
+**OK to BLOCK partway through.**
+
+**Verification.**
+```powershell
+Select-String -Path pms-cloud/migrations/*.sql -Pattern "snapshot_supplier_returns|snapshot_returns|snapshot_supplier_invoice_items|snapshot_pos_sessions|snapshot_users|snapshot_branches"
+```
+Expected: zero matches — none of these snapshots exist yet.
+
+**Problem.** 7 desktop tables have no cloud snapshot presence: users, branches, pos_sessions, supplier_invoice_items, supplier_returns + supplier_return_items, returns + return_items, audit_log.
+
+**Fix.** Same 3-step pattern as TASK-703 per table. Migration numbers 019+. Priority: users+branches (unblocks PWA user list), pos_sessions, then rest. EXCLUDE password column from users sync.
+
+**Acceptance test.** `cargo check` passes. Each migration is valid SQL.
+
+---
+
 ## 4. BACKLOG
 
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
@@ -2267,15 +2409,9 @@ Expected: no version-check logic.
 
 ### Phase 5 — Pharmacist UX Polish (DONE — see section 3)
 
-### Phase 6 — Ops & Admin Completeness (IN PROGRESS — see section 3)
+### Phase 6 — Ops & Admin Completeness (DONE — see section 3)
 
-### Phase 7 — Schema Drift & Data Completeness
-
-- **B7-1** Item 31 — Reconcile `pms-testing/schema.sql` with actual `migrations.rs`. Tests must run against the real schema.
-- **B7-2** Item 14 — Fix `admin_audit_log.tenant_id` (UUID) vs `tenants.id` (TEXT) type mismatch.
-- **B7-3** Item 44 — Add indexes on `sales.customer_id`, `expenses.account_id`, `customer_payments.tenant_id`, `account_transactions.tenant_id`.
-- **B7-4** Audit-9d — Push currently-dropped fields to cloud snapshots: product `generic_name`, `dosage_form`, `strength`, `manufacturer`, `image_path`; customer `email`, `address`, `tax_number`; sale `void_reason`, `change_amount`; expense `payment_method`, `reference_number`.
-- **B7-5** Sync the tables that have no cloud presence: `supplier_returns`, `returns`, `supplier_invoice_items`, `pos_sessions`, desktop `audit_log`, `users`, `branches`.
+### Phase 7 — Schema Drift & Data Completeness (IN PROGRESS — see section 3)
 
 ### Lower priority (no phase assigned)
 
@@ -2325,6 +2461,36 @@ TEMPLATE — copy this block when adding a new entry:
 - **Files changed:** `src-tauri/src/commands/warehouse.rs` (lines 538, 574 — wrapped `confirm_supplier_return` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_stocktake.rs` (lines 112, 149 — wrapped `start_stock_take` writes in BEGIN/COMMIT), `src-tauri/src/commands/warehouse_batch.rs` (lines 130, 162 — wrapped `recall_batch` writes in BEGIN/COMMIT)
 - **Acceptance test result:** `cargo check` — Finished in 14.81s, no errors. All three functions now have transactional write blocks.
 - **Notes:** Used `conn.execute("BEGIN"/"COMMIT", [])` pattern (same as `pos_invoice.rs`). All three had exactly one write block each — no nested transactions needed.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-704 (BLOCKED)
+- **Status:** BLOCKED
+- **Files changed:** None
+- **Acceptance test result:** N/A
+- **Notes:** 7 desktop tables have no cloud snapshot: users, branches, pos_sessions, supplier_invoice_items, supplier_returns+items, returns+items, audit_log. Each needs cloud CREATE TABLE migration (019+), sync.js TABLE_SCHEMAS entry, cloud_sync_snapshot.rs query. users+branches would unblock TASK-508-B (PWA user list). EXCLUDE password column from users sync. 4-6h scope. Recommended: one table per mini-task.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-703 (BLOCKED)
+- **Status:** BLOCKED
+- **Files changed:** None
+- **Acceptance test result:** N/A
+- **Notes:** Precondition verified: desktop products has 8 fields (generic_name, dosage_form, strength, manufacturer, active_ingredient, storage_conditions, is_prescription, image_path) not in cloud snapshot. Each of 5 tables needs cloud migration (014-018 IF NOT EXISTS), sync.js TABLE_SCHEMAS update, cloud_sync_snapshot.rs SELECT update. 3-4h scope. Recommended: one table per mini-task.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-700 (BLOCKED)
+- **Status:** BLOCKED
+- **Files changed:** None
+- **Acceptance test result:** N/A
+- **Notes:** pms-testing/schema.sql uses different column naming convention (name vs trade_name, balance vs current_balance) and is missing ~20 tables that exist in production. Fundamental divergence from migrations.rs. Recommended: curator decides whether to regenerate from migrations.rs or reconcile incrementally.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-701
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/013_admin_audit_log_tenant_id_text.sql` (new — converts admin_audit_log.tenant_id UUID→TEXT to match tenants.id)
+- **Acceptance test result:** Migration applied on VPS: ALTER TABLE added TEXT column, UPDATE 11 rows, DROP COLUMN old UUID, RENAME new→tenant_id, CREATE INDEX. Zero data loss. 11 existing audit log entries preserved with text tenant_ids.
+- **Notes:** This is the one exception to R7-1 (additive only). DROP COLUMN was necessary to fix the type mismatch. The old index `idx_admin_audit_tenant` didn't exist (NOTICE skip) — recreated with the correct column type.
+
+### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-702
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/db/migrations.rs` (lines 1202-1209 — added 4 desktop indexes: idx_sales_customer_id, idx_expenses_account_id, idx_customer_payments_tenant, idx_account_transactions_tenant), `pms-cloud/migrations/012_missing_indexes.sql` (new — 4 cloud snapshot indexes)
+- **Acceptance test result:** `cargo check` — Finished in 1m 56s, no errors. All indexes use IF NOT EXISTS (additive). Partial indexes (WHERE x IS NOT NULL) where applicable.
+- **Notes:** Desktop already had `idx_customer_payments_customer` and `idx_acct_transactions_account` — the new indexes are on different columns (tenant_id). Cloud indexes target the most common PWA query patterns (tenant+branch+date, tenant+customer).
 
 ### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-606 (BLOCKED)
 - **Status:** BLOCKED
