@@ -45,6 +45,7 @@ n8nac-config.json
 .ai/
 plans/
 workflows/
+!.github/workflows/
 n8n-workflows/
 docs/AGENT-HANDOFF.md
 docs/agents/

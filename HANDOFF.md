@@ -2232,8 +2232,8 @@ Expected: no version-check logic.
 | --- | --- |
 | Severity | Medium |
 | Audit ref | Item 8d, B6-7 |
-| Owner | DeepSeek V4 (OpenCode) |
-| Status | BLOCKED |
+| Owner | Devin (Cognition) |
+| Status | DONE |
 | Estimated effort | 4–8 hours (LARGEST PHASE 6 TASK) |
 | Depends on | — |
 
@@ -2442,6 +2442,12 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** <exact command run, key output line(s) proving success>
 - **Notes:** <surprises, follow-ups, edge cases — anything the curator should see>
 -->
+
+### 2026-05-19 — Devin (Cognition) — TASK-606
+- **Status:** DONE
+- **Files changed:** src-tauri/tauri.conf.json (updater active: true, new pubkey, endpoint pms-pharmacy-v4 -> taj-pharmacy), .github/workflows/release.yml (replaced with tauri-apps/tauri-action@v0 using npm ci), src-tauri/src/lib.rs (no change -- already had tauri_plugin_updater)
+- **Acceptance test result:** cargo check -- Finished no errors. grep tauri-action .github/workflows/release.yml -- found. tauri.conf.json shows active: true.
+- **Notes:** Minisign keypair generated via npx tauri signer generate --ci --password "". Public key in tauri.conf.json. Private key printed in session report for user to add as TAURI_SIGNING_PRIVATE_KEY on GitHub (taj-pharmacy repo Settings -> Secrets -> Actions). TAURI_SIGNING_PRIVATE_KEY_PASSWORD is empty string in workflow (key has no password). Project uses npm so pnpm step replaced with npm ci. DO NOT PUSH until user adds the GitHub secret.
 
 ### 2026-05-19 — Devin (Cognition) — TASK-300
 - **Status:** DONE
