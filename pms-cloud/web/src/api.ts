@@ -618,3 +618,13 @@ export async function getOwnerAccounts(branch?: string): Promise<{ accounts: Own
   const params = branch ? `?branch=${branch}` : '';
   return request(`/v1/accounts${params}`);
 }
+
+export interface UserRow { id: string; branch_id: string | null; role_id: string; username: string; full_name: string; full_name_ar: string | null; phone: string | null; is_active: boolean; last_login_at: string | null; }
+export async function getOwnerUsers(): Promise<{ tenant_id: string; users: UserRow[] }> {
+  return request('/v1/users');
+}
+
+export interface BranchRow { id: string; name: string; name_ar: string | null; is_main: boolean; is_active: boolean; }
+export async function getBranchFriendlyNames(): Promise<{ tenant_id: string; branches: BranchRow[] }> {
+  return request('/v1/branches/friendly-names');
+}

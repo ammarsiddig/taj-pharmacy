@@ -352,6 +352,14 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
              COALESCE(p.sale_price, 0) AS sale_price, 0 AS tax_percent, \
              COALESCE(p.min_stock_level, 0) AS min_stock, \
              COALESCE(SUM(b.quantity_current), 0) AS current_stock, \
+             COALESCE(p.generic_name, '') AS generic_name, \
+             COALESCE(p.generic_name_ar, '') AS generic_name_ar, \
+             COALESCE(p.dosage_form, '') AS dosage_form, \
+             COALESCE(p.manufacturer, '') AS manufacturer, \
+             COALESCE(p.active_ingredient, '') AS active_ingredient, \
+             COALESCE(p.storage_conditions, '') AS storage_conditions, \
+             COALESCE(p.is_prescription, 0) AS is_prescription, \
+             COALESCE(p.image_path, '') AS image_path, \
              p.is_active, p.updated_at \
              FROM products p \
              LEFT JOIN batches b ON b.product_id = p.id AND b.status = 'active' AND b.deleted_at IS NULL \
@@ -471,6 +479,35 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
              JOIN accounts a ON a.id = at.account_id \
              WHERE at.tenant_id = ?1 AND a.branch_id = ?2 \
              ORDER BY at.created_at DESC LIMIT 500",
+            tenant_id, branch)),
+        ("supplier_returns", query_table_rows(&conn,
+            "SELECT id, tenant_id, branch_id, supplier_id, invoice_id, return_number, \
+             return_date, total_amount, status, COALESCE(reason, '') AS reason, \
+             COALESCE(notes, '') AS notes, created_by, \
+             COALESCE(confirmed_by, '') AS confirmed_by, \
+             COALESCE(confirmed_at, '') AS confirmed_at, \
+             1 AS is_active, created_at, updated_at \
+             FROM supplier_returns \
+             WHERE tenant_id = ?1 AND branch_id = ?2 AND deleted_at IS NULL",
+            tenant_id, branch)),
+        ("supplier_return_items", query_table_rows(&conn,
+            "SELECT sri.id, sri.tenant_id, sr.branch_id, sri.supplier_return_id, \
+             sri.product_id, sri.batch_id, sri.quantity, sri.unit_cost, \
+             sri.total_price, COALESCE(sri.reason, '') AS reason, \
+             1 AS is_active, sri.created_at \
+             FROM supplier_return_items sri \
+             JOIN supplier_returns sr ON sr.id = sri.supplier_return_id \
+             WHERE sri.tenant_id = ?1 AND sr.branch_id = ?2 AND sr.deleted_at IS NULL",
+            tenant_id, branch)),
+        ("pos_sessions", query_table_rows(&conn,
+            "SELECT id, tenant_id, branch_id, cashier_id, account_id, status, \
+             opening_cash, expected_cash, COALESCE(actual_cash, 0) AS actual_cash, \
+             COALESCE(cash_difference, 0) AS cash_difference, \
+             total_sales, total_returns, sales_count, opened_at, \
+             closed_at, COALESCE(notes, '') AS notes, \
+             1 AS is_active, created_at, updated_at \
+             FROM pos_sessions \
+             WHERE tenant_id = ?1 AND branch_id = ?2 AND deleted_at IS NULL",
             tenant_id, branch)),
     ];
 

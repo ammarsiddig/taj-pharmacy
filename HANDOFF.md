@@ -2500,6 +2500,30 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** Migration applied on VPS: ALTER TABLE added TEXT column, UPDATE 11 rows, DROP COLUMN old UUID, RENAME new→tenant_id, CREATE INDEX. Zero data loss. 11 existing audit log entries preserved with text tenant_ids.
 - **Notes:** This is the one exception to R7-1 (additive only). DROP COLUMN was necessary to fix the type mismatch. The old index `idx_admin_audit_tenant` didn't exist (NOTICE skip) — recreated with the correct column type.
 
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-703a
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/022_products_full_fields.sql` (new — ADD COLUMN IF NOT EXISTS for 8 product detail fields), `pms-cloud/src/routes/sync.js` (lines 97,99 — added 8 new columns to products TABLE_SCHEMAS), `src-tauri/src/commands/cloud_sync_snapshot.rs` (lines 356-364 — added 8 COALESCE columns to products push query)
+- **Acceptance test result:** `cargo check` — 21s, no errors. Cloud sync module loads clean. Desktop now pushes generic_name, generic_name_ar, dosage_form, manufacturer, active_ingredient, storage_conditions, is_prescription, image_path to cloud. All new columns use COALESCE ('' for TEXT, 0 for boolean integer). Migration uses IF NOT EXISTS on all columns.
+- **Notes:** `strength` column was in spec but does NOT exist on desktop products table — skipped. `generic_name_ar` exists on desktop but was not in spec — included.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-704c
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/021_snapshot_pos_sessions.sql` (new — CREATE TABLE IF NOT EXISTS), `pms-cloud/src/routes/sync.js` (added pos_sessions TABLE_SCHEMAS entry), `src-tauri/src/commands/cloud_sync_snapshot.rs` (added pos_sessions push query with COALESCE for nullable numeric/date fields)
+- **Acceptance test result:** `cargo check` — 27s, no errors. Sync module loads. Desktop now pushes pos_sessions with all 19 columns matching migration.rs schema.
+- **Notes:** Desktop uses `actual_cash` and `cash_difference` (not `closing_cash`/`cash_diff` as spec template had). Also includes `account_id` and `sales_count` which spec omitted. All columns matched to actual desktop schema.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-704b
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/020_snapshot_supplier_returns.sql` (new — 2 tables: supplier_returns + supplier_return_items), `pms-cloud/src/routes/sync.js` (added both TABLE_SCHEMAS entries), `src-tauri/src/commands/cloud_sync_snapshot.rs` (added both push queries — supplier_return_items JOINs supplier_returns for branch_id)
+- **Acceptance test result:** `cargo check` — 2m27s, no errors. Sync module loads. Both tables now sync to cloud.
+- **Notes:** Desktop uses `total_amount` (not `total`), `total_price` (not `subtotal`), `supplier_return_id` (not `return_id`) — all matched to migration.rs. supplier_return_items query JOINs supplier_returns for branch_id filtering.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-508-B-finish
+- **Status:** DONE
+- **Files changed:** `pms-cloud/src/routes/auth.js` (lines 595-630 — new GET /v1/users and GET /v1/branches/friendly-names endpoints with requireAuthOrJwt), `pms-cloud/web/src/api.ts` (added getOwnerUsers, getBranchFriendlyNames + types), `pms-cloud/web/src/pages/OwnerSettings.tsx` (added user list UI with loading/empty/active states)
+- **Acceptance test result:** `npx tsc --noEmit` — no errors. Cloud auth module loads. PWA OwnerSettings now shows user list (full_name_ar, username, is_active badge) fetched from /v1/users. Branches endpoint ready for PWA use.
+- **Notes:** Migration 019 (snapshot_users + snapshot_branches) already exists from TASK-704a. No password columns in users sync (excluded per spec). User list is read-only — no create/edit/delete.
+
 ### 2026-05-18 — DeepSeek V4 (OpenCode) — TASK-702
 - **Status:** DONE
 - **Files changed:** `src-tauri/src/db/migrations.rs` (lines 1202-1209 — added 4 desktop indexes: idx_sales_customer_id, idx_expenses_account_id, idx_customer_payments_tenant, idx_account_transactions_tenant), `pms-cloud/migrations/012_missing_indexes.sql` (new — 4 cloud snapshot indexes)

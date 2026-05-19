@@ -592,4 +592,39 @@ router.get('/v1/subscription', requireAuthOrJwt, async (req, res) => {
   }
 });
 
+// GET /v1/users — owner PWA user list
+router.get('/v1/users', requireAuthOrJwt, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, branch_id, role_id, username, full_name, full_name_ar,
+              phone, is_active, last_login_at
+       FROM snapshot_users
+       WHERE tenant_id = $1
+       ORDER BY full_name`,
+      [req.tenantId]
+    );
+    res.json({ tenant_id: req.tenantId, users: result.rows });
+  } catch (err) {
+    console.error('[users] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/branches/friendly-names — owner PWA branch list with names
+router.get('/v1/branches/friendly-names', requireAuthOrJwt, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, name, name_ar, is_main, is_active
+       FROM snapshot_branches
+       WHERE tenant_id = $1
+       ORDER BY is_main DESC, name`,
+      [req.tenantId]
+    );
+    res.json({ tenant_id: req.tenantId, branches: result.rows });
+  } catch (err) {
+    console.error('[branches] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

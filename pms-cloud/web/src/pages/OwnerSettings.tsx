@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSubscription, clearToken, changePassword, updateTenantInfo, type SubscriptionInfo } from '../api';
+import { getSubscription, clearToken, changePassword, updateTenantInfo, getOwnerUsers, type SubscriptionInfo, type UserRow } from '../api';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import InstallBanner from '../components/InstallBanner';
 
@@ -19,12 +19,18 @@ export default function OwnerSettings({ onLogout }: Props) {
   const [pharmacyName, setPharmacyName] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [nameMsg, setNameMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   useEffect(() => {
     getSubscription()
       .then(setSubscription)
       .catch(() => {})
       .finally(() => setLoading(false));
+    getOwnerUsers()
+      .then(r => setUsers(r.users || []))
+      .catch(() => {})
+      .finally(() => setLoadingUsers(false));
   }, []);
 
   const handleLogout = () => {
@@ -234,6 +240,32 @@ export default function OwnerSettings({ onLogout }: Props) {
             <span className="text-sm" dir="ltr">support@taj-pharmacy.com</span>
           </a>
         </div>
+      </div>
+
+      {/* Users Card — TASK-508-B */}
+      <div className="app-card p-5">
+        <p className="font-semibold mb-3" style={{ color: 'var(--color-ink-main)' }}>👥 المستخدمين</p>
+        {loadingUsers ? (
+          <div className="flex justify-center py-4">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-transparent" style={{ borderTopColor: 'var(--color-primary-600)' }} />
+          </div>
+        ) : users.length === 0 ? (
+          <p className="text-sm text-center py-4" style={{ color: 'var(--color-ink-muted)' }}>لا يوجد مستخدمين</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {users.map(u => (
+              <div key={u.id} className="flex items-center justify-between rounded-xl p-3" style={{ background: 'var(--color-ivory-muted)' }}>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-ink-main)' }}>{u.full_name_ar || u.full_name}</p>
+                  <p className="text-xs" style={{ color: 'var(--color-ink-muted)' }}>{u.username}</p>
+                </div>
+                <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={u.is_active ? { background: '#F0FDF4', color: '#059669' } : { background: '#F3F4F6', color: '#6B7280' }}>
+                  {u.is_active ? 'نشط' : 'معطل'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Version Info */}

@@ -94,9 +94,9 @@ async function recomputeDashboard(tenantId, branchId) {
 // Table column definitions for UPSERT operations
 const TABLE_SCHEMAS = {
   products: {
-    columns: ['id', 'tenant_id', 'branch_id', 'name', 'name_ar', 'barcode', 'category', 'unit_measure', 'purchase_price', 'sale_price', 'tax_percent', 'min_stock', 'current_stock', 'is_active', 'updated_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'name', 'name_ar', 'barcode', 'category', 'unit_measure', 'purchase_price', 'sale_price', 'tax_percent', 'min_stock', 'current_stock', 'generic_name', 'generic_name_ar', 'dosage_form', 'manufacturer', 'active_ingredient', 'storage_conditions', 'is_prescription', 'image_path', 'is_active', 'updated_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['name', 'name_ar', 'barcode', 'category', 'unit_measure', 'purchase_price', 'sale_price', 'tax_percent', 'min_stock', 'current_stock', 'is_active', 'updated_at', 'synced_at']
+    updateColumns: ['name', 'name_ar', 'barcode', 'category', 'unit_measure', 'purchase_price', 'sale_price', 'tax_percent', 'min_stock', 'current_stock', 'generic_name', 'generic_name_ar', 'dosage_form', 'manufacturer', 'active_ingredient', 'storage_conditions', 'is_prescription', 'image_path', 'is_active', 'updated_at', 'synced_at']
   },
   batches: {
     columns: ['id', 'tenant_id', 'branch_id', 'product_id', 'batch_number', 'expiry_date', 'quantity', 'purchase_price', 'location_id', 'is_active', 'updated_at'],
@@ -172,6 +172,21 @@ const TABLE_SCHEMAS = {
     columns: ['id', 'tenant_id', 'name', 'name_ar', 'address', 'phone', 'is_main', 'is_active', 'created_at', 'updated_at'],
     conflictColumns: ['tenant_id', 'id'],
     updateColumns: ['name', 'name_ar', 'address', 'phone', 'is_main', 'is_active', 'updated_at', 'synced_at']
+  },
+  supplier_returns: {
+    columns: ['id', 'tenant_id', 'branch_id', 'supplier_id', 'invoice_id', 'return_number', 'return_date', 'total_amount', 'status', 'reason', 'notes', 'created_by', 'confirmed_by', 'confirmed_at', 'is_active', 'created_at', 'updated_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['branch_id', 'supplier_id', 'invoice_id', 'return_number', 'return_date', 'total_amount', 'status', 'reason', 'notes', 'created_by', 'confirmed_by', 'confirmed_at', 'is_active', 'updated_at', 'synced_at']
+  },
+  supplier_return_items: {
+    columns: ['id', 'tenant_id', 'supplier_return_id', 'product_id', 'batch_id', 'quantity', 'unit_cost', 'total_price', 'reason', 'is_active', 'created_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['supplier_return_id', 'product_id', 'batch_id', 'quantity', 'unit_cost', 'total_price', 'reason', 'is_active', 'synced_at']
+  },
+  pos_sessions: {
+    columns: ['id', 'tenant_id', 'branch_id', 'cashier_id', 'account_id', 'status', 'opening_cash', 'expected_cash', 'actual_cash', 'cash_difference', 'total_sales', 'total_returns', 'sales_count', 'opened_at', 'closed_at', 'notes', 'is_active', 'created_at', 'updated_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['branch_id', 'cashier_id', 'account_id', 'status', 'opening_cash', 'expected_cash', 'actual_cash', 'cash_difference', 'total_sales', 'total_returns', 'sales_count', 'opened_at', 'closed_at', 'notes', 'is_active', 'updated_at', 'synced_at']
   }
 };
 
