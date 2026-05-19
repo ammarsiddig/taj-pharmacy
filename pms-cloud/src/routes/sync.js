@@ -162,6 +162,16 @@ const TABLE_SCHEMAS = {
     columns: ['id', 'tenant_id', 'branch_id', 'account_id', 'transaction_type', 'direction', 'amount', 'balance_before', 'balance_after', 'reference_type', 'reference_id', 'description', 'created_by', 'is_active', 'created_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
     updateColumns: ['account_id', 'transaction_type', 'direction', 'amount', 'balance_before', 'balance_after', 'reference_type', 'reference_id', 'description', 'created_by', 'is_active', 'created_at', 'synced_at']
+  },
+  users: {
+    columns: ['id', 'tenant_id', 'branch_id', 'role_id', 'username', 'full_name', 'full_name_ar', 'phone', 'is_active', 'last_login_at', 'created_at', 'updated_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['branch_id', 'role_id', 'username', 'full_name', 'full_name_ar', 'phone', 'is_active', 'last_login_at', 'updated_at', 'synced_at']
+  },
+  branches: {
+    columns: ['id', 'tenant_id', 'name', 'name_ar', 'address', 'phone', 'is_main', 'is_active', 'created_at', 'updated_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['name', 'name_ar', 'address', 'phone', 'is_main', 'is_active', 'updated_at', 'synced_at']
   }
 };
 

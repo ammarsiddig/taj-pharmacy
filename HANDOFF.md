@@ -2379,6 +2379,11 @@ Expected: pms-testing/schema.sql diverged from migrations.rs.
 
 **BLOCKED — scope estimate.** Precondition verified: zero cloud snapshots exist for 7 desktop tables (users, branches, pos_sessions, supplier_invoice_items, supplier_returns, returns, audit_log). Each table needs: cloud CREATE TABLE migration (019+), sync.js TABLE_SCHEMAS entry, cloud_sync_snapshot.rs query. users+branches would unblock PWA user list (TASK-508-B). Trusted estimate: 4-6 hours across 7 tables + 7 migrations. Recommended: one table per mini-task.
 
+**Progress (2026-05-19):** TASK-704a (users + branches snapshot)
+DONE — see worklog. Remaining sub-tables (supplier_returns,
+returns, supplier_invoice_items, pos_sessions, audit_log) still
+BLOCKED.
+
 **OK to BLOCK partway through.**
 
 **Verification.**
@@ -2437,6 +2442,15 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** <exact command run, key output line(s) proving success>
 - **Notes:** <surprises, follow-ups, edge cases — anything the curator should see>
 -->
+
+### 2026-05-19 — Gemini 3.1 Pro (Code Assist) — TASK-704a (users + branches)
+- **Status:** DONE
+- **Files changed:**
+  - pms-cloud/migrations/019_snapshot_users_branches.sql (new)
+  - pms-cloud/src/routes/sync.js (TABLE_SCHEMAS entries for users, branches)
+  - src-tauri/src/commands/cloud_sync_snapshot.rs (push queries for users, branches)
+- **Acceptance test result:** cargo check passes. npm run dev boots cleanly. Migration SQL is valid. NO password column included anywhere.
+- **Notes:** Unblocks TASK-508-B from Phase 5 (PWA user list endpoint). Migration 019 must be applied to VPS Postgres on next deploy. Remaining TASK-704 sub-tables are separate follow-up tasks.
 
 ### 2026-05-17 — DeepSeek V4 (OpenCode) — TASK-103
 - **Status:** DONE

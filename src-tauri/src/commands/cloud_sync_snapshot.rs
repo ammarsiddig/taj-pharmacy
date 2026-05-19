@@ -329,6 +329,20 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let tables_data: Vec<(&str, Vec<Value>)> = vec![
+        ("users", query_table_rows(&conn,
+            "SELECT id, tenant_id, branch_id, role_id, username, full_name, \
+             COALESCE(full_name_ar, '') AS full_name_ar, \
+             COALESCE(phone, '') AS phone, is_active, last_login_at, created_at, updated_at \
+             FROM users \
+             WHERE tenant_id = ?1 AND deleted_at IS NULL",
+            tenant_id, branch)),
+        ("branches", query_table_rows(&conn,
+            "SELECT id, tenant_id, name, COALESCE(name_ar, '') AS name_ar, \
+             COALESCE(address, '') AS address, COALESCE(phone, '') AS phone, \
+             is_main, is_active, created_at, updated_at \
+             FROM branches \
+             WHERE tenant_id = ?1 AND deleted_at IS NULL",
+            tenant_id, branch)),
         ("products", query_table_rows(&conn,
             "SELECT p.id, p.tenant_id, ?2 AS branch_id, \
              p.trade_name AS name, COALESCE(p.trade_name_ar, '') AS name_ar, \
