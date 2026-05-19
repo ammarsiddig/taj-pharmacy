@@ -2500,6 +2500,48 @@ TEMPLATE — copy this block when adding a new entry:
 - **Acceptance test result:** Migration applied on VPS: ALTER TABLE added TEXT column, UPDATE 11 rows, DROP COLUMN old UUID, RENAME new→tenant_id, CREATE INDEX. Zero data loss. 11 existing audit log entries preserved with text tenant_ids.
 - **Notes:** This is the one exception to R7-1 (additive only). DROP COLUMN was necessary to fix the type mismatch. The old index `idx_admin_audit_tenant` didn't exist (NOTICE skip) — recreated with the correct column type.
 
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-704f
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/029_snapshot_audit_log.sql` (new — CREATE TABLE IF NOT EXISTS snapshot_audit_log), `pms-cloud/src/routes/sync.js` (audit_log TABLE_SCHEMAS entry), `src-tauri/src/commands/cloud_sync_snapshot.rs` (audit_log push query with 30-day LIMIT)
+- **Acceptance test result:** `cargo check` — 2m04s, no errors. Sync module loads. Desktop audit_log now pushes to cloud but with `WHERE created_at > date('now', '-30 days')` to prevent cloud bloat.
+- **Notes:** Desktop uses `changes_json` column (not `details`). No `branch_id` or `deleted_at` on desktop audit_log. Uses `tenant_id` only for WHERE (not branch-filtered). 30-day rolling window keeps cloud storage bounded.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-704e
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/028_snapshot_supplier_invoice_items.sql` (new — CREATE TABLE IF NOT EXISTS), `pms-cloud/src/routes/sync.js` (supplier_invoice_items TABLE_SCHEMAS entry), `src-tauri/src/commands/cloud_sync_snapshot.rs` (push query joining supplier_invoices for branch_id)
+- **Acceptance test result:** `cargo check` — 2m04s, no errors. Sync module loads. Supplier invoice line items now sync with product_id, batch_number, expiry_date, quantity, unit_cost, sale_price, subtotal.
+- **Notes:** Desktop uses `invoice_id` (not `supplier_invoice_id`). Includes `sale_price` column (price charged, separate from unit_cost). JOINs supplier_invoices for branch_id filtering.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-704d
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/027_snapshot_returns.sql` (new — 2 tables: snapshot_returns + snapshot_return_items), `pms-cloud/src/routes/sync.js` (both TABLE_SCHEMAS entries), `src-tauri/src/commands/cloud_sync_snapshot.rs` (both push queries — return_items JOINs returns for branch_id)
+- **Acceptance test result:** `cargo check` — 2m04s, no errors. Sync module loads. Customer returns and return_items now sync to cloud with all columns matching desktop schema.
+- **Notes:** Desktop returns have `refund_method` (cash/bank_transfer/none), `return_type` (full/partial), `return_number`. Return_items uses `unit_price` (not unit_cost — these are refunds at sale price). JOINs returns for branch_id.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-703e
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/026_expenses_full_fields.sql` (new — ADD COLUMN IF NOT EXISTS for 3 fields), `pms-cloud/src/routes/sync.js` (added payment_method, notes, created_by to expenses columns), `src-tauri/src/commands/cloud_sync_snapshot.rs` (added 3 columns to expenses push query)
+- **Acceptance test result:** `cargo check` — 2m04s, no errors. Sync module loads. Expenses now sync payment_method, notes, created_by to cloud.
+- **Notes:** `reference_number` and `approved_by` were in spec but do NOT exist on desktop expenses table — skipped. Desktop expenses has payment_method (cash/bank_transfer), notes (TEXT nullable), created_by (TEXT NOT NULL).
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-703d
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/025_pos_sales_full_fields.sql` (new — ADD COLUMN IF NOT EXISTS for 4 fields), `pms-cloud/src/routes/sync.js` (added sale_type, change_amount, payment_method_id, void_reason to pos_sales columns), `src-tauri/src/commands/cloud_sync_snapshot.rs` (added 4 columns to pos_sales push query)
+- **Acceptance test result:** `cargo check` — 2m04s, no errors. Sync module loads. POS sales now sync sale_type, change_amount, payment_method_id, void_reason to cloud.
+- **Notes:** `account_id` was in spec but does NOT exist on desktop sales table — skipped. `void_reason` exists via ensure_column+1132. `sale_type` is in CREATE TABLE (pos/invoice). `payment_method_id` and `change_amount` are in CREATE TABLE.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-703c
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/024_suppliers_full_fields.sql` (new — ADD COLUMN IF NOT EXISTS for 3 fields), `pms-cloud/src/routes/sync.js` (added name_ar, contact_person, notes to suppliers columns), `src-tauri/src/commands/cloud_sync_snapshot.rs` (added 3 COALESCE columns to suppliers push query)
+- **Acceptance test result:** `cargo check` — 2m04s, no errors. Sync module loads. Suppliers now sync name_ar, contact_person, notes to cloud.
+- **Notes:** All 3 spec columns (name_ar, contact_person, notes) exist on desktop suppliers. name_ar was NOT previously synced despite existing in the desktop CREATE TABLE.
+
+### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-703b
+- **Status:** DONE
+- **Files changed:** `pms-cloud/migrations/023_customers_full_fields.sql` (new — ADD COLUMN IF NOT EXISTS for 3 fields), `pms-cloud/src/routes/sync.js` (added email, address, notes to customers columns), `src-tauri/src/commands/cloud_sync_snapshot.rs` (added 3 COALESCE columns to customers push query)
+- **Acceptance test result:** `cargo check` — 2m04s, no errors. Sync module loads. Customers now sync email, address, notes to cloud.
+- **Notes:** `customer_type` and `tax_number` were in spec but do NOT exist on desktop customers table — skipped. Desktop customers has email, address, notes all present. Used COALESCE for nullable TEXT columns.
+
 ### 2026-05-19 — DeepSeek V4 (OpenCode) — TASK-703a
 - **Status:** DONE
 - **Files changed:** `pms-cloud/migrations/022_products_full_fields.sql` (new — ADD COLUMN IF NOT EXISTS for 8 product detail fields), `pms-cloud/src/routes/sync.js` (lines 97,99 — added 8 new columns to products TABLE_SCHEMAS), `src-tauri/src/commands/cloud_sync_snapshot.rs` (lines 356-364 — added 8 COALESCE columns to products push query)

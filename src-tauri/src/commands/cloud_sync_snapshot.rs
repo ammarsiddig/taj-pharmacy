@@ -371,6 +371,8 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
             "SELECT id, tenant_id, ?2 AS branch_id, name, COALESCE(name_ar, '') AS name_ar, \
              COALESCE(phone, '') AS phone, COALESCE(credit_limit, 0) AS credit_limit, \
              COALESCE(current_balance, 0) AS current_balance, 0 AS total_purchases, \
+             COALESCE(email, '') AS email, COALESCE(address, '') AS address, \
+             COALESCE(notes, '') AS notes, is_active, updated_at \
              is_active, updated_at \
              FROM customers WHERE tenant_id = ?1 AND deleted_at IS NULL",
             tenant_id, branch)),
@@ -379,6 +381,9 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
              COALESCE(phone, '') AS phone, COALESCE(email, '') AS email, \
              COALESCE(address, '') AS address, \
              COALESCE(opening_balance, 0) AS current_balance, \
+             COALESCE(name_ar, '') AS name_ar, \
+             COALESCE(contact_person, '') AS contact_person, \
+             COALESCE(notes, '') AS notes, \
              is_active, updated_at \
              FROM suppliers WHERE tenant_id = ?1 AND deleted_at IS NULL",
             tenant_id, branch)),
@@ -389,7 +394,11 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
              COALESCE(s.discount, 0) AS discount, s.payment_method, s.payment_status, \
              s.amount_paid, (s.total - s.amount_paid) AS balance_due, \
              '' AS cashier_name, \
-             COALESCE(s.notes, '') AS notes, 0 AS is_return, s.created_at \
+             COALESCE(s.notes, '') AS notes, 0 AS is_return, \
+             s.sale_type, COALESCE(s.change_amount, 0) AS change_amount, \
+             COALESCE(s.payment_method_id, '') AS payment_method_id, \
+             COALESCE(s.void_reason, '') AS void_reason, \
+             s.created_at \
              FROM sales s \
              LEFT JOIN customers c ON c.id = s.customer_id \
              WHERE s.tenant_id = ?1 AND s.branch_id = ?2 AND s.deleted_at IS NULL",
@@ -408,7 +417,9 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
         ("expenses", query_table_rows(&conn,
             "SELECT id, tenant_id, branch_id, \
              COALESCE(category_id, '') AS category, amount, \
-             COALESCE(description, '') AS description, expense_date, created_at \
+             COALESCE(description, '') AS description, expense_date, \
+             payment_method, COALESCE(notes, '') AS notes, created_by, \
+             created_at \
              FROM expenses WHERE tenant_id = ?1 AND branch_id = ?2 AND deleted_at IS NULL",
             tenant_id, branch)),
         ("batches", query_table_rows(&conn,
@@ -508,6 +519,39 @@ pub(crate) fn push_all_tables(db: &Database, tenant_id: &str, branch: &str) -> R
              1 AS is_active, created_at, updated_at \
              FROM pos_sessions \
              WHERE tenant_id = ?1 AND branch_id = ?2 AND deleted_at IS NULL",
+            tenant_id, branch)),
+        ("returns", query_table_rows(&conn,
+            "SELECT id, tenant_id, branch_id, return_number, \
+             sale_id, session_id, return_type, status, subtotal, total, \
+             refund_method, COALESCE(reason, '') AS reason, created_by, \
+             1 AS is_active, created_at \
+             FROM returns \
+             WHERE tenant_id = ?1 AND branch_id = ?2",
+            tenant_id, branch)),
+        ("return_items", query_table_rows(&conn,
+            "SELECT ri.id, ri.tenant_id, r.branch_id, ri.return_id, ri.sale_item_id, \
+             ri.product_id, ri.batch_id, ri.quantity, ri.unit_price, ri.subtotal, \
+             1 AS is_active, ri.created_at \
+             FROM return_items ri \
+             JOIN returns r ON r.id = ri.return_id \
+             WHERE ri.tenant_id = ?1 AND r.branch_id = ?2",
+            tenant_id, branch)),
+        ("supplier_invoice_items", query_table_rows(&conn,
+            "SELECT sii.id, sii.tenant_id, si.branch_id, sii.invoice_id, \
+             sii.product_id, COALESCE(sii.batch_number, '') AS batch_number, \
+             COALESCE(sii.expiry_date, '') AS expiry_date, sii.quantity, \
+             sii.unit_cost, sii.sale_price, sii.subtotal, \
+             1 AS is_active, sii.created_at, sii.updated_at \
+             FROM supplier_invoice_items sii \
+             JOIN supplier_invoices si ON si.id = sii.invoice_id \
+             WHERE sii.tenant_id = ?1 AND si.branch_id = ?2 AND si.deleted_at IS NULL",
+            tenant_id, branch)),
+        ("audit_log", query_table_rows(&conn,
+            "SELECT id, tenant_id, user_id, action, entity_type, entity_id, \
+             COALESCE(changes_json, '') AS changes_json, \
+             1 AS is_active, created_at \
+             FROM audit_log \
+             WHERE tenant_id = ?1 AND created_at > date('now', '-30 days')",
             tenant_id, branch)),
     ];
 

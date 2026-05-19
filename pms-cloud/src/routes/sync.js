@@ -104,19 +104,19 @@ const TABLE_SCHEMAS = {
     updateColumns: ['product_id', 'batch_number', 'expiry_date', 'quantity', 'purchase_price', 'location_id', 'is_active', 'updated_at', 'synced_at']
   },
   customers: {
-    columns: ['id', 'tenant_id', 'branch_id', 'name', 'name_ar', 'phone', 'credit_limit', 'current_balance', 'total_purchases', 'is_active', 'updated_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'name', 'name_ar', 'phone', 'credit_limit', 'current_balance', 'total_purchases', 'email', 'address', 'notes', 'is_active', 'updated_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['name', 'name_ar', 'phone', 'credit_limit', 'current_balance', 'total_purchases', 'is_active', 'updated_at', 'synced_at']
+    updateColumns: ['name', 'name_ar', 'phone', 'credit_limit', 'current_balance', 'total_purchases', 'email', 'address', 'notes', 'is_active', 'updated_at', 'synced_at']
   },
   suppliers: {
-    columns: ['id', 'tenant_id', 'branch_id', 'name', 'phone', 'email', 'address', 'current_balance', 'is_active', 'updated_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'name', 'phone', 'email', 'address', 'current_balance', 'name_ar', 'contact_person', 'notes', 'is_active', 'updated_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['name', 'phone', 'email', 'address', 'current_balance', 'is_active', 'updated_at', 'synced_at']
+    updateColumns: ['name', 'phone', 'email', 'address', 'current_balance', 'name_ar', 'contact_person', 'notes', 'is_active', 'updated_at', 'synced_at']
   },
   pos_sales: {
-    columns: ['id', 'tenant_id', 'branch_id', 'session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'is_active', 'created_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'sale_type', 'change_amount', 'payment_method_id', 'void_reason', 'is_active', 'created_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'is_active', 'created_at', 'synced_at']
+    updateColumns: ['session_id', 'sale_number', 'customer_id', 'customer_name', 'total', 'tax_amount', 'discount', 'payment_method', 'payment_status', 'amount_paid', 'balance_due', 'cashier_name', 'notes', 'is_return', 'sale_type', 'change_amount', 'payment_method_id', 'void_reason', 'is_active', 'created_at', 'synced_at']
   },
   pos_sale_items: {
     columns: ['id', 'tenant_id', 'branch_id', 'sale_id', 'product_id', 'product_name', 'batch_id', 'batch_number', 'quantity', 'unit_price', 'subtotal', 'is_active'],
@@ -124,9 +124,9 @@ const TABLE_SCHEMAS = {
     updateColumns: ['sale_id', 'product_id', 'product_name', 'batch_id', 'batch_number', 'quantity', 'unit_price', 'subtotal', 'is_active', 'synced_at']
   },
   expenses: {
-    columns: ['id', 'tenant_id', 'branch_id', 'category', 'amount', 'description', 'expense_date', 'is_active', 'created_at'],
+    columns: ['id', 'tenant_id', 'branch_id', 'category', 'amount', 'description', 'expense_date', 'payment_method', 'notes', 'created_by', 'is_active', 'created_at'],
     conflictColumns: ['tenant_id', 'branch_id', 'id'],
-    updateColumns: ['category', 'amount', 'description', 'expense_date', 'is_active', 'created_at', 'synced_at']
+    updateColumns: ['category', 'amount', 'description', 'expense_date', 'payment_method', 'notes', 'created_by', 'is_active', 'created_at', 'synced_at']
   },
   stock_movements: {
     columns: ['id', 'tenant_id', 'branch_id', 'product_id', 'batch_id', 'movement_type', 'quantity', 'reference_type', 'reference_id', 'notes', 'is_active', 'created_at'],
@@ -187,6 +187,26 @@ const TABLE_SCHEMAS = {
     columns: ['id', 'tenant_id', 'branch_id', 'cashier_id', 'account_id', 'status', 'opening_cash', 'expected_cash', 'actual_cash', 'cash_difference', 'total_sales', 'total_returns', 'sales_count', 'opened_at', 'closed_at', 'notes', 'is_active', 'created_at', 'updated_at'],
     conflictColumns: ['tenant_id', 'id'],
     updateColumns: ['branch_id', 'cashier_id', 'account_id', 'status', 'opening_cash', 'expected_cash', 'actual_cash', 'cash_difference', 'total_sales', 'total_returns', 'sales_count', 'opened_at', 'closed_at', 'notes', 'is_active', 'updated_at', 'synced_at']
+  },
+  returns: {
+    columns: ['id', 'tenant_id', 'branch_id', 'return_number', 'sale_id', 'session_id', 'return_type', 'status', 'subtotal', 'total', 'refund_method', 'reason', 'created_by', 'is_active', 'created_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['branch_id', 'return_number', 'sale_id', 'session_id', 'return_type', 'status', 'subtotal', 'total', 'refund_method', 'reason', 'created_by', 'is_active', 'synced_at']
+  },
+  return_items: {
+    columns: ['id', 'tenant_id', 'return_id', 'sale_item_id', 'product_id', 'batch_id', 'quantity', 'unit_price', 'subtotal', 'is_active', 'created_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['return_id', 'sale_item_id', 'product_id', 'batch_id', 'quantity', 'unit_price', 'subtotal', 'is_active', 'synced_at']
+  },
+  supplier_invoice_items: {
+    columns: ['id', 'tenant_id', 'invoice_id', 'product_id', 'batch_number', 'expiry_date', 'quantity', 'unit_cost', 'sale_price', 'subtotal', 'is_active', 'created_at', 'updated_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['invoice_id', 'product_id', 'batch_number', 'expiry_date', 'quantity', 'unit_cost', 'sale_price', 'subtotal', 'is_active', 'updated_at', 'synced_at']
+  },
+  audit_log: {
+    columns: ['id', 'tenant_id', 'user_id', 'action', 'entity_type', 'entity_id', 'changes_json', 'is_active', 'created_at'],
+    conflictColumns: ['tenant_id', 'id'],
+    updateColumns: ['user_id', 'action', 'entity_type', 'entity_id', 'changes_json', 'is_active', 'synced_at']
   }
 };
 
