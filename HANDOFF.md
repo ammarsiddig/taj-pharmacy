@@ -2443,6 +2443,18 @@ TEMPLATE — copy this block when adding a new entry:
 - **Notes:** <surprises, follow-ups, edge cases — anything the curator should see>
 -->
 
+### 2026-05-19 — Devin (Cognition) — TASK-300
+- **Status:** DONE
+- **Files changed:** `src/pages/Onboarding.tsx` (full rewrite — added mode state, Step 0 branch screen, restore flow steps R1-R4), `src-tauri/src/commands/cloud_sync_restore.rs` (added `RecoverResult` struct and `recover_cloud_credentials` Tauri command), `src-tauri/src/lib.rs` (registered `recover_cloud_credentials`), `src/types/system.ts` (added `RecoverResult`, `RestoreResult` interfaces), `src/api/system.ts` (added `recoverCloudCredentials`, `pullAllTables` functions), `src/i18n/ar.json` (added onboarding.restore.* + onboarding.step0* keys), `src/i18n/en.json` (same)
+- **Acceptance test result:** `cd src && npx tsc --noEmit` — exit 0, no errors.
+- **Notes:** Step 0 uses mode: null|create|restore state. Create path unchanged (steps 1-4). Restore: R1 form (licenseKey, email, password) → R2/R3 combined progress spinner → R4 done summary with per-table counts. CANONICAL_CLOUD_ENDPOINT = https://pharmacy.taj.systems. recover_cloud_credentials is synchronous Rust (reqwest blocking). Account lockout and rate-limit errors translated to Arabic. Back button on Step 1 now returns to Step 0.
+
+### 2026-05-19 — Devin (Cognition) — TASK-606
+- **Status:** BLOCKED (pre-existing, confirmed)
+- **Files changed:** (none — code change not attempted)
+- **Acceptance test result:** N/A
+- **Notes:** TASK-606 requires signing keypairs + GitHub Actions release pipeline. Scope too large for autonomous execution per the spec's own "OK TO BLOCK" note. Curator should walk user through this when ready.
+
 ### 2026-05-19 — Devin (Cognition) — TASK-302
 - **Status:** DONE
 - **Files changed:** `pms-cloud/src/routes/sync.js` (added GET /v1/sync/dump endpoint before export), `src-tauri/src/commands/cloud_sync_restore.rs` (new — 510 lines, pull_all_tables Tauri command), `src-tauri/src/commands/mod.rs` (added pub mod cloud_sync_restore), `src-tauri/src/lib.rs` (registered pull_all_tables command)

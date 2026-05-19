@@ -508,3 +508,90 @@ pub fn pull_all_tables(
         error: None,
     })
 }
+
+// ── TASK-300: Credential recovery (calls /auth/recover on cloud) ──────────────
+
+/// Return type for recover_cloud_credentials.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecoverResult {
+    pub tenant_id: String,
+    pub sync_token: String,
+    pub pharmacy_name: String,
+}
+
+/// Calls POST {cloud_endpoint}/auth/recover and returns the sync token.
+/// Used by the onboarding "Restore Existing Pharmacy" flow (TASK-300).
+///
+/// Parameters:
+/// - `license_key`: e.g. "TAJ-XXXX-XXXX-XXXX-XXXX"
+/// - `email`: owner email (normalised to lowercase server-side)
+/// - `password`: owner cloud password
+#[tauri::command]
+pub fn recover_cloud_credentials(
+    license_key: String,
+    email: String,
+    password: String,
+) -> Result<RecoverResult, String> {
+    let endpoint = std::env::var("PMS_OWNER_SYNC_ENDPOINT")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "https://pharmacy.taj.systems".to_string());
+
+    let client = cloud_sync::build_cloud_sync_client()?;
+    let url = format!("{}/auth/recover", endpoint.trim_end_matches('/'));
+
+    let body = serde_json::json!({
+        "license_key": license_key.trim(),
+        "email": email.trim().to_lowercase(),
+        "password": password,
+    });
+
+    let response = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| format!("فشل الاتصال بالخادم: {}", e))?;
+
+    let status = response.status();
+    let resp_body: Value = response
+        .json()
+        .map_err(|e| format!("فشل تحليل استجابة الخادم: {}", e))?;
+
+    if !status.is_success() {
+        let raw = resp_body
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("خطأ غير معروف")
+            .to_string();
+        let msg = if raw.contains("Invalid recovery credentials") {
+            "بيانات الاعتماد غير صحيحة. تحقق من مفتاح الترخيص والبريد الإلكتروني وكلمة المرور.".to_string()
+        } else if raw.contains("temporarily locked") || status.as_u16() == 429 {
+            "الحساب مقفل مؤقتاً بسبب محاولات متكررة. حاول مرة أخرى لاحقاً.".to_string()
+        } else {
+            raw
+        };
+        return Err(msg);
+    }
+
+    let tenant_id = resp_body
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let sync_token = resp_body
+        .get("sync_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let pharmacy_name = resp_body
+        .get("pharmacy_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    if tenant_id.is_empty() || sync_token.is_empty() {
+        return Err("استجابة غير متوقعة من الخادم: بيانات ناقصة".to_string());
+    }
+
+    Ok(RecoverResult { tenant_id, sync_token, pharmacy_name })
+}

@@ -206,3 +206,19 @@ export interface PharmacyConfigInput {
   cloud_endpoint: string;
   cloud_token: string;
 }
+
+// TASK-300: Credential recovery result (from /auth/recover via Rust command)
+export interface RecoverResult {
+  tenant_id: string;
+  sync_token: string;
+  pharmacy_name: string;
+}
+
+// TASK-302: Table-level restore result
+export interface RestoreResult {
+  success: boolean;
+  tables: Record<string, number>;
+  total_rows: number;
+  skipped_tables: string[];
+  error: string | null;
+}

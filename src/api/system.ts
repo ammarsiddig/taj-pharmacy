@@ -1,4 +1,4 @@
-﻿import { invoke } from '../lib/tauri';
+import { invoke } from '../lib/tauri';
 import type {
   AuditLogRow, AuditLogEntry, LicenseInfo, LicenseHistoryRow,
   OnboardingStatus, OnboardingData, ActivateLicenseCloudData, ActivateLicenseCloudResult,
@@ -7,6 +7,7 @@ import type {
   AssetCategory, AssetCategoryData, AssetRow, AssetData,
   DisposeAssetData, DepreciationEntry, DepreciationRunResult, AssetSummary,
   PharmacyConfig, PharmacyConfigInput,
+  RecoverResult, RestoreResult,
 } from '../types';
 import { getTenantId } from './core';
 
@@ -170,4 +171,21 @@ export async function getActivePharmacy(): Promise<PharmacyConfig | null> {
 
 export async function removePharmacy(tenantId: string): Promise<void> {
   return invoke('remove_pharmacy', { tenantId });
+}
+
+// ---
+
+export async function recoverCloudCredentials(
+  licenseKey: string,
+  email: string,
+  password: string,
+): Promise<RecoverResult> {
+  return invoke('recover_cloud_credentials', { licenseKey, email, password });
+}
+
+export async function pullAllTables(
+  endpoint: string,
+  syncToken: string,
+): Promise<RestoreResult> {
+  return invoke('pull_all_tables', { endpoint, syncToken });
 }

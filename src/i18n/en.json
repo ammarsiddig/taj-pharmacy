@@ -1528,7 +1528,32 @@
     "mainBranchPlaceholder": "Main Branch",
     "adminNamePlaceholder": "System Administrator",
     "usernamePlaceholder": "admin",
-    "emailPlaceholder": "owner@pharmacy.com"
+    "emailPlaceholder": "owner@pharmacy.com",
+    "restore": {
+      "title": "Restore Existing Pharmacy",
+      "subtitle": "Enter your account credentials to restore all your pharmacy data on this device",
+      "licenseKeyLabel": "License Key",
+      "licenseKeyPlaceholder": "TAJ-XXXX-XXXX-XXXX-XXXX",
+      "emailLabel": "Owner Email",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Your TAJ account password",
+      "submit": "Restore Data",
+      "back": "Back",
+      "progressTitle": "Restoring",
+      "progressVerify": "Verifying credentials...",
+      "progressPull": "Pulling pharmacy data from the cloud...",
+      "progressNote": "This may take a minute or two depending on data size. Do not close the app.",
+      "doneTitle": "Restore complete!",
+      "doneSubtitle": "Your pharmacy data has been restored. You can now log in.",
+      "totalRecords": "Total",
+      "records": "records"
+    },
+    "step0Title": "Do you already have a TAJ Pharmacy account?",
+    "step0Subtitle": "Choose the option that applies to you",
+    "createNew": "New Pharmacy",
+    "createNewDesc": "Create a new pharmacy and start fresh",
+    "restoreExisting": "Restore Existing Pharmacy",
+    "restoreExistingDesc": "Recover your data on a new device"
   },
   "errors": {
     "customer_cash_only": "This customer is cash-only (no credit allowed).",

@@ -255,6 +255,7 @@ pub fn run() {
             commands::cloud_sync_snapshot::get_sync_status,
             commands::cloud_sync_snapshot::sync_all_tables_now,
             commands::cloud_sync_restore::pull_all_tables,
+            commands::cloud_sync_restore::recover_cloud_credentials,
         ])
         .run(tauri::generate_context!())
         .expect("خطأ أثناء تشغيل التطبيق");

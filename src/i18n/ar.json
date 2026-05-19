@@ -1535,7 +1535,32 @@
     "mainBranchPlaceholder": "الفرع الرئيسي",
     "adminNamePlaceholder": "مدير النظام",
     "usernamePlaceholder": "admin",
-    "emailPlaceholder": "owner@pharmacy.com"
+    "emailPlaceholder": "owner@pharmacy.com",
+    "restore": {
+      "title": "استعادة صيدلية موجودة",
+      "subtitle": "أدخل بيانات حسابك لاستعادة جميع بيانات صيدليتك على هذا الجهاز",
+      "licenseKeyLabel": "مفتاح الترخيص",
+      "licenseKeyPlaceholder": "TAJ-XXXX-XXXX-XXXX-XXXX",
+      "emailLabel": "البريد الإلكتروني للمالك",
+      "passwordLabel": "كلمة المرور",
+      "passwordPlaceholder": "كلمة مرور حساب TAJ",
+      "submit": "استعادة البيانات",
+      "back": "رجوع",
+      "progressTitle": "جاري الاستعادة",
+      "progressVerify": "جاري التحقق من بيانات الاعتماد...",
+      "progressPull": "جاري استعادة بيانات الصيدلية من السحابة...",
+      "progressNote": "قد تستغرق هذه العملية دقيقة أو دقيقتين حسب حجم البيانات. لا تغلق التطبيق.",
+      "doneTitle": "تمت الاستعادة بنجاح!",
+      "doneSubtitle": "تم استرجاع بيانات صيدليتك. يمكنك الآن تسجيل الدخول.",
+      "totalRecords": "الإجمالي",
+      "records": "سجل"
+    },
+    "step0Title": "هل لديك حساب TAJ Pharmacy بالفعل؟",
+    "step0Subtitle": "اختر الخيار المناسب لحالتك",
+    "createNew": "صيدلية جديدة",
+    "createNewDesc": "أنشئ صيدلية جديدة وابدأ من الصفر",
+    "restoreExisting": "استعادة صيدلية موجودة",
+    "restoreExistingDesc": "استرجع بياناتك على جهاز جديد"
   },
   "errors": {
     "customer_cash_only": "هذا العميل نقدي فقط (لا يسمح بالائتمان).",
