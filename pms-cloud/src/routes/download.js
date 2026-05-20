@@ -2,8 +2,8 @@ import { Router } from 'express';
 
 const router = Router();
 
-const GITHUB_RELEASE_API = 'https://api.github.com/repos/ammarsiddig/pms-pharmacy-v4/releases/latest';
-const GITHUB_DOWNLOAD_BASE = 'https://github.com/ammarsiddig/pms-pharmacy-v4/releases/download';
+const GITHUB_RELEASE_API = 'https://api.github.com/repos/ammarsiddig/taj-pharmacy/releases/latest';
+const GITHUB_DOWNLOAD_BASE = 'https://github.com/ammarsiddig/taj-pharmacy/releases/download';
 const FALLBACK_URL = 'https://taj.systems/download/TAJ-Pharmacy-Setup.exe';
 
 /**
