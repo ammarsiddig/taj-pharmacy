@@ -31,11 +31,17 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Write signing key to file
+        shell: pwsh
+        run: |
+          $keyContent = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+          [System.IO.File]::WriteAllText("$env:RUNNER_TEMP\tauri-signing.key", $keyContent)
+
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ runner.temp }}\tauri-signing.key
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'TAJ Pharmacy v__VERSION__'
