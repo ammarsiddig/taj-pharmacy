@@ -4,21 +4,17 @@ import { getLicenseInfo, checkLicenseOnline } from '../api';
 import type { LicenseInfo } from '../types';
 import { FEATURE_FLAGS } from './usePermission';
 
-// All flags enabled (used when license cannot be loaded)
 const ALL_FLAGS = Object.values(FEATURE_FLAGS).reduce((a, b) => a | b, 0);
 
 interface LicenseContextValue {
   license: LicenseInfo | null;
   loading: boolean;
+  licenseError: boolean;
   refresh: () => Promise<void>;
   hasFeature: (flag: number) => boolean;
-  /** true when expired AND past grace period */
   isBlocked: boolean;
-  /** true when backend considers license read-only */
   isReadOnly: boolean;
-  /** true when in 7-day grace window after expiry */
   isInGrace: boolean;
-  /** true when valid license expires within 14 days */
   isNearExpiry: boolean;
   daysUntilExpiry: number | null;
   graceDaysRemaining: number | null;
@@ -27,8 +23,9 @@ interface LicenseContextValue {
 const LicenseContext = createContext<LicenseContextValue>({
   license: null,
   loading: true,
+  licenseError: false,
   refresh: async () => {},
-  hasFeature: () => true,
+  hasFeature: () => false,
   isBlocked: false,
   isReadOnly: false,
   isInGrace: false,
@@ -40,14 +37,16 @@ const LicenseContext = createContext<LicenseContextValue>({
 export function LicenseProvider({ children }: { children: ReactNode }) {
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [licenseError, setLicenseError] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       const info = await getLicenseInfo();
       setLicense(info);
+      setLicenseError(false);
     } catch {
-      // On error allow all features — don't block the user
       setLicense(null);
+      setLicenseError(true);
     } finally {
       setLoading(false);
     }
@@ -55,22 +54,18 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
-    // Re-check every 5 minutes
     const timer = setInterval(refresh, 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, [refresh]);
 
-  // Online heartbeat: check against license server on mount then every 24 h
   useEffect(() => {
     const runOnlineCheck = async () => {
       try {
         const result = await checkLicenseOnline();
-        // If the server confirmed revocation, refresh local state immediately
         if (result.checked && result.revoked) {
           await refresh();
         }
       } catch {
-        // Non-fatal — server may not be configured
       }
     };
     runOnlineCheck();
@@ -80,7 +75,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
 
   const hasFeature = useCallback(
     (flag: number): boolean => {
-      if (!license) return true;
+      if (!license) return false;
       const flags = license.feature_flags === 0 ? ALL_FLAGS : license.feature_flags;
       return (flags & flag) !== 0;
     },
@@ -92,7 +87,6 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   const isInGrace = license?.in_grace_period ?? false;
   const daysUntilExpiry = license?.days_until_expiry ?? null;
   const graceDaysRemaining = license?.grace_days_remaining ?? null;
-  // Near-expiry: valid, not yet in grace, ≤ 14 days left
   const isNearExpiry =
     !isInGrace && daysUntilExpiry !== null && daysUntilExpiry >= 0 && daysUntilExpiry <= 14;
 
@@ -101,6 +95,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       value={{
         license,
         loading,
+        licenseError,
         refresh,
         hasFeature,
         isBlocked,

@@ -3,8 +3,11 @@ import { requireAdmin } from '../auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { query, transaction } from '../db.js';
 import bcrypt from 'bcryptjs';
+import { adminLimiter } from '../middleware/rate-limit.js';
 
 const router = Router();
+
+router.use(adminLimiter);
 
 // Audit log helper
 async function auditLog(actor, action, data = {}) {

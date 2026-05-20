@@ -41,7 +41,7 @@ export default function Toast({ message, type = 'success', onClose, duration }: 
   const { border, bg } = styles[type];
   return (
     <div
-      className={`fixed top-20 start-1/2 -translate-x-1/2 z-[80] max-w-sm px-4 py-3 rounded-xl border-s-4 shadow-lg animate-in ${border} ${bg} ${!visible ? 'opacity-0 -translate-y-2 transition-all duration-200' : ''}`}
+      className={`fixed bottom-6 start-1/2 -translate-x-1/2 z-[80] max-w-sm px-4 py-3 rounded-xl border-s-4 shadow-lg animate-in ${border} ${bg} ${!visible ? 'opacity-0 translate-y-2 transition-all duration-200' : ''}`}
       role="alert"
     >
       <div className="flex items-center gap-2">

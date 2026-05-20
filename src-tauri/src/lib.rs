@@ -33,6 +33,8 @@ pub fn run() {
             let cloud_sync_runtime = commands::cloud_sync::CloudSyncRuntime::default();
             let auth_session = commands::session_state::AuthSessionState::new();
 
+            commands::auth::init_token_secret(&app_data_dir);
+            commands::settings_backup::init_backup_secrets(&app_data_dir);
             commands::settings_sync_config::init_cloud_config_from_db(&database);
 
             commands::cloud_sync_scheduler::spawn_background_scheduler(

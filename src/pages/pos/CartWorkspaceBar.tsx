@@ -88,60 +88,55 @@ export default function CartWorkspaceBar({
         </div>
       </div>
 
-      {showParkedSales && (
-        <div className="app-panel p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-ink-main">{t('pos.parkedSales')}</h3>
-              <p className="text-xs text-ink-muted">{t('pos.parkedSalesHint')}</p>
-            </div>
-            <button type="button" onClick={() => setShowParkedSales(false)} className="text-xs text-ink-muted hover:text-ink-main">
-              {t('common.close')}
-            </button>
+      <div className={`app-panel p-4 overflow-hidden transition-all duration-200 ease-out ${showParkedSales ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 py-0'}`}>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-ink-main">{t('pos.parkedSales')}</h3>
+            <p className="text-xs text-ink-muted">{t('pos.parkedSalesHint')}</p>
           </div>
-          {parkedWorkspaces.length === 0 ? (
-            <div className="rounded-2xl bg-ivory-muted px-4 py-6 text-center text-sm text-ink-muted">{t('pos.noParkedSales')}</div>
-          ) : (
-            <div className="grid gap-2 md:grid-cols-2">
-              {parkedWorkspaces.map((workspace) => (
-                <div
-                  key={workspace.id}
-                  className="rounded-2xl border border-ivory-border bg-white px-4 py-3 text-right hover:border-primary-300 hover:bg-primary-50 group"
-                >
-                  <div className="flex items-center justify-between gap-3">
+        </div>
+        {parkedWorkspaces.length === 0 ? (
+          <div className="rounded-2xl bg-ivory-muted px-4 py-6 text-center text-sm text-ink-muted">{t('pos.noParkedSales')}</div>
+        ) : (
+          <div className="grid gap-2 md:grid-cols-2">
+            {parkedWorkspaces.map((workspace) => (
+              <div
+                key={workspace.id}
+                className="rounded-2xl border border-ivory-border bg-white px-4 py-3 text-right hover:border-primary-300 hover:bg-primary-50 group"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onRestore(workspace.id)}
+                    className="flex-1 text-right font-medium text-ink-main hover:text-primary-600"
+                  >
+                    {workspace.name}
+                  </button>
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => onRestore(workspace.id)}
-                      className="flex-1 text-right font-medium text-ink-main hover:text-primary-600"
+                      className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 hover:bg-amber-100"
                     >
-                      {workspace.name}
+                      {t('pos.restoreSale')}
                     </button>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onRestore(workspace.id)}
-                        className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 hover:bg-amber-100"
-                      >
-                        {t('pos.restoreSale')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setDeleteWorkspaceId(workspace.id); }}
-                        className="rounded-full p-1 text-ink-muted hover:text-status-danger hover:bg-red-50"
-                        title={t('common.delete')}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDeleteWorkspaceId(workspace.id); }}
+                      className="rounded-full p-1 text-ink-muted hover:text-status-danger hover:bg-red-50"
+                      title={t('common.delete')}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <div className="mt-2 text-xs text-ink-muted">{workspace.cart.length} {t('pos.items')}</div>
-                  <div className="mt-1 text-xs text-ink-muted">{workspace.parkedAt ? new Date(workspace.parkedAt).toLocaleTimeString() : ''}</div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                <div className="mt-2 text-xs text-ink-muted">{workspace.cart.length} {t('pos.items')}</div>
+                <div className="mt-1 text-xs text-ink-muted">{workspace.parkedAt ? new Date(workspace.parkedAt).toLocaleTimeString() : ''}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <Modal
         open={!!deleteWorkspaceId}

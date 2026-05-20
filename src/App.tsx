@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './hooks/useAuth';
@@ -27,25 +27,39 @@ import { checkOnboarding, syncAllTablesNow, initTenantId } from './api';
 import { checkPendingUpdate } from './api';
 import './i18n';
 
-const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-function useAutoSync(enabled: boolean) {
+interface SyncStatusCtx {
+  syncError: boolean;
+  setSyncError: (v: boolean) => void;
+}
+const SyncStatusContext = createContext<SyncStatusCtx>({
+  syncError: false,
+  setSyncError: () => {},
+});
+export function useSyncStatus() { return useContext(SyncStatusContext); }
+
+function useAutoSync(enabled: boolean, setSyncError: (v: boolean) => void) {
   useEffect(() => {
     if (!enabled) return;
-    const run = () => syncAllTablesNow().catch(() => { /* silent */ });
+    const run = () => {
+      syncAllTablesNow()
+        .then(() => setSyncError(false))
+        .catch(() => setSyncError(true));
+    };
     run();
     const id = setInterval(run, AUTO_SYNC_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [enabled]);
+  }, [enabled, setSyncError]);
 }
 
 function useUpdateCheck(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
-    checkPendingUpdate().catch(() => { /* silent */ });
+    checkPendingUpdate().catch(() => {});
     const id = setInterval(() => {
-      checkPendingUpdate().catch(() => { /* silent */ });
+      checkPendingUpdate().catch(() => {});
     }, UPDATE_CHECK_INTERVAL_MS);
     return () => clearInterval(id);
   }, [enabled]);
@@ -91,6 +105,12 @@ function FeatureGate({ flag, children }: { flag: number; children: React.ReactNo
   return <>{children}</>;
 }
 
+function PermissionGate({ permission, children }: { permission: string; children: React.ReactNode }) {
+  const { permissions } = useAuth();
+  if (!permissions.includes(permission)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 function BlockedScreen() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -120,7 +140,8 @@ function BlockedScreen() {
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
-  useAutoSync(isAuthenticated);
+  const [syncError, setSyncError] = useState(false);
+  useAutoSync(isAuthenticated, setSyncError);
   useUpdateCheck(isAuthenticated);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(true);
@@ -150,34 +171,36 @@ function AppRoutes() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route
-        element={
-          <ProtectedRoute>
-            <AppLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/products" element={<FeatureGate flag={FEATURE_FLAGS.PRODUCTS}><Products /></FeatureGate>} />
-        <Route path="/purchases" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><Purchases /></FeatureGate>} />
-        <Route path="/purchases/new" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate>} />
-        <Route path="/purchases/:id/edit" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate>} />
-        <Route path="/purchases/:id" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseDetail /></FeatureGate>} />
-        <Route path="/pos" element={<FeatureGate flag={FEATURE_FLAGS.POS}><POS /></FeatureGate>} />
-        <Route path="/expenses" element={<FeatureGate flag={FEATURE_FLAGS.EXPENSES}><Expenses /></FeatureGate>} />
-        <Route path="/accounts" element={<FeatureGate flag={FEATURE_FLAGS.ACCOUNTS}><Accounts /></FeatureGate>} />
-        <Route path="/customers/new" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerNew /></FeatureGate>} />
-        <Route path="/customers/:id" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerDetail /></FeatureGate>} />
-        <Route path="/suppliers/:id" element={<FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate>} />
-        <Route path="/reports" element={<FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate>} />
-        <Route path="/warehouse" element={<FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><Warehouse /></FeatureGate>} />
-        <Route path="/sales" element={<FeatureGate flag={FEATURE_FLAGS.SALES}><Sales /></FeatureGate>} />
-        <Route path="/settings" element={<Settings />} />
-      </Route>
-      <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
-    </Routes>
+    <SyncStatusContext.Provider value={{ syncError, setSyncError }}>
+      <Routes>
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/products" element={<FeatureGate flag={FEATURE_FLAGS.PRODUCTS}><Products /></FeatureGate>} />
+          <Route path="/purchases" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><Purchases /></FeatureGate>} />
+          <Route path="/purchases/new" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate>} />
+          <Route path="/purchases/:id/edit" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate>} />
+          <Route path="/purchases/:id" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseDetail /></FeatureGate>} />
+          <Route path="/pos" element={<FeatureGate flag={FEATURE_FLAGS.POS}><POS /></FeatureGate>} />
+          <Route path="/expenses" element={<FeatureGate flag={FEATURE_FLAGS.EXPENSES}><Expenses /></FeatureGate>} />
+          <Route path="/accounts" element={<FeatureGate flag={FEATURE_FLAGS.ACCOUNTS}><Accounts /></FeatureGate>} />
+          <Route path="/customers/new" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerNew /></FeatureGate>} />
+          <Route path="/customers/:id" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerDetail /></FeatureGate>} />
+          <Route path="/suppliers/:id" element={<FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate>} />
+          <Route path="/reports" element={<FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate>} />
+          <Route path="/warehouse" element={<FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><Warehouse /></FeatureGate>} />
+          <Route path="/sales" element={<FeatureGate flag={FEATURE_FLAGS.SALES}><Sales /></FeatureGate>} />
+          <Route path="/settings" element={<PermissionGate permission="settings"><Settings /></PermissionGate>} />
+        </Route>
+        <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+      </Routes>
+    </SyncStatusContext.Provider>
   );
 }
 

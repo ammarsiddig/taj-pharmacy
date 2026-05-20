@@ -7,6 +7,7 @@
  */
 
 import { Router } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { query, transaction } from '../db.js';
 import { authenticateToken } from '../auth.js';
 import { syncLimiter } from '../middleware/rate-limit.js';
@@ -305,7 +306,14 @@ router.post('/v1/sync/batch', authenticateToken, syncLimiter, async (req, res) =
     });
 
     // Recompute dashboard so PWA shows fresh data immediately
-    recomputeDashboard(tenantId, branchId).catch(err => console.error('[sync] dashboard recompute error:', err.message));
+    recomputeDashboard(tenantId, branchId).catch(err => {
+      console.error('[sync] dashboard recompute error:', err.message);
+      query(
+        `INSERT INTO activity_log (id, tenant_id, branch_id, event_type, entity_type, entity_id, summary, occurred_at, synced_at)
+         VALUES ($1, $2, $3, 'dashboard_recompute_failed', 'system', $4, $5, NOW(), NOW())`,
+        [uuidv4(), tenantId, branchId, branchId, `dashboard_recompute_failed: ${err.message}`]
+      ).catch(() => {});
+    });
 
     res.json({
       success: true,
@@ -418,7 +426,14 @@ router.post('/v1/sync/:table', authenticateToken, syncLimiter, async (req, res) 
     });
 
     // Recompute dashboard so PWA shows fresh data immediately
-    recomputeDashboard(tenantId, branchId).catch(err => console.error('[sync] dashboard recompute error:', err.message));
+    recomputeDashboard(tenantId, branchId).catch(err => {
+      console.error('[sync] dashboard recompute error:', err.message);
+      query(
+        `INSERT INTO activity_log (id, tenant_id, branch_id, event_type, entity_type, entity_id, summary, occurred_at, synced_at)
+         VALUES ($1, $2, $3, 'dashboard_recompute_failed', 'system', $4, $5, NOW(), NOW())`,
+        [uuidv4(), tenantId, branchId, branchId, `dashboard_recompute_failed: ${err.message}`]
+      ).catch(() => {});
+    });
 
     res.json({
       success: true,

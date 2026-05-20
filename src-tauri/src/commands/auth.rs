@@ -4,15 +4,50 @@ use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use rusqlite::params;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use std::path::Path;
+use std::sync::OnceLock;
 
 use crate::db::Database;
 use crate::commands::session_state::{AuthSession, AuthSessionState, resolve_identity};
 
 type HmacSha256 = Hmac<Sha256>;
-// TODO(Phase 3): derive TOKEN_SECRET from a per-installation secret stored in
-// the OS keychain (e.g. tauri-plugin-stronghold or Windows DPAPI) so that
-// tokens from one installation cannot be replayed on another machine.
-const TOKEN_SECRET: &[u8] = b"pms-pharmacy-secret-key-change-in-production";
+
+static TOKEN_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
+
+pub fn init_token_secret(app_data_dir: &Path) {
+    let secret = if let Ok(val) = std::env::var("PMS_TOKEN_SECRET") {
+        let v = val.trim().to_string();
+        if !v.is_empty() {
+            v.into_bytes()
+        } else {
+            load_or_generate_token_secret(app_data_dir)
+        }
+    } else {
+        load_or_generate_token_secret(app_data_dir)
+    };
+    TOKEN_SECRET.set(secret).ok();
+}
+
+fn load_or_generate_token_secret(app_data_dir: &Path) -> Vec<u8> {
+    let secret_file = app_data_dir.join("token_secret.key");
+    if let Ok(bytes) = std::fs::read(&secret_file) {
+        if bytes.len() >= 32 {
+            return bytes;
+        }
+    }
+    use aes_gcm::aead::rand_core::{OsRng, RngCore};
+    let mut secret = vec![0u8; 32];
+    OsRng.fill_bytes(&mut secret);
+    std::fs::write(&secret_file, &secret).expect("فشل حفظ المفتاح السري للرموز");
+    secret
+}
+
+fn get_token_secret() -> &'static [u8] {
+    TOKEN_SECRET
+        .get()
+        .expect("لم يتم تهيئة المفتاح السري للرموز — استدع init_token_secret أولاً")
+        .as_slice()
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserInfo {
@@ -48,9 +83,10 @@ pub struct LoginResponse {
 }
 
 fn generate_token(user_id: &str) -> Result<String, String> {
+    let secret = get_token_secret();
     let expiry = chrono::Utc::now().timestamp() + 2_592_000; // 30 days
     let payload = format!("{}:{}", user_id, expiry);
-    let mut mac = HmacSha256::new_from_slice(TOKEN_SECRET)
+    let mut mac = HmacSha256::new_from_slice(secret)
         .map_err(|e| e.to_string())?;
     mac.update(payload.as_bytes());
     let sig = hex::encode(mac.finalize().into_bytes());
@@ -58,6 +94,7 @@ fn generate_token(user_id: &str) -> Result<String, String> {
 }
 
 fn verify_token(token: &str) -> Result<String, String> {
+    let secret = get_token_secret();
     let parts: Vec<&str> = token.rsplitn(2, '.').collect();
     if parts.len() != 2 {
         return Err("تنسيق الرمز غير صالح".into());
@@ -65,7 +102,7 @@ fn verify_token(token: &str) -> Result<String, String> {
     let sig = parts[0];
     let payload = parts[1];
 
-    let mut mac = HmacSha256::new_from_slice(TOKEN_SECRET)
+    let mut mac = HmacSha256::new_from_slice(secret)
         .map_err(|e| e.to_string())?;
     mac.update(payload.as_bytes());
     let expected_sig = hex::encode(mac.finalize().into_bytes());
@@ -113,7 +150,6 @@ fn get_role_default_permissions(role_name: &str) -> Vec<String> {
 fn get_user_permissions(db: &Database, user_id: &str, role_name: &str) -> Result<Vec<String>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Get user-specific overrides
     let mut stmt = conn
         .prepare("SELECT feature, allowed FROM permissions WHERE user_id = ?1 AND deleted_at IS NULL")
         .map_err(|e| e.to_string())?;
@@ -179,7 +215,7 @@ pub fn login(
                 created_at: row.get(11)?,
                 updated_at: row.get(12)?,
             },
-            row.get::<_, String>(5)?, // password_hash
+            row.get::<_, String>(5)?,
             RoleInfo {
                 id: row.get(13)?,
                 tenant_id: row.get(14)?,
@@ -199,27 +235,23 @@ pub fn login(
         return Err("بيانات الدخول غير صحيحة".into());
     }
 
-    // Verify password
     let parsed_hash = PasswordHash::new(&password_hash)
         .map_err(|_| "بيانات الدخول غير صحيحة".to_string())?;
     Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)
         .map_err(|_| "بيانات الدخول غير صحيحة".to_string())?;
 
-    // Update last_login_at
     let _ = conn.execute(
         "UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?1",
         params![user.id],
     );
 
-    // Drop conn and stmt to release the lock before calling get_user_permissions
     drop(stmt);
     drop(conn);
 
     let token = generate_token(&user.id)?;
     let permissions = get_user_permissions(&db, &user.id, &role.name)?;
 
-    // Populate AuthSession state for use by other commands
     auth_session_state.set(AuthSession {
         user_id: user.id.clone(),
         tenant_id: user.tenant_id.clone(),
@@ -269,7 +301,6 @@ pub fn get_current_user(
     .map_err(|_| "المستخدم غير موجود".into())
 }
 
-/// Clears the current AuthSession (called on logout).
 #[tauri::command]
 pub fn clear_auth_session(
     auth_session_state: State<'_, AuthSessionState>,
@@ -286,7 +317,6 @@ pub fn check_permission(
     let user_id = verify_token(&token)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Get user's role name
     let role_name: String = conn
         .query_row(
             "SELECT r.name FROM users u JOIN roles r ON u.role_id = r.id
@@ -302,7 +332,6 @@ pub fn check_permission(
     Ok(permissions.contains(&feature))
 }
 
-// Emergency password reset — blocked in release builds at runtime.
 #[tauri::command]
 pub fn reset_admin_password(
     db: State<'_, Database>,
@@ -317,7 +346,6 @@ pub fn reset_admin_password(
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Find admin user
     let admin_id: String = conn
         .query_row(
             "SELECT id FROM users WHERE username = 'admin' AND deleted_at IS NULL ORDER BY created_at LIMIT 1",
@@ -326,7 +354,6 @@ pub fn reset_admin_password(
         )
         .map_err(|_| "المستخدم المسؤول غير موجود".to_string())?;
 
-    // Hash new password using Argon2 with random salt
     let salt = SaltString::from_b64(&uuid::Uuid::new_v4().to_string().replace("-", ""))
         .map_err(|e| format!("فشل إنشاء الملح: {}", e))?;
     let argon2 = Argon2::default();
@@ -335,7 +362,6 @@ pub fn reset_admin_password(
         .map_err(|e| format!("فشل تشفير كلمة المرور: {}", e))?
         .to_string();
 
-    // Update password
     conn.execute(
         "UPDATE users SET password_hash = ?1, updated_at = datetime('now') WHERE id = ?2",
         params![&password_hash, &admin_id],

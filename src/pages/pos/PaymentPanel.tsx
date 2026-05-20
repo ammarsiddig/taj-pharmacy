@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Banknote, Smartphone, FileText, Wallet, Tag, Percent, AlertTriangle, Plus } from 'lucide-react';
+import { useMemo, useState, useRef, useEffect, type FormEvent } from 'react';
+import { Banknote, Smartphone, FileText, Wallet, Tag, Percent, AlertTriangle, Plus, X, ChevronDown } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import type { CartItem, PaymentMethodSetting, CustomerRow, CustomerData } from '../../types';
 import Button from '../../components/ui/Button';
@@ -98,6 +98,20 @@ export default function PaymentPanel({
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCust, setNewCust] = useState({ name: '', phone: '' });
   const [addingCustomer, setAddingCustomer] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
+  const selectedCustomer = customers.find(c => c.id === selectedCustomerId) ?? null;
 
   const handleAddCustomer = async (e: FormEvent) => {
     e.preventDefault();
@@ -192,15 +206,52 @@ export default function PaymentPanel({
               <label className="block text-xs text-ink-muted mb-1">{t('customers.title')}</label>
               <input type="text" value={customerSearch} onChange={e => onCustomerSearchChange(e.target.value)} placeholder={t('common.search')}
                 className="app-input mb-2 w-full px-3 py-2 text-sm text-ink-main placeholder:text-ink-placeholder focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" />
-              <select value={selectedCustomerId || ''} onChange={e => onCustomerSelect(e.target.value || null)}
-                className="app-input w-full px-3 py-3 text-sm text-ink-main focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
-                <option value="">{t('common.search')}...</option>
-                {filteredCustomers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name_ar || c.name}  {t('customers.balance')}: {formatMoney(c.current_balance)} / {formatMoney(c.credit_limit)}
-                  </option>
-                ))}
-              </select>
+
+              {/* Custom dropdown replacing native select */}
+              <div className="relative" ref={dropdownRef}>
+                <div
+                  onClick={() => setDropdownOpen(v => !v)}
+                  className={`app-input w-full px-3 py-2.5 text-sm flex items-center justify-between cursor-pointer border border-ivory-border rounded-xl bg-white ${dropdownOpen ? 'border-primary-500 ring-2 ring-primary-100' : ''}`}
+                >
+                  <span className={selectedCustomer ? 'text-ink-main' : 'text-ink-placeholder'}>
+                    {selectedCustomer ? (selectedCustomer.name_ar || selectedCustomer.name) : 'اختر عميلاً...'}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {selectedCustomer && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onCustomerSelect(null); }}
+                        className="p-0.5 rounded hover:bg-ivory-muted text-ink-muted"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                    <ChevronDown size={14} className={`text-ink-muted transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </div>
+
+                {dropdownOpen && (
+                  <div className="absolute start-0 end-0 top-full mt-1 z-40 rounded-xl shadow-[var(--shadow-float)] max-h-48 overflow-y-auto bg-white border border-ivory-border">
+                    {filteredCustomers.length === 0 ? (
+                      <div className="text-xs text-ink-muted text-center py-3">لا يوجد عملاء مطابقون</div>
+                    ) : (
+                      filteredCustomers.map(c => (
+                        <div
+                          key={c.id}
+                          onClick={() => { onCustomerSelect(c.id); setDropdownOpen(false); }}
+                          className={`px-3 py-2 text-sm cursor-pointer hover:bg-primary-50 flex items-center justify-between gap-2 ${c.id === selectedCustomerId ? 'bg-primary-50' : ''}`}
+                        >
+                          <span className="font-medium text-ink-main truncate">{c.name_ar || c.name}</span>
+                          <span className="text-xs text-ink-muted whitespace-nowrap">
+                            {formatMoney(c.current_balance)} / {formatMoney(c.credit_limit)}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
               <button type="button" onClick={() => setShowNewCustomer(!showNewCustomer)}
                 className="mt-1 flex items-center gap-1 text-xs text-primary-600 hover:underline">
                 <Plus size={12} /> {t('customers.addCustomer')}

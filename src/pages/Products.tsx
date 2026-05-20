@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Settings2, ShoppingCart } from 'lucide-react';
+import { Settings2, ShoppingCart, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import * as api from '../api';
 import type { Product, ProductFormData, ProductImportResult } from '../types';
 import Button from '../components/ui/Button';
@@ -12,6 +12,8 @@ import UnitManagementModal from '../components/products/UnitManagementModal';
 import ProductPanel from '../components/products/ProductPanel';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { useLicense } from '../hooks/useLicense';
+
+const PAGE_SIZE = 50;
 
 export default function Products() {
   const { t } = useTranslation();
@@ -30,6 +32,10 @@ export default function Products() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null);
   const showToast = (type: 'success' | 'danger', msg: string) => setToast({ msg, type });
+
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -128,6 +134,68 @@ export default function Products() {
     return <Badge variant="success">{stock}</Badge>;
   };
 
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      if (sortDir === 'asc') {
+        setSortDir('desc');
+      } else {
+        setSortKey(null);
+        setSortDir('asc');
+      }
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sortIcon = (key: string) => {
+    if (sortKey === key) {
+      return sortDir === 'asc'
+        ? <ChevronUp size={14} className="inline ms-1" />
+        : <ChevronDown size={14} className="inline ms-1" />;
+    }
+    return <ChevronsUpDown size={14} className="inline ms-1 text-ink-placeholder" />;
+  };
+
+  const sortedProducts = useMemo(() => {
+    if (!sortKey) return products;
+    return [...products].sort((a, b) => {
+      const va = (a as Record<string, unknown>)[sortKey];
+      const vb = (b as Record<string, unknown>)[sortKey];
+
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+
+      let cmp: number;
+      if (typeof va === 'number' && typeof vb === 'number') {
+        cmp = va - vb;
+      } else {
+        cmp = String(va).localeCompare(String(vb), 'ar', { sensitivity: 'base', numeric: true });
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [products, sortKey, sortDir]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sortedProducts.length]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PAGE_SIZE));
+  const paginatedProducts = sortedProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const firstItem = (currentPage - 1) * PAGE_SIZE + 1;
+  const lastItem = Math.min(currentPage * PAGE_SIZE, sortedProducts.length);
+
+  const pageButtons: number[] = [];
+  if (totalPages <= 5) {
+    for (let i = 1; i <= totalPages; i++) pageButtons.push(i);
+  } else {
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, currentPage + 2);
+    for (let i = start; i <= end; i++) pageButtons.push(i);
+  }
+
   return (
     <div className="flex h-full gap-6">
       {/* Main content */}
@@ -204,18 +272,42 @@ export default function Products() {
               <thead>
                 <tr>
                   <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.barcode')}</th>
-                  <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.tradeName')}</th>
+                  <th
+                    className="px-4 py-2.5 text-right font-medium text-ink-muted cursor-pointer hover:text-ink-main select-none"
+                    onClick={() => handleSort('trade_name')}
+                  >
+                    {t('products.tradeName')}
+                    {sortIcon('trade_name')}
+                  </th>
                   <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.activeIngredient')}</th>
-                  <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.category')}</th>
-                  <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.salePrice')}</th>
-                  <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.stock')}</th>
+                  <th
+                    className="px-4 py-2.5 text-right font-medium text-ink-muted cursor-pointer hover:text-ink-main select-none"
+                    onClick={() => handleSort('category')}
+                  >
+                    {t('products.category')}
+                    {sortIcon('category')}
+                  </th>
+                  <th
+                    className="px-4 py-2.5 text-right font-medium text-ink-muted cursor-pointer hover:text-ink-main select-none"
+                    onClick={() => handleSort('sale_price')}
+                  >
+                    {t('products.salePrice')}
+                    {sortIcon('sale_price')}
+                  </th>
+                  <th
+                    className="px-4 py-2.5 text-right font-medium text-ink-muted cursor-pointer hover:text-ink-main select-none"
+                    onClick={() => handleSort('total_stock')}
+                  >
+                    {t('products.stock')}
+                    {sortIcon('total_stock')}
+                  </th>
                   <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.minStock')}</th>
                   <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.status')}</th>
                   <th className="px-4 py-2.5 text-right font-medium text-ink-muted">{t('products.actions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {products.map((p) => (
+                {paginatedProducts.map((p) => (
                   <tr
                     key={p.id}
                     className="group border-b border-ivory-border bg-white transition-colors"
@@ -270,9 +362,40 @@ export default function Products() {
           </div>
         )}
 
-        {products.length > 0 && (
-          <div className="mt-3 text-xs text-ink-muted">
-            {products.length} {t('products.title')}
+        {sortedProducts.length > PAGE_SIZE && (
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs text-ink-muted">
+              عرض {firstItem}–{lastItem} من {sortedProducts.length} منتج
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="rounded-lg border border-ivory-border p-1.5 text-ink-muted hover:bg-ivory-muted disabled:opacity-50"
+              >
+                <ChevronRight size={14} />
+              </button>
+              {pageButtons.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                    p === currentPage
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : 'border-ivory-border text-ink-muted hover:bg-ivory-muted'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-lg border border-ivory-border p-1.5 text-ink-muted hover:bg-ivory-muted disabled:opacity-50"
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
           </div>
         )}
       </div>

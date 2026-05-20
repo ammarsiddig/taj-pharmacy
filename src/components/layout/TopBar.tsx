@@ -5,6 +5,21 @@ import { useAuth } from '../../hooks/useAuth';
 import { getSystemAlerts, getBranchId, dismissSystemAlert, undismissAllSystemAlerts, checkPendingUpdate } from '../../api';
 import { installUpdate } from '../../api/system';
 import type { NotificationRow } from '../../types';
+import type { JSX } from 'react';
+import {
+  Package,
+  AlertTriangle,
+  Clock,
+  Ban,
+  DollarSign,
+  Calendar,
+  Lock,
+  XCircle,
+  Timer,
+  ClipboardList,
+  ArrowUpCircle,
+  Bell,
+} from 'lucide-react';
 import PharmacySwitcher from '../PharmacySwitcher';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -21,18 +36,19 @@ const SEVERITY_DOT: Record<string, string> = {
   success: 'bg-green-500',
 };
 
-const TYPE_ICONS: Record<string, string> = {
-  low_stock: '📦',
-  out_of_stock: '⚠️',
-  expiring_soon: '⏰',
-  expired: '🚫',
-  overdue_payables: '💰',
-  supplier_overdue: '📅',
-  license_suspended: '🔒',
-  license_expired: '❌',
-  license_expiring_7: '⏳',
-  license_expiring_30: '📋',
-  update_available: '⬆️',
+const ALERT_ICONS: Record<string, JSX.Element> = {
+  low_stock: <Package size={14} className="text-status-warning" />,
+  out_of_stock: <AlertTriangle size={14} className="text-status-danger" />,
+  expiring_soon: <Clock size={14} className="text-status-warning" />,
+  expired: <Ban size={14} className="text-status-danger" />,
+  overdue_payables: <DollarSign size={14} className="text-status-warning" />,
+  supplier_overdue: <Calendar size={14} className="text-status-warning" />,
+  license_suspended: <Lock size={14} className="text-status-danger" />,
+  license_expired: <XCircle size={14} className="text-status-danger" />,
+  license_expiring_7: <Timer size={14} className="text-status-warning" />,
+  license_expiring_30: <ClipboardList size={14} className="text-ink-muted" />,
+  update_available: <ArrowUpCircle size={14} className="text-primary-600" />,
+  __default: <Bell size={14} className="text-ink-muted" />,
 };
 
 const CATEGORY_GROUPS: { label: string; labelAr: string; types: string[] }[] = [
@@ -190,15 +206,7 @@ export default function TopBar() {
 
   return (
     <header className="h-16 bg-white/92 backdrop-blur-sm border-b border-ivory-border flex items-center px-5 shrink-0 shadow-[0_8px_24px_-20px_rgb(15_23_42_/_0.35)] z-[60] relative">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <img src="/taj-logo.svg" alt="TAJ Pharmacy" className="h-8 w-8 object-contain" />
-          <span className="text-base font-bold text-brand-600">TAJ Pharmacy</span>
-        </div>
-        <PharmacySwitcher />
-      </div>
-
-      <div className="me-auto flex items-center gap-3">
+      <div className="flex items-center gap-3">
         {/* Notification bell */}
         <div className="relative" ref={dropRef}>
           <button
@@ -248,7 +256,7 @@ export default function TopBar() {
                           className={`group px-4 py-3 border-b last:border-0 ${alert.reference_type ? 'cursor-pointer hover:brightness-95' : ''} ${SEVERITY_COLORS[alert.severity] || ''} ${readIds.has(alert.id) ? 'opacity-60' : ''}`}
                         >
                           <div className="flex items-start gap-2">
-                            <span className="text-base leading-none mt-0.5 flex-shrink-0">{TYPE_ICONS[alert.notification_type] || '🔔'}</span>
+                            <span className="flex-shrink-0 mt-0.5">{ALERT_ICONS[alert.notification_type] ?? ALERT_ICONS['__default']}</span>
                             <div
                               className="flex-1 min-w-0"
                               onClick={() => handleAlertClick(alert)}
@@ -315,6 +323,14 @@ export default function TopBar() {
             {t('auth.logout')}
           </button>
         </div>
+      </div>
+
+      <div className="ms-auto flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <img src="/taj-logo.svg" alt="TAJ Pharmacy" className="h-8 w-8 object-contain" />
+          <span className="text-base font-bold text-brand-600">TAJ Pharmacy</span>
+        </div>
+        <PharmacySwitcher />
       </div>
     </header>
   );

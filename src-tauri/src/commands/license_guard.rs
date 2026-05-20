@@ -1,15 +1,7 @@
-/// License enforcement helpers.
-/// Call these at the start of any mutation command to enforce license rules.
-///
-/// All functions fail-open: if the tenants row cannot be read they return Ok(())
-/// so a DB error doesn't accidentally lock users out of the app.
-
 use rusqlite::params;
 
 const GRACE_DAYS: i64 = 7;
 
-/// Block mutations when the license has expired and the grace window has closed.
-/// Returns Ok(()) while the license is active or still inside the 7-day grace period.
 pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<(), String> {
     let result = conn.query_row(
         "SELECT subscription_status, subscription_expiry
@@ -19,7 +11,7 @@ pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<()
     );
 
     let (status, expiry) = match result {
-        Err(_) => return Ok(()), // fail-open
+        Err(e) => return Err(format!("license_check_failed: {}", e)),
         Ok(v) => v,
     };
 
@@ -34,7 +26,7 @@ pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<()
         let today_date = NaiveDate::parse_from_str(&today_str, "%Y-%m-%d");
 
         if let (Ok(e), Ok(t)) = (exp_date, today_date) {
-            let diff = (e - t).num_days(); // negative = expired
+            let diff = (e - t).num_days();
             if diff < -GRACE_DAYS {
                 return Err(
                     "انتهت صلاحية ترخيصك وانتهت فترة السماح. \
@@ -45,7 +37,6 @@ pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<()
         }
     }
 
-    // Explicitly block expired records that have no usable expiry date context.
     if status == "expired" {
         return Err(
             "انتهت صلاحية ترخيصك والنظام الآن في وضع القراءة فقط. \
@@ -57,8 +48,6 @@ pub fn require_active(conn: &rusqlite::Connection, tenant_id: &str) -> Result<()
     Ok(())
 }
 
-/// Block a command if the tenant's feature_flags do not include `flag`.
-/// feature_flags == 0 means all features are enabled (seed/basic state).
 pub fn require_feature(
     conn: &rusqlite::Connection,
     tenant_id: &str,
@@ -71,7 +60,7 @@ pub fn require_feature(
     );
 
     match result {
-        Err(_) => Ok(()), // fail-open
+        Err(e) => Err(format!("license_check_failed: {}", e)),
         Ok(flags) => {
             if flags == 0 || (flags & flag) != 0 {
                 Ok(())
@@ -86,7 +75,6 @@ pub fn require_feature(
     }
 }
 
-/// Prevent creating a new branch when the plan's branch cap has been reached.
 pub fn check_branch_limit(conn: &rusqlite::Connection, tenant_id: &str) -> Result<(), String> {
     let result = conn.query_row(
         "SELECT
@@ -98,7 +86,7 @@ pub fn check_branch_limit(conn: &rusqlite::Connection, tenant_id: &str) -> Resul
     );
 
     match result {
-        Err(_) => Ok(()), // fail-open
+        Err(e) => Err(format!("license_check_failed: {}", e)),
         Ok((count, max)) => {
             if count >= max {
                 Err(format!(
@@ -112,7 +100,6 @@ pub fn check_branch_limit(conn: &rusqlite::Connection, tenant_id: &str) -> Resul
     }
 }
 
-/// Prevent creating a new user when the plan's user cap has been reached.
 pub fn check_user_limit(conn: &rusqlite::Connection, tenant_id: &str) -> Result<(), String> {
     let result = conn.query_row(
         "SELECT
@@ -124,7 +111,7 @@ pub fn check_user_limit(conn: &rusqlite::Connection, tenant_id: &str) -> Result<
     );
 
     match result {
-        Err(_) => Ok(()), // fail-open
+        Err(e) => Err(format!("license_check_failed: {}", e)),
         Ok((count, max)) => {
             if count >= max {
                 Err(format!(

@@ -3,7 +3,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::db::Database;
-use crate::commands::{license_guard, guard, audit};
+use crate::commands::{license_guard, guard, audit, cloud_sync};
 use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 const FLAG_WAREHOUSE: i64 = 8;
@@ -65,7 +65,13 @@ pub fn transfer_stock(
     );
     match xfer {
         Err(e) => { conn.execute("ROLLBACK", []).ok(); Err(e) }
-        Ok(()) => { conn.execute("COMMIT", []).map_err(|e| e.to_string())?; Ok(()) }
+        Ok(()) => {
+            conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
+            if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "warehouse_transfer") {
+                log::warn!("cloud sync enqueue failed after transfer_stock: {}", e);
+            }
+            Ok(())
+        }
     }
 }
 

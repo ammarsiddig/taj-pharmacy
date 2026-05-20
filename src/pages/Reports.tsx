@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ShoppingCart, Package, Clock, TrendingUp, Truck, Users, Scale, Receipt } from 'lucide-react';
 import Toast from '../components/ui/Toast';
 import SalesTab from './reports/SalesTab';
 import InventoryTab from './reports/InventoryTab';
@@ -17,15 +18,15 @@ export default function Reports() {
   const [tab, setTab] = useState<Tab>('sales');
   const [error, setError] = useState('');
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'sales', label: t('reports.sales') },
-    { key: 'inventory', label: t('reports.inventory') },
-    { key: 'expiry', label: t('reports.expiry') },
-    { key: 'profitLoss', label: t('reports.profitLoss') },
-    { key: 'supplierAging', label: t('reports.supplierAging') },
-    { key: 'customerCredit', label: t('reports.customerCredit') },
-    { key: 'balanceSheet', label: t('reports.balanceSheetTab') },
-    { key: 'taxReport', label: t('reports.taxReport') },
+  const tabs: { key: Tab; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+    { key: 'sales',          label: t('reports.sales'),           icon: ShoppingCart },
+    { key: 'inventory',      label: t('reports.inventory'),        icon: Package },
+    { key: 'expiry',         label: t('reports.expiry'),           icon: Clock },
+    { key: 'profitLoss',     label: t('reports.profitLoss'),       icon: TrendingUp },
+    { key: 'supplierAging',  label: t('reports.supplierAging'),    icon: Truck },
+    { key: 'customerCredit', label: t('reports.customerCredit'),   icon: Users },
+    { key: 'balanceSheet',   label: t('reports.balanceSheetTab'),  icon: Scale },
+    { key: 'taxReport',      label: t('reports.taxReport'),        icon: Receipt },
   ];
 
   return (
@@ -37,19 +38,25 @@ export default function Reports() {
       </div>
 
       <div className="app-panel flex flex-wrap gap-2 p-2">
-        {tabs.map((tb) => (
-          <button
-            key={tb.key}
-            onClick={() => setTab(tb.key)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              tab === tb.key
-                ? 'bg-primary-600 text-white shadow-[var(--shadow-soft)]'
-                : 'text-ink-muted hover:bg-surface-secondary hover:text-ink-main'
-            }`}
-          >
-            {tb.label}
-          </button>
-        ))}
+        {tabs.map((tb) => {
+          const Icon = tb.icon;
+          return (
+            <button
+              key={tb.key}
+              onClick={() => setTab(tb.key)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                tab === tb.key
+                  ? 'bg-primary-600 text-white shadow-[var(--shadow-soft)]'
+                  : 'text-ink-muted hover:bg-surface-secondary hover:text-ink-main'
+              }`}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Icon size={14} />
+                {tb.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'sales' && <SalesTab onError={setError} />}

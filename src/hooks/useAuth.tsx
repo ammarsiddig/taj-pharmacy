@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { AuthState } from '../types';
 import { login as apiLogin, getAuthState, setAuthState, clearAuthState } from '../api';
+import { invoke } from '../lib/tauri';
 
 interface AuthContextType extends AuthState {
   login: (username: string, password: string) => Promise<void>;
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    invoke('clear_auth_session').catch(() => {});
     clearAuthState();
     setState({
       user: null,

@@ -323,7 +323,7 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
                 <div>
                   <div className="font-bold text-ink-main text-base mb-1">صيدلية جديدة</div>
-                  <div className="text-xs text-ink-muted">أنشئ صيدلية جديدة وابدأ من الصفر</div>
+                  <div className="text-xs text-ink-muted leading-relaxed">لم تستخدم TAJ من قبل — ابدأ من الصفر بدون بيانات سابقة</div>
                 </div>
                 <ArrowRight size={16} className="text-primary-400 group-hover:text-primary-600 transition-colors" />
               </button>
@@ -339,7 +339,7 @@ export default function Onboarding({ onComplete }: Props) {
                 </div>
                 <div>
                   <div className="font-bold text-ink-main text-base mb-1">استعادة صيدلية موجودة</div>
-                  <div className="text-xs text-ink-muted">استرجع بياناتك على جهاز جديد</div>
+                  <div className="text-xs text-ink-muted leading-relaxed">لديك حساب TAJ وتريد نقل بياناتك إلى جهاز جديد أو فرع آخر</div>
                 </div>
                 <ArrowRight size={16} className="text-teal-400 group-hover:text-teal-600 transition-colors" />
               </button>

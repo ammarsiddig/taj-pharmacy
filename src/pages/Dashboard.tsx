@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [backupStatus, setBackupStatus] = useState<api.BackupLogRow | null>(null);
   const [backingUp, setBackingUp] = useState(false);
+  const [backupError, setBackupError] = useState('');
   const isRtl = i18n.dir() === 'rtl';
   const salesTrend = useMemo(() => (data?.last_7_days_sales ?? []).map((d) => d.total), [data?.last_7_days_sales]);
 
@@ -44,6 +45,7 @@ export default function Dashboard() {
   return (
     <div className="dashboard-readable space-y-6">
       {error && <Toast message={error} type="danger" onClose={() => setError('')} />}
+      {backupError && <Toast message={backupError} type="danger" onClose={() => setBackupError('')} />}
 
       <div>
         <h2 className="text-2xl font-bold text-ink-main">{t('dashboard.title')}</h2>
@@ -51,7 +53,10 @@ export default function Dashboard() {
       </div>
 
       {/* Getting Started Checklist — TASK-506 */}
-      {data && data.today_sales_count === 0 && data.today_sales_total === 0 && (
+      {data && data.today_sales_count === 0 && data.today_sales_total === 0
+        && (data.month_net_profit === 0 || data.month_net_profit === null)
+        && (data.customer_receivables === 0 || data.customer_receivables === null)
+        && (
         <GettingStarted />
       )}
 
@@ -91,11 +96,14 @@ export default function Dashboard() {
         backingUp={backingUp}
         onBackupNow={async () => {
           setBackingUp(true);
+          setBackupError('');
           try {
             await api.uploadBackupToCloud(api.getUserId());
             const updated = await api.getAutoBackupStatus();
             setBackupStatus(updated);
-          } catch { /* ignore */ }
+          } catch {
+            setBackupError('فشل رفع النسخة الاحتياطية. تحقق من إعدادات المزامنة.');
+          }
           setBackingUp(false);
         }}
         rtl={isRtl}

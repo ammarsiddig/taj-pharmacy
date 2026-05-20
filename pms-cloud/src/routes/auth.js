@@ -517,7 +517,7 @@ router.put('/auth/password', requireJwt, async (req, res) => {
     }
 
     const ownerResult = await query(
-      'SELECT password_hash FROM owners WHERE tenant_id = $1',
+      'SELECT id, password_hash FROM owners WHERE tenant_id = $1',
       [req.tenantId]
     );
     if (ownerResult.rows.length === 0) {
@@ -530,12 +530,17 @@ router.put('/auth/password', requireJwt, async (req, res) => {
     }
 
     const passwordHash = bcrypt.hashSync(new_password, BCRYPT_ROUNDS);
+    const ownerId = ownerResult.rows[0].id;
     await query(
       'UPDATE owners SET password_hash = $1 WHERE tenant_id = $2',
       [passwordHash, req.tenantId]
     );
+    await query(
+      'DELETE FROM refresh_tokens WHERE owner_id = $1',
+      [ownerId]
+    );
 
-    res.json({ ok: true });
+    res.json({ ok: true, message: 'Password updated. Please log in again on all devices.' });
   } catch (err) {
     console.error('[auth] password update error:', err);
     res.status(500).json({ error: 'Internal server error' });

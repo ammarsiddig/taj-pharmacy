@@ -10,12 +10,6 @@ import { getTenantId } from './core';
 
 // ---
 
-export async function login(username: string, password: string) {
-  return invoke<{ token: string; user: User; role: Role; permissions: string[]; tenant_id: string }>(
-    'login', { username, password, tenantId: getTenantId() }
-  );
-}
-
 export async function getCurrentUser(token: string): Promise<User> {
   return invoke('get_current_user', { token });
 }

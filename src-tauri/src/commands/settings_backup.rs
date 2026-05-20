@@ -11,6 +11,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::Manager;
 use tauri::State;
@@ -22,8 +23,49 @@ use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 // ─── Backup System ───
 
-const CLOUD_CONFIG_SECRET: &[u8] = b"PMS-PHARMACY-2026-CLOUD-CONFIG";
-const CLOUD_BACKUP_SECRET: &[u8] = b"PMS-PHARMACY-2026-CLOUD-BACKUP";
+static CLOUD_CONFIG_SECRET: OnceLock<[u8; 32]> = OnceLock::new();
+static CLOUD_BACKUP_SECRET: OnceLock<[u8; 32]> = OnceLock::new();
+
+pub fn init_backup_secrets(app_data_dir: &Path) {
+    let config_secret = load_or_generate_secret(app_data_dir, "PMS_CLOUD_CONFIG_SECRET", "backup_config_secret.key");
+    let backup_secret = load_or_generate_secret(app_data_dir, "PMS_CLOUD_BACKUP_SECRET", "backup_backup_secret.key");
+    CLOUD_CONFIG_SECRET.set(config_secret).ok();
+    CLOUD_BACKUP_SECRET.set(backup_secret).ok();
+}
+
+fn load_or_generate_secret(app_data_dir: &Path, env_var: &str, filename: &str) -> [u8; 32] {
+    if let Ok(val) = std::env::var(env_var) {
+        let v = val.trim().to_string();
+        if !v.is_empty() {
+            let mut hasher = Sha256::new();
+            hasher.update(v.as_bytes());
+            let digest = hasher.finalize();
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&digest[..32]);
+            return key;
+        }
+    }
+    let secret_file = app_data_dir.join(filename);
+    if let Ok(bytes) = std::fs::read(&secret_file) {
+        if bytes.len() >= 32 {
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&bytes[..32]);
+            return key;
+        }
+    }
+    let mut key = [0u8; 32];
+    OsRng.fill_bytes(&mut key);
+    std::fs::write(&secret_file, &key).expect("فشل حفظ المفتاح السري للنسخ الاحتياطي");
+    key
+}
+
+fn get_cloud_config_secret() -> &'static [u8; 32] {
+    CLOUD_CONFIG_SECRET.get().expect("لم يتم تهيئة أسرار النسخ الاحتياطي")
+}
+
+fn get_cloud_backup_secret() -> &'static [u8; 32] {
+    CLOUD_BACKUP_SECRET.get().expect("لم يتم تهيئة أسرار النسخ الاحتياطي")
+}
 
 #[derive(Debug, Serialize)]
 pub struct BackupLogRow {
@@ -158,7 +200,7 @@ fn decrypt_payload(key: &[u8; 32], header: &[u8], payload: &[u8]) -> Result<Vec<
 }
 
 fn encrypt_secret_for_storage(tenant_id: &str, secret: &str) -> Result<String, String> {
-    let key = derive_key(&[CLOUD_CONFIG_SECRET, tenant_id.as_bytes()]);
+    let key = derive_key(&[get_cloud_config_secret(), tenant_id.as_bytes()]);
     let encrypted = encrypt_payload(&key, b"PMSCFG1", secret.as_bytes())?;
     Ok(base64::engine::general_purpose::STANDARD.encode(encrypted))
 }
@@ -170,18 +212,18 @@ fn decrypt_secret_from_storage(tenant_id: &str, encrypted: &str) -> Result<Strin
     let payload = base64::engine::general_purpose::STANDARD
         .decode(encrypted)
         .map_err(|_| "رمز السحابة المخزن غير صالح".to_string())?;
-    let key = derive_key(&[CLOUD_CONFIG_SECRET, tenant_id.as_bytes()]);
+    let key = derive_key(&[get_cloud_config_secret(), tenant_id.as_bytes()]);
     let decrypted = decrypt_payload(&key, b"PMSCFG1", &payload)?;
     String::from_utf8(decrypted).map_err(|_| "الرمز المخزن ليس UTF-8 صالح".to_string())
 }
 
 pub(crate) fn encrypt_backup_bytes(tenant_id: &str, cloud_token: &str, bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let key = derive_key(&[CLOUD_BACKUP_SECRET, tenant_id.as_bytes(), cloud_token.as_bytes()]);
+    let key = derive_key(&[get_cloud_backup_secret(), tenant_id.as_bytes(), cloud_token.as_bytes()]);
     encrypt_payload(&key, b"PMSBK1", bytes)
 }
 
 fn decrypt_backup_bytes(tenant_id: &str, cloud_token: &str, bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let key = derive_key(&[CLOUD_BACKUP_SECRET, tenant_id.as_bytes(), cloud_token.as_bytes()]);
+    let key = derive_key(&[get_cloud_backup_secret(), tenant_id.as_bytes(), cloud_token.as_bytes()]);
     decrypt_payload(&key, b"PMSBK1", bytes)
 }
 

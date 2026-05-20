@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Banknote, History, LogOut, RotateCcw, ReceiptText } from 'lucide-react';
+import { Search, Banknote, History, LogOut, RotateCcw, ReceiptText, Keyboard } from 'lucide-react';
 import * as api from '../api';
 import type { PosSession, PosProduct, CartItem, Sale, PaymentMethodSetting, CustomerRow } from '../types';
 import Button from '../components/ui/Button';
@@ -668,7 +668,7 @@ export default function POS() {
             type="text"
             value={searchQuery}
             onChange={e => { setSearchQuery(e.target.value); setHighlightedResultIdx(-1); }}
-            placeholder={t('pos.searchProduct')}
+            placeholder={`${t('pos.searchProduct')} — F3`}
             className="app-input w-full ps-10 pe-3 py-3 text-sm text-ink-main placeholder:text-ink-placeholder focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
           />
           {searchResults.length > 0 && (
@@ -726,7 +726,8 @@ export default function POS() {
           formatMoney={api.formatMoney}
         />
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-ink-placeholder">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-ink-muted">
+          <Keyboard size={11} className="text-ink-muted" />
           <span>F12: {t('pos.save')}</span>
           <span>F3: {t('pos.focusSearch')}</span>
           <span>F6/F7/F8: {t('pos.paymentMethod')}</span>

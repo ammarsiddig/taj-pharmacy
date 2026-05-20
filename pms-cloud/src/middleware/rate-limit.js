@@ -22,3 +22,11 @@ export const syncLimiter = rateLimit({
   keyGenerator: (req, res) => req.tenantId || ipKeyGenerator(req, res),
   message: { error: 'Sync rate limit exceeded. Slow down.' },
 });
+
+export const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Try again in 15 minutes.' },
+});

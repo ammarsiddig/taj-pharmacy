@@ -41,7 +41,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-ivory-app flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="bg-ivory-surface rounded-sm shadow-lg p-8 border border-ivory-border">
+        <div className="bg-ivory-surface rounded-2xl shadow-lg p-8 border border-ivory-border">
           {/* Logo */}
           <div className="text-center mb-8">
             <img src="/taj-logo.svg" alt="TAJ Pharmacy" className="mx-auto mb-4 h-28 w-28 object-contain" />
@@ -70,7 +70,7 @@ export default function Login() {
             />
 
             {error && (
-              <div className="text-sm text-status-danger bg-status-danger-bg px-3 py-2 rounded-sm">
+              <div className="text-sm text-status-danger bg-status-danger-bg px-3 py-2 rounded-xl">
                 {error}
               </div>
             )}

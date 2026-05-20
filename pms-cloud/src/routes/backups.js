@@ -9,7 +9,6 @@ const router = Router();
 const DATA_DIR = process.env.PMS_DATA_DIR || '/data';
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 
-// Ensure backups directory exists
 if (!fs.existsSync(BACKUPS_DIR)) {
   fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 }
@@ -29,14 +28,20 @@ router.post('/v1/backups', requireAuthOrJwt, (req, res) => {
     fs.mkdirSync(tenantDir, { recursive: true });
   }
 
-  const filePath = path.join(tenantDir, `${backupId}.bak`);
+  const tmpPath = path.join(tenantDir, `${backupId}.tmp`);
+  const finalPath = path.join(tenantDir, `${backupId}.bak`);
   const chunks = [];
   let totalSize = 0;
-  const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+  const MAX_SIZE = 100 * 1024 * 1024;
+
+  const cleanupTmp = () => {
+    try { fs.unlinkSync(tmpPath); } catch {}
+  };
 
   req.on('data', (chunk) => {
     totalSize += chunk.length;
     if (totalSize > MAX_SIZE) {
+      cleanupTmp();
       req.destroy();
       return;
     }
@@ -54,15 +59,15 @@ router.post('/v1/backups', requireAuthOrJwt, (req, res) => {
       }
 
       const buffer = Buffer.concat(chunks);
-      fs.writeFileSync(filePath, buffer);
+      fs.writeFileSync(tmpPath, buffer);
 
-      // Store metadata in PostgreSQL
+      fs.renameSync(tmpPath, finalPath);
+
       await query(`
         INSERT INTO backups (id, tenant_id, file_size, file_path, created_at)
         VALUES ($1, $2, $3, $4, NOW())
-      `, [backupId, tenantId, totalSize, filePath]);
+      `, [backupId, tenantId, totalSize, finalPath]);
 
-      // Keep only last 10 backups per tenant
       const oldResult = await query(`
         SELECT id, file_path FROM backups
         WHERE tenant_id = $1
@@ -84,12 +89,14 @@ router.post('/v1/backups', requireAuthOrJwt, (req, res) => {
         created_at: new Date().toISOString(),
       });
     } catch (err) {
+      cleanupTmp();
       console.error('[backups] Error:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
 
   req.on('error', (err) => {
+    cleanupTmp();
     console.error('[backups] Upload error:', err);
     res.status(500).json({ error: 'Upload failed' });
   });

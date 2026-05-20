@@ -3,13 +3,21 @@ import type {
   AuditLogRow, AuditLogEntry, LicenseInfo, LicenseHistoryRow,
   OnboardingStatus, OnboardingData, ActivateLicenseCloudData, ActivateLicenseCloudResult,
   RenewLicenseCloudData, RenewLicenseCloudResult,
-  CloudRemoteConfig,
+  CloudRemoteConfig, User, Role,
   AssetCategory, AssetCategoryData, AssetRow, AssetData,
   DisposeAssetData, DepreciationEntry, DepreciationRunResult, AssetSummary,
   PharmacyConfig, PharmacyConfigInput,
   RecoverResult, RestoreResult,
 } from '../types';
 import { getTenantId } from './core';
+
+// ---
+
+export async function login(username: string, password: string) {
+  return invoke<{ token: string; user: User; role: Role; permissions: string[]; tenant_id: string }>(
+    'login', { username, password, tenantId: getTenantId() }
+  );
+}
 
 // ---
 
