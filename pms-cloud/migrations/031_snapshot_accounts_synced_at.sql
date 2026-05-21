@@ -7,6 +7,7 @@ ALTER TABLE snapshot_accounts ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ DEF
 
 ALTER TABLE snapshot_account_transactions ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE snapshot_account_transactions ADD COLUMN IF NOT EXISTS branch_id TEXT NOT NULL DEFAULT 'main-branch';
+ALTER TABLE snapshot_account_transactions ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;
 
 -- Rebuild primary keys to include branch_id (matching all other snapshot tables)
 ALTER TABLE snapshot_accounts DROP CONSTRAINT IF EXISTS snapshot_accounts_pkey;

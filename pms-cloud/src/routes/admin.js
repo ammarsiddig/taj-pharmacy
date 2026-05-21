@@ -32,7 +32,7 @@ router.get('/admin/me', requireAdmin, async (req, res) => {
 
 router.get('/admin/overview', requireAdmin, async (req, res) => {
   try {
-    const [[stats], recentRenewals, expiringSoon] = await Promise.all([
+    const [stats, recentRenewals, expiringSoon] = await Promise.all([
       query(`SELECT
         (SELECT COUNT(*) FROM tenants WHERE deleted_at IS NULL) AS total_tenants,
         (SELECT COUNT(*) FROM tenants WHERE deleted_at IS NULL AND is_suspended = false AND (expires_at IS NULL OR expires_at > NOW())) AS active_tenants,
