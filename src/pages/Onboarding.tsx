@@ -175,7 +175,15 @@ export default function Onboarding({ onComplete }: Props) {
       setActivationMessage('تم تفعيل الترخيص وربط الحساب السحابي بنجاح');
     } catch (err: unknown) {
       setActivationState('error');
-      const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : 'فشل تفعيل الترخيص';
+      const raw = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+      const msg =
+        raw.includes('already exists') || raw.includes('already registered')
+          ? 'هذا البريد الإلكتروني مسجل لصيدلية أخرى. استخدم بريدًا مختلفًا أو تواصل مع الدعم.'
+          : raw.includes('Invalid or already used')
+          ? 'مفتاح الترخيص غير صالح أو تم استخدامه من قبل.'
+          : raw.includes('expired')
+          ? 'مفتاح الترخيص منتهي الصلاحية. تواصل مع الدعم للتجديد.'
+          : raw || 'فشل تفعيل الترخيص. تحقق من المفتاح والبريد الإلكتروني وحاول مجدداً.';
       setActivationMessage(msg);
     } finally {
       setActivating(false);
