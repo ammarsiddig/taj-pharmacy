@@ -2400,6 +2400,514 @@ Expected: zero matches — none of these snapshots exist yet.
 
 ---
 
+### Phase 8 — Marketing Website at taj.systems
+
+> **Why this phase exists.** Right now `taj.systems/` serves the Owner PWA login page. There is no public-facing marketing site, no visible Download button, no pricing, no feature explanations. Anyone hitting `taj.systems` sees a login form for a product they don't have. The download URL `taj.systems/download/TAJ-Pharmacy-Setup.exe` works but is invisible — only people who know the path can find it. This is the single biggest blocker between "we have a product" and "people can find and install it."
+>
+> **Strategy.** Move the Owner PWA to `app.taj.systems` and turn `taj.systems` into a real SaaS marketing site (think Stripe / Linear / Notion aesthetic, in Arabic). Build it in two phases: Phase 8.1 is the functional foundation — Home, Download, Contact — enough for a pharmacy to discover the product, learn what it does, and download it. Phase 8.2 fills out the rest (Features, Pricing, Docs, About, Blog) over time. Until 8.2 ships, those routes return a styled "Coming Soon" page that links back to Home.
+>
+> **Tech choice.** Static HTML + Tailwind CSS via CDN. No build step, no npm, no Vite. Reason: Ammar (non-technical solo dev) must be able to edit copy without running tooling, and SEO needs real `<head>` tags. Can migrate to Astro later if blog scope grows. Files live in `pms-cloud/marketing/` and are served by Nginx directly (no Express, no Docker).
+>
+> **URL split after Phase 8.1.**
+>
+> | Domain | Purpose | Tech |
+> | --- | --- | --- |
+> | `taj.systems` | Public marketing site | Static HTML + Tailwind |
+> | `app.taj.systems` | Owner PWA (login + dashboard) | React PWA (current `web-dist`) |
+> | `pharmacy.taj.systems` | Cloud API (already exists, unchanged) | Express + Postgres |
+> | `taj.systems/mgmt` | Admin PWA (Ammar only — same as current) | Stays under main domain |
+>
+> **Design system reuse.** Marketing site uses the exact same tokens as the desktop app: primary `#0FA3A6`, brand `#1C5F6F`, ink `#0D2023`, ivory background `#F4FBFB`, Tajawal font. RTL Arabic-first, mobile-responsive. This keeps brand consistency: a pharmacist going from the website to the app sees the same colors and feel.
+
+### TASK-800 — Move Owner PWA from `taj.systems` to `app.taj.systems`
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical (blocks all Phase 8 work) |
+| Audit ref | Phase 8 strategy |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 1–2 hours |
+| Depends on | — |
+
+**Verification.**
+
+```powershell
+# Confirm current setup
+curl -sI https://taj.systems/ | findstr "200\|301"
+curl -sI https://app.taj.systems/ | findstr "200\|301\|certificate"  # should fail (no subdomain yet)
+```
+
+If `app.taj.systems` already resolves, set BLOCKED — investigate before continuing.
+
+**Problem.** Apex domain `taj.systems` is occupied by the Owner PWA. Cannot put marketing site there without first vacating it. Path-based split (e.g., `taj.systems/app`) is rejected — clean subdomains are non-negotiable for SaaS appearance.
+
+**Fix.**
+
+1. **DNS.** Add an A record `app.taj.systems` → `178.104.158.147` (same IP as the apex).
+2. **Issue SSL cert for app subdomain.**
+   ```bash
+   ssh root@178.104.158.147
+   certbot --nginx -d app.taj.systems --non-interactive --agree-tos -m ammarsdeeg@gmail.com
+   ```
+3. **Add a new Nginx server block** for `app.taj.systems` in `/etc/nginx/sites-enabled/taj_suite`. Copy the current `taj.systems` server block, change `server_name` to `app.taj.systems`, and keep all the existing locations (`/`, `/v1/`, `/auth/`, `/admin/`, `/health`, `/download/`). Use the new `app.taj.systems` certificate paths.
+4. **Do NOT remove the existing `taj.systems` server block yet.** Phase 8.1 will repurpose it for the marketing site. For now `taj.systems` continues to serve the PWA so nothing breaks if a user has the old URL bookmarked.
+5. **Reload Nginx.** `nginx -t && systemctl reload nginx`.
+6. **Smoke test.** `curl -sI https://app.taj.systems/` returns 200. PWA loads. Login works. Download `/download/TAJ-Pharmacy-Setup.exe` still works from both domains.
+
+**Files to handle.**
+
+- `/etc/nginx/sites-enabled/taj_suite` (on VPS — duplicate the server block, do NOT delete the original)
+- Let's Encrypt: `/etc/letsencrypt/live/app.taj.systems/` (new)
+
+**Acceptance test.**
+
+```powershell
+curl -sI https://app.taj.systems/                    # 200
+curl -sI https://app.taj.systems/health              # 200, returns API JSON
+curl -sI https://app.taj.systems/download/TAJ-Pharmacy-Setup.exe   # 200, 5MB
+curl -sI https://taj.systems/                        # 200 (still PWA — repurposed in TASK-806)
+```
+
+---
+
+### TASK-801 — Build marketing site foundation (layout, header, footer, design tokens)
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Phase 8 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 2–3 hours |
+| Depends on | — (parallel to TASK-800) |
+
+**Verification.**
+
+```powershell
+Test-Path pms-cloud/marketing      # should be False — directory does not exist yet
+```
+
+If the directory already exists, set BLOCKED.
+
+**Problem.** No marketing site exists. Need a foundation — shared header, footer, design tokens, base styles — before building pages.
+
+**Fix.**
+
+Create directory `pms-cloud/marketing/` with this structure:
+
+```
+pms-cloud/marketing/
+├── index.html               # Empty stub — TASK-802 fills this
+├── download.html            # Empty stub — TASK-803 fills this
+├── contact.html             # Empty stub — TASK-804 fills this
+├── features.html            # Coming Soon — TASK-805
+├── pricing.html             # Coming Soon — TASK-805
+├── docs.html                # Coming Soon — TASK-805
+├── about.html                # Coming Soon — TASK-805
+├── blog.html                # Coming Soon — TASK-805
+├── 404.html                 # Friendly Arabic 404
+├── assets/
+│   ├── styles.css           # Custom CSS layered on top of Tailwind
+│   ├── tailwind-config.js   # Custom Tailwind config injected via CDN script
+│   ├── logo.svg             # Copy from `pms-cloud/web/public/taj-logo.svg`
+│   ├── logo-mark.svg
+│   ├── favicon.svg
+│   ├── og-image.png         # 1200x630 OG image for social sharing
+│   └── screenshots/         # 4 PNG screenshots of the app — placeholder for now
+└── README.md                # How to edit content (for Ammar)
+```
+
+**Design tokens** to include in `assets/styles.css` (matches desktop app):
+
+```css
+:root {
+  --color-primary: #0FA3A6;
+  --color-primary-hover: #0D8B8D;
+  --color-brand: #1C5F6F;
+  --color-ink: #0D2023;
+  --color-ink-muted: #3D6567;
+  --color-ivory: #F4FBFB;
+  --color-ivory-surface: #FFFFFF;
+  --color-ivory-border: #D3E8E9;
+  --font-sans: 'Tajawal', sans-serif;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+}
+html { direction: rtl; }
+body { font-family: var(--font-sans); background: var(--color-ivory); color: var(--color-ink); }
+```
+
+**Shared header** (must appear on every page — paste this block into each HTML file's `<body>` top):
+
+- Left: TAJ Pharmacy logo + product name
+- Center: nav links — الميزات / الأسعار / التحميل / الدعم / المدونة / تواصل معنا
+- Right: "دخول صاحب الصيدلية" button → `https://app.taj.systems`
+- Mobile: hamburger menu
+
+**Shared footer** (must appear on every page):
+
+- Column 1: Logo + tagline (`نظام إدارة الصيدليات للسوق السوداني`)
+- Column 2: Product (Features, Pricing, Download, Changelog)
+- Column 3: Resources (Docs, FAQ, Contact, Blog)
+- Column 4: Company (About, Privacy, Terms)
+- Bottom strip: `© 2026 TAJ Pharmacy. صنع في السودان.`
+
+**`<head>` boilerplate** (use on every page — change `<title>` and meta description per page):
+
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAJ Pharmacy — نظام إدارة الصيدليات</title>
+  <meta name="description" content="...">
+  <meta property="og:title" content="...">
+  <meta property="og:image" content="/assets/og-image.png">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/assets/tailwind-config.js"></script>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+```
+
+**Acceptance test.** Open `index.html` in browser locally — shared header and footer render, fonts load, RTL layout works, no console errors. All 9 HTML files exist (even if mostly empty stubs).
+
+---
+
+### TASK-802 — Build Home page (`/`)
+
+| Field | Value |
+| --- | --- |
+| Severity | High |
+| Audit ref | Phase 8 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 3–4 hours |
+| Depends on | TASK-801 |
+
+**Verification.**
+
+```powershell
+Test-Path pms-cloud/marketing/index.html   # True (created in 801 as stub)
+(Get-Content pms-cloud/marketing/index.html).Length -lt 500   # True — stub state
+```
+
+**Problem.** Home page is the front door. Currently doesn't exist.
+
+**Fix.** Build `pms-cloud/marketing/index.html` with these sections in order:
+
+1. **Hero** (full viewport height on desktop, 80vh on mobile)
+   - Background: subtle gradient from `--color-ivory` to white
+   - Left side (60% width on desktop): Arabic headline `أدر صيدليتك بكفاءة احترافية` (text-5xl, font-bold), subhead `نظام إدارة شامل للصيدليات في السودان — مبيعات، مخزون، تقارير، مزامنة سحابية` (text-xl, text-ink-muted), two CTAs: primary button `حمّل التطبيق الآن` → `/download`, secondary button `شاهد كيف يعمل` → `/features`
+   - Right side (40% width on desktop): Hero screenshot of the POS or Dashboard (rounded-2xl, shadow-2xl, slight tilt for depth)
+   - Trust line below CTAs: `يعمل دون اتصال • مزامنة سحابية تلقائية • دعم باللغة العربية`
+
+2. **Trust strip** — narrow strip with 3 stat cards: `+15 صيدلية تستخدم النظام` / `+50,000 معاملة شهرياً` / `99.9% وقت تشغيل` (placeholder numbers — Ammar updates later)
+
+3. **Three feature highlights** — 3-column grid (1 column on mobile), each card:
+   - Icon (use Lucide via CDN — Package, ShoppingCart, Cloud)
+   - Title (text-xl, bold)
+   - Description (2 lines)
+   - "Learn more →" link to `/features#<anchor>`
+   - Content:
+     - 📦 **إدارة المخزون** — تتبع المخزون، الباتشات، تواريخ الانتهاء. تنبيهات تلقائية للمنتجات القاربة على الانتهاء.
+     - 🛒 **نقطة بيع سريعة** — أكمل عملية البيع في أقل من 10 ثوانٍ. دعم الباركود، الدفع المنقسم، البيع بالأجل.
+     - ☁️ **مزامنة سحابية** — نسخ احتياطي تلقائي. تصفح صيدليتك من أي مكان عبر اللوحة الإلكترونية للمالك.
+
+4. **Screenshot showcase** — section title `شاهد TAJ Pharmacy في العمل`. Then 4 screenshots in a 2x2 grid (1 column on mobile), each with a caption:
+   - Dashboard — `نظرة شاملة على أداء صيدليتك`
+   - POS — `بيع سريع مع البحث الذكي`
+   - Products — `إدارة كاملة لكتالوج المنتجات`
+   - Reports — `تقارير مفصلة لاتخاذ قرارات أفضل`
+
+5. **How it works** — 3 steps with arrow connectors (or numbered circles on mobile):
+   - **1. حمّل التطبيق** — تثبيت بضغطة واحدة على ويندوز
+   - **2. أنشئ صيدليتك** — أدخل بياناتك في 3 دقائق
+   - **3. ابدأ البيع** — كل شيء جاهز للعمل
+
+6. **Pricing teaser** — large card with `أسعار مبسطة قريباً` heading + body `نعمل على خطط أسعار تناسب الصيدليات الصغيرة والكبيرة. سجّل اهتمامك للحصول على خصم المؤسسين.` + email input + button `سجّل اهتمامك` (button is non-functional for now — just placeholder, or `mailto:hello@taj.systems`)
+
+7. **FAQ** — accordion with 6 questions (use `<details><summary>` for no-JS version):
+   - هل يعمل التطبيق بدون إنترنت؟ → نعم، التطبيق يعمل بالكامل دون اتصال. المزامنة السحابية تتم تلقائياً عند توفر الإنترنت.
+   - ما هي متطلبات النظام؟ → ويندوز 10 أو أحدث، 4 جيجا رام، 500 ميجا مساحة فارغة.
+   - هل يمكن تجربة التطبيق قبل الشراء؟ → نعم، النسخة التجريبية متاحة الآن مجاناً.
+   - كيف تتم النسخ الاحتياطي؟ → يومياً تلقائياً إلى السحابة + يمكن إنشاء نسخة محلية يدوياً في أي وقت.
+   - هل يدعم التطبيق فروع متعددة؟ → نعم، يمكن إدارة عدة فروع من نفس الحساب.
+   - كيف أتواصل مع الدعم؟ → عبر واتساب أو البريد الإلكتروني — تفاصيل التواصل في صفحة [تواصل معنا](/contact).
+
+8. **Final CTA** — full-width section with primary teal background: `جاهز لتجربة TAJ Pharmacy?` + download button + secondary `أو تواصل معنا للحصول على عرض توضيحي`
+
+**Acceptance test.** Open `index.html` in browser. All 8 sections render. RTL layout works on both desktop (1920px) and mobile (375px). Tab navigation works. No layout breaks. All links resolve (even Coming Soon pages return styled placeholder).
+
+---
+
+### TASK-803 — Build Download page (`/download`)
+
+| Field | Value |
+| --- | --- |
+| Severity | High (functional core of Phase 8.1) |
+| Audit ref | Phase 8 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 1–2 hours |
+| Depends on | TASK-801 |
+
+**Verification.**
+
+```powershell
+curl -sI "https://taj.systems/download/TAJ-Pharmacy-Setup.exe" | findstr "200"
+```
+
+Must return 200 — file is already served via Nginx static alias.
+
+**Problem.** No visible download UI. Users must know the magic URL.
+
+**Fix.** Build `pms-cloud/marketing/download.html` with:
+
+1. **Hero (slim)** — `حمّل TAJ Pharmacy v0.2.0` + subtitle `النسخة الأحدث، مجانية أثناء فترة الإطلاق`
+2. **Primary CTA card** — large card centered, with:
+   - OS icon (Windows logo) 
+   - Title: `TAJ Pharmacy for Windows`
+   - File size: `4.85 ميجابايت`
+   - Version: `v0.2.0 • تاريخ الإصدار: 2026-05-20`
+   - Big download button → `/download/TAJ-Pharmacy-Setup.exe` (this is the Nginx static alias, NOT the HTML page)
+3. **System requirements** — checklist:
+   - نظام التشغيل: ويندوز 10 (64-bit) أو أحدث
+   - الذاكرة: 4 جيجابايت رام
+   - المساحة: 500 ميجابايت
+   - الشاشة: 1024×768 أو أعلى
+4. **Installation guide** — numbered steps with screenshots:
+   - 1. حمّل ملف التثبيت من الزر أعلاه
+   - 2. شغّل الملف (قد يظهر تحذير من ويندوز — اضغط "مزيد من المعلومات" ثم "تشغيل على أي حال". هذا طبيعي للبرامج الجديدة وسنحصل على شهادة توقيع رقمي قريباً.)
+   - 3. اتبع خطوات التثبيت — البرنامج سيُثبَّت في `Program Files`
+   - 4. شغّل TAJ Pharmacy من قائمة ابدأ
+   - 5. أكمل خطوات الإعداد الأول (تستغرق 3 دقائق)
+5. **What's new in v0.2.0** — bullet list of 5–6 highlights from this release (security improvements, UI polish, table sorting/pagination, searchable customer dropdown, sync error indicator, etc.)
+6. **Need older version?** — collapsed section with link to GitHub releases page
+
+**Acceptance test.** Download button click downloads the actual installer (5,083,601 bytes). Page renders correctly RTL. Mobile layout stacks properly. SmartScreen warning notice is visible and Arabic.
+
+---
+
+### TASK-804 — Build Contact page (`/contact`)
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | Phase 8 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 1 hour |
+| Depends on | TASK-801 |
+
+**Problem.** No way to reach Ammar from the website.
+
+**Fix.** Build `pms-cloud/marketing/contact.html` with:
+
+1. Hero — `تواصل معنا`
+2. Three contact cards (3-column grid):
+   - **واتساب** — icon, number `+249 XXX XXX XXX` (placeholder — Ammar fills), button `افتح واتساب` → `https://wa.me/249XXXXXXXXX`
+   - **البريد الإلكتروني** — icon, address `hello@taj.systems`, button `أرسل رسالة` → `mailto:hello@taj.systems`
+   - **العنوان** — icon, location text (placeholder)
+3. **Operating hours** — small card: `الأحد – الخميس: 9 ص – 6 م`
+4. **FAQ link** — `لديك سؤال شائع؟ تحقق من صفحة الأسئلة الشائعة أولاً.` → `/docs#faq` (Coming Soon for now)
+
+**Acceptance test.** WhatsApp link opens WhatsApp Web with placeholder number. mailto opens default email client.
+
+---
+
+### TASK-805 — Build 5 "Coming Soon" pages
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | Phase 8 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 1 hour |
+| Depends on | TASK-801 |
+
+**Problem.** Navigation links to /features, /pricing, /docs, /about, /blog must not 404. They need styled placeholders until Phase 8.2 builds them out.
+
+**Fix.** Each of `features.html`, `pricing.html`, `docs.html`, `about.html`, `blog.html` gets the same template:
+
+- Shared header + footer (from TASK-801)
+- Centered content area with:
+  - Icon (different per page — Sparkles for Features, Tag for Pricing, BookOpen for Docs, Building for About, Newspaper for Blog)
+  - Title: page name in Arabic
+  - Big "Coming Soon" badge: `قريباً جداً`
+  - Description: 2 lines about what's coming
+  - Email signup: `كن أول من يعلم عند الإطلاق` + email input + `تنبيه` button (non-functional placeholder OR mailto)
+  - "Back to Home" link
+
+**Acceptance test.** All 5 pages render with the same template, distinct icon/title/description. Header navigation highlights the active page.
+
+---
+
+### TASK-806 — Deploy marketing site, repoint Nginx, update PWA references
+
+| Field | Value |
+| --- | --- |
+| Severity | Critical (final step that makes Phase 8.1 live) |
+| Audit ref | Phase 8 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 1–2 hours |
+| Depends on | TASK-800, TASK-802, TASK-803, TASK-804, TASK-805 |
+
+**Verification.** All dependency tasks must be DONE.
+
+**Problem.** Site is built but not deployed. Nginx still serves the PWA on the apex domain.
+
+**Fix.**
+
+1. **Upload marketing site to VPS.**
+   ```bash
+   scp -r pms-cloud/marketing/* root@178.104.158.147:/var/www/taj/marketing/
+   ```
+2. **Update Nginx apex server block** in `/etc/nginx/sites-enabled/taj_suite`:
+   - Change `root /opt/pms-cloud/web-dist;` to `root /var/www/taj/marketing;`
+   - Keep `/v1/`, `/auth/`, `/admin/`, `/health`, `/download/`, `/mgmt/` locations exactly as they are (marketing site does NOT touch these)
+   - Change the catch-all `location / { try_files $uri $uri/ /index.html; }` to `location / { try_files $uri $uri.html $uri/ /404.html; }` — this enables clean URLs (`/download` serves `download.html`)
+3. **Test Nginx config.** `nginx -t && systemctl reload nginx`
+4. **Smoke test.** Visit `https://taj.systems/` — see marketing site. Visit `https://app.taj.systems/` — see Owner PWA login. Visit `https://taj.systems/download/TAJ-Pharmacy-Setup.exe` — installer downloads. Visit `https://taj.systems/v1/health` — API responds.
+5. **Update PWA's internal redirects** in `pms-cloud/web/src/api.ts` and any other place that references `taj.systems/` as the PWA URL — change to `app.taj.systems`. Search command:
+   ```powershell
+   Select-String -Path "pms-cloud/web/src/**/*.ts","pms-cloud/web/src/**/*.tsx" -Pattern "taj\.systems[^/]" -SimpleMatch:$false
+   ```
+6. **Rebuild and redeploy PWA** via existing `deploy.ps1`.
+7. **Add redirect for old PWA users.** Some bookmarks point at `taj.systems/`. In the new marketing `index.html`, optionally include a top banner: `هل تبحث عن لوحة المالك؟ [اضغط هنا](https://app.taj.systems)` — visible for the first 30 days, then remove.
+
+**Acceptance test.**
+
+```powershell
+curl -sI https://taj.systems/                    # 200, returns marketing HTML (not PWA)
+curl -s https://taj.systems/ | findstr "أدر صيدليتك"      # found
+curl -sI https://taj.systems/download             # 200 (clean URL)
+curl -sI https://taj.systems/v1/health            # 200, JSON
+curl -sI https://app.taj.systems/                # 200, returns PWA HTML
+curl -sI https://taj.systems/download/TAJ-Pharmacy-Setup.exe  # 200, 5MB
+```
+
+---
+
+### TASK-807 — Update download link references across desktop app and PWA
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | Phase 8 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 30 min |
+| Depends on | TASK-806 |
+
+**Problem.** Several places in the codebase reference the download URL directly or assume the PWA lives at `taj.systems/`. After the migration they need updating.
+
+**Fix.** Find and update:
+
+1. **Cloud `routes/download.js`** — `FALLBACK_URL` should be `https://taj.systems/download/TAJ-Pharmacy-Setup.exe` (already correct).
+2. **Desktop `cloud_sync_*` Rust files** — search for `https://taj.systems` or `taj.systems`. Replace API references with `pharmacy.taj.systems` (already correct). Marketing references can stay.
+3. **PWA `web/src/`** — search `taj.systems` literal. Any reference to login/dashboard URLs should change to `app.taj.systems`.
+4. **Admin `CreatePharmacyDialog.tsx`** — line that says `لتحميل البرنامج: ${window.location.origin}/download/TAJ-Pharmacy-Setup.exe` is now wrong if Ammar accesses admin from `app.taj.systems`. Hard-code `https://taj.systems/download/TAJ-Pharmacy-Setup.exe` instead.
+
+**Acceptance test.**
+```powershell
+Select-String -Path "src/**/*.tsx","src/**/*.ts","src-tauri/**/*.rs","pms-cloud/web/src/**/*.tsx","pms-cloud/web/src/**/*.ts" -Pattern "taj\.systems"
+```
+Review each result. Each match should be intentional: `taj.systems/download/` for installer downloads, `app.taj.systems` for PWA, `pharmacy.taj.systems` for API.
+
+---
+
+### TASK-810 (Phase 8.2) — Build Features detail page
+
+| Field | Value |
+| --- | --- |
+| Severity | Low |
+| Audit ref | Phase 8.2 |
+| Owner | Unassigned |
+| Status | OPEN (Phase 8.2 — not started until 8.1 ships) |
+| Estimated effort | 4–6 hours |
+| Depends on | TASK-806 |
+
+**Fix.** Replace the Coming Soon stub in `features.html` with a detailed feature breakdown:
+
+- Hero: `جميع الميزات`
+- 6–8 feature groups (POS, Inventory, Purchases, Customers, Suppliers, Reports, Cloud Sync, Settings)
+- Each group: anchor link, icon, 4–6 bullet sub-features, 1–2 screenshots
+- Sticky table of contents on desktop (left rail)
+
+---
+
+### TASK-811 (Phase 8.2) — Build Pricing page
+
+| Field | Value |
+| --- | --- |
+| Severity | High (blocks revenue) |
+| Audit ref | Phase 8.2 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 2–3 hours |
+| Depends on | TASK-806, pricing decision |
+
+**Fix.** Pricing page with 3 or 4 tiers. Tier names and prices to be decided by Ammar before this task starts. Suggested structure:
+
+- **تجريبي** — Free for 30 days, all features
+- **أساسي** — Single pharmacy, basic reports — SDG X/month
+- **احترافي** — Multi-branch, advanced reports, priority support — SDG Y/month
+- **مؤسسي** — Custom — Contact us
+
+Include: feature comparison table, FAQ on billing, "Contact us for enterprise" CTA.
+
+---
+
+### TASK-812 (Phase 8.2) — Build Docs/Help section
+
+| Field | Value |
+| --- | --- |
+| Severity | Medium |
+| Audit ref | Phase 8.2 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 6–8 hours (content-heavy) |
+| Depends on | TASK-806 |
+
+**Fix.** Multi-page docs:
+- Getting Started (install, first sale, first product)
+- POS Guide
+- Inventory Management
+- Reports Explained
+- Cloud Sync & Backup
+- FAQ
+- Troubleshooting
+- Contact Support
+
+Either expand into a sub-folder `pms-cloud/marketing/docs/` with one HTML per topic, or migrate to Astro if scope grows beyond 10 pages.
+
+---
+
+### TASK-813 (Phase 8.2) — Build About + Blog
+
+| Field | Value |
+| --- | --- |
+| Severity | Low |
+| Audit ref | Phase 8.2 |
+| Owner | Unassigned |
+| Status | OPEN |
+| Estimated effort | 3–4 hours |
+| Depends on | TASK-806 |
+
+**Fix.**
+- **About** — Mission, story, "built in Sudan", contact links.
+- **Blog** — Index of posts + 3 starter posts (e.g., "Why we built TAJ", "v0.2.0 release notes", "5 tips for better pharmacy inventory"). If blog scope grows beyond static HTML, evaluate Astro migration.
+
+---
+
 ## 4. BACKLOG
 
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
