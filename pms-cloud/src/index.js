@@ -15,6 +15,9 @@ import downloadRouter from './routes/download.js';
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
+// Trust Nginx reverse proxy (required for rate-limit X-Forwarded-For)
+app.set('trust proxy', 1);
+
 // Security & parsing
 app.use(helmet());
 app.use(cors());
