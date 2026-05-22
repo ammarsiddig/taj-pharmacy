@@ -52,6 +52,7 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
   const [sessionSales, setSessionSales] = useState<Record<string, SessionSaleRow[]>>({});
   const [sessionProducts, setSessionProducts] = useState<Record<string, ProductSummaryRow[]>>({});
   const [sessionReturns, setSessionReturns] = useState<Record<string, SessionReturnRow[]>>({});
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidReasonFor, setVoidReasonFor] = useState<string | null>(null);
@@ -90,6 +91,7 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
   };
 
   const loadSessionDetail = async (sessionId: string) => {
+    setDetailLoading(sessionId);
     try {
       const [sales, products, returns] = await Promise.all([
         api.getSessionSales(sessionId),
@@ -99,8 +101,10 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
       setSessionSales(prev => ({ ...prev, [sessionId]: sales }));
       setSessionProducts(prev => ({ ...prev, [sessionId]: products }));
       setSessionReturns(prev => ({ ...prev, [sessionId]: returns }));
-    } catch {
-      /* non-critical: session detail is informational, silently ignore load failures */
+    } catch (err) {
+      console.error('[SessionHistory] Failed to load session detail:', err);
+    } finally {
+      setDetailLoading(null);
     }
   };
 
@@ -292,7 +296,9 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
                       </div>
 
                       <div className="px-3 py-2 max-h-72 overflow-y-auto">
-                        {sessionDetailTab === 'sales' && (
+                        {detailLoading === s.id ? (
+                          <div className="text-center py-4 text-xs text-ink-muted">{t('common.loading')}</div>
+                        ) : sessionDetailTab === 'sales' && (
                           (sessionSales[s.id] || []).length === 0
                             ? <div className="text-center py-3 text-xs text-ink-muted">{t('pos.noSales')}</div>
                             : <div className="space-y-1">

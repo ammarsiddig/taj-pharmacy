@@ -1,4 +1,4 @@
-import { AlertTriangle, Minus, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Minus, Plus, Trash2, ShoppingCart } from 'lucide-react';
 import type { CartItem } from '../../types';
 import type { TFunction } from 'i18next';
 import Numpad from '../../components/ui/Numpad';
@@ -33,7 +33,13 @@ export default function CartDisplay({
   return (
     <div className="app-card flex-1 overflow-y-auto min-h-0">
       {cart.length === 0 ? (
-        <div className="text-center py-20 text-ink-muted">{t('pos.emptyCart')}</div>
+        <div className="flex flex-col items-center justify-center h-full py-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center mb-4">
+            <ShoppingCart size={28} className="text-primary-400" />
+          </div>
+          <p className="text-base font-medium text-ink-muted">{t('pos.emptyCart')}</p>
+          <p className="text-sm text-ink-placeholder mt-1">ابحث عن منتج أو امسح الباركود للبدء</p>
+        </div>
       ) : (
         <table className="w-full text-sm">
           <thead className="sticky top-0">

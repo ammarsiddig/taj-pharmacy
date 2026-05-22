@@ -34,6 +34,7 @@ pub fn create_return(
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_POS)?;
     guard::require_permission(&conn, &created_by, "pos")?;
+    guard::require_permission(&conn, &created_by, "pos.returns")?;
 
     let sale_number: String = conn.query_row(
         "SELECT sale_number FROM sales WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",

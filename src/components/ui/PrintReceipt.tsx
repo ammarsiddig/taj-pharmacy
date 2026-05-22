@@ -94,7 +94,7 @@ export default function PrintReceipt({
         {header && <div className="text-[9px] mt-1 whitespace-pre-line">{header}</div>}
       </div>
 
-      <div className="border-t border-dashed border-black my-1" />
+      <div className="border-t border-dashed border-black border-[1.5px] my-1" />
 
       {/* Sale info */}
       <div className="flex justify-between text-[10px]">
@@ -111,22 +111,22 @@ export default function PrintReceipt({
         <div className="text-[10px] opacity-70">{t('pos.notes')}: {notes}</div>
       )}
 
-      <div className="border-t border-dashed border-black my-1" />
+      <div className="border-t border-dashed border-black border-[1.5px] my-1" />
 
       {/* Items table */}
       <table className={`w-full ${receiptPreferences.compactMode ? 'text-[9px]' : 'text-[10px]'}`}>
         <thead>
-          <tr className="border-b border-black">
-            <th className="text-right py-0.5">{t('pos.product')}</th>
-            <th className="text-center py-0.5 w-8">{t('pos.qty')}</th>
-            <th className="text-right py-0.5 w-14">{t('pos.price')}</th>
-            <th className="text-right py-0.5 w-14">{t('pos.total')}</th>
+          <tr className="border-b border-black bg-gray-100">
+            <th className="text-right py-0.5 text-[11px]">{t('pos.product')}</th>
+            <th className="text-center py-0.5 w-8 text-[11px]">{t('pos.qty')}</th>
+            <th className="text-right py-0.5 w-14 text-[11px]">{t('pos.price')}</th>
+            <th className="text-right py-0.5 w-14 text-[11px]">{t('pos.total')}</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item, idx) => (
             <tr key={item.id || idx} className="border-b border-dotted border-gray-300">
-              <td className="py-0.5">{item.product_name || '—'}</td>
+              <td className="py-0.5" style={{ maxWidth: '30mm', wordBreak: 'break-word' }}>{item.product_name || '—'}</td>
               <td className="text-center py-0.5">{item.quantity}</td>
               <td className="text-right py-0.5 tabular-nums">{api.formatMoney(item.unit_price)}</td>
               <td className="text-right py-0.5 tabular-nums">{api.formatMoney(item.subtotal)}</td>
@@ -135,7 +135,7 @@ export default function PrintReceipt({
         </tbody>
       </table>
 
-      <div className="border-t border-dashed border-black my-1" />
+      <div className="border-t border-dashed border-black border-[1.5px] my-1" />
 
       {/* Subtotal */}
       <div className="flex justify-between text-[10px]">
@@ -160,7 +160,7 @@ export default function PrintReceipt({
       )}
 
       {/* Grand total */}
-      <div className="flex justify-between text-xs font-bold mt-0.5">
+      <div className="flex justify-between text-sm font-bold mt-1 pt-1 border-t-2 border-black border-double">
         <span>{t('pos.grandTotal')}</span>
         <span className="tabular-nums">{api.formatMoney(total)}</span>
       </div>
@@ -187,7 +187,7 @@ export default function PrintReceipt({
         </div>
       )}
 
-      <div className="border-t border-dashed border-black my-2" />
+      <div className="border-t border-dashed border-black border-[1.5px] my-3" />
 
       {/* Footer */}
       <div className="text-center text-[9px] opacity-70 whitespace-pre-line">{footer}</div>

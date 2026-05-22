@@ -6,6 +6,7 @@ import {
   getStorageLocations, transferStock, searchProductsPos,
 } from '../../api';
 import type { StorageLocationFull } from '../../types';
+import Toast from '../../components/ui/Toast';
 
 interface Props {
   branchId: string;
@@ -38,7 +39,7 @@ export default function TransferTab({ branchId }: Props) {
     if (!productSearch.trim()) { setProductResults([]); return; }
     const timer = setTimeout(async () => {
       try {
-        const res = await searchProductsPos(productSearch, branchId);
+        const res = await searchProductsPos(branchId, productSearch);
         setProductResults(res.slice(0, 8).map(p => ({ id: p.product_id, trade_name: p.product_name, trade_name_ar: p.product_name_ar })));
       } catch { setProductResults([]); }
     }, 300);
@@ -128,11 +129,7 @@ export default function TransferTab({ branchId }: Props) {
         </button>
       </div>
 
-      {toast && (
-        <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${toast.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
-          {toast.msg}
-        </div>
-      )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

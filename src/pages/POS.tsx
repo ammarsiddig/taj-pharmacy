@@ -744,7 +744,10 @@ export default function POS() {
           <div>
             <div className="text-xs text-ink-muted">{t('pos.session')}</div>
             <div className="text-sm font-medium text-ink-main">
-              {t('pos.salesCount')}: {session.sales_count} | {api.formatMoney(session.total_sales)}
+              <span>{t('pos.salesCount')}: </span>
+              <span className="text-primary-600 font-bold">{session.sales_count}</span>
+              <span className="mx-2 text-ink-placeholder">|</span>
+              <span className="font-bold tabular-nums">{api.formatMoney(session.total_sales)}</span>
             </div>
           </div>
           <div className="flex gap-1">

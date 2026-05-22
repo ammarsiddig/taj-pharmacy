@@ -37,12 +37,15 @@ export default function PrintInvoice({
 }: PrintInvoiceProps) {
   const { t } = useTranslation();
   const [tenant, setTenant] = useState<TenantSettings | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     api.getTenantSettings().then(setTenant).catch(() => { /* non-critical: invoice prints with fallback pharmacy name */ });
+    api.getPharmacyLogo().then(setLogoUrl).catch(() => { /* non-critical: invoice prints without logo */ });
   }, []);
 
   const pharmacyName = tenant?.name || t('pos.receiptPharmacyName');
+  const pharmacyNameAr = tenant?.name_ar || '';
   const phone = tenant?.phone || '';
   const address = tenant?.address || '';
 
@@ -51,15 +54,17 @@ export default function PrintInvoice({
       {/* Header */}
       <div className="flex justify-between items-start border-b-2 border-black pb-3 mb-4">
         <div>
+          {logoUrl && (
+            <img src={logoUrl} alt={t('common.logo')} className="mb-2" style={{ maxHeight: '40px', maxWidth: '60mm' }} />
+          )}
           <h1 className="text-lg font-bold">{pharmacyName}</h1>
+          {pharmacyNameAr && <p className="text-sm font-medium">{pharmacyNameAr}</p>}
           {address && <p className="text-xs opacity-70">{address}</p>}
           {phone && <p className="text-xs opacity-70">{phone}</p>}
         </div>
         <div className="text-right">
-          <h2 className="text-base font-bold">
-            {type === 'purchase' ? t('purchases.invoiceDetail') : t('sales.invoiceTitle')}
-          </h2>
-          <p className="text-sm font-mono">{invoiceNumber}</p>
+          <p className="text-xs text-ink-muted mb-1">Invoice / فاتورة</p>
+          <h2 className="text-lg font-bold">{invoiceNumber}</h2>
           <p className="text-xs opacity-70">{date}</p>
           {status && <p className="text-xs mt-1 font-medium">{status}</p>}
         </div>
@@ -129,7 +134,7 @@ export default function PrintInvoice({
               <span className="tabular-nums">{api.formatMoney(taxAmount)} {t('common.currency')}</span>
             </div>
           )}
-          <div className="flex justify-between py-1.5 font-bold text-sm border-t-2 border-black">
+          <div className="flex justify-between py-1.5 font-bold text-sm border-t-2 border-black border-double">
             <span>{t('purchases.grandTotal')}</span>
             <span className="tabular-nums">{api.formatMoney(total)} {t('common.currency')}</span>
           </div>
@@ -145,7 +150,8 @@ export default function PrintInvoice({
 
       {/* Footer */}
       <div className="border-t border-gray-300 pt-3 text-center text-[9px] opacity-50">
-        {tenant?.receipt_footer || pharmacyName}
+        <p>{tenant?.receipt_footer || pharmacyName}</p>
+        <p className="mt-1">شكراً لتعاملكم معنا</p>
       </div>
     </div>
   );

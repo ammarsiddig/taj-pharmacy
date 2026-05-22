@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLicense } from '../../hooks/useLicense';
+import { useAuth } from '../../hooks/useAuth';
 import { FEATURE_FLAGS } from '../../hooks/usePermission';
 
 interface NavItem {
@@ -26,18 +27,20 @@ interface NavItem {
   group: 'core' | 'ops' | 'admin';
   /** Feature flag that controls access — undefined means always accessible */
   featureFlag?: number;
+  /** If true, this item is hidden for cashier role */
+  hideForCashier?: boolean;
 }
 
 const navItems: NavItem[] = [
   { key: 'dashboard',  path: '/dashboard',  icon: LayoutDashboard, group: 'core' },
   { key: 'pos',        path: '/pos',        icon: ShoppingCart,    group: 'core',  featureFlag: FEATURE_FLAGS.POS },
-  { key: 'sales',      path: '/sales',      icon: FileText,        group: 'ops',   featureFlag: FEATURE_FLAGS.SALES },
-  { key: 'purchases',  path: '/purchases',  icon: ShoppingBag,     group: 'ops',   featureFlag: FEATURE_FLAGS.PURCHASES },
-  { key: 'products',   path: '/products',   icon: Package,         group: 'ops',   featureFlag: FEATURE_FLAGS.PRODUCTS },
-  { key: 'warehouse',  path: '/warehouse',  icon: Warehouse,       group: 'ops',   featureFlag: FEATURE_FLAGS.WAREHOUSE },
-  { key: 'expenses',   path: '/expenses',   icon: Receipt,         group: 'ops',   featureFlag: FEATURE_FLAGS.EXPENSES },
-  { key: 'accounts',   path: '/accounts',   icon: Landmark,        group: 'ops',   featureFlag: FEATURE_FLAGS.ACCOUNTS },
-  { key: 'reports',    path: '/reports',    icon: BarChart3,       group: 'admin', featureFlag: FEATURE_FLAGS.REPORTS },
+  { key: 'sales',      path: '/sales',      icon: FileText,        group: 'ops',   featureFlag: FEATURE_FLAGS.SALES, hideForCashier: true },
+  { key: 'purchases',  path: '/purchases',  icon: ShoppingBag,     group: 'ops',   featureFlag: FEATURE_FLAGS.PURCHASES, hideForCashier: true },
+  { key: 'products',   path: '/products',   icon: Package,         group: 'ops',   featureFlag: FEATURE_FLAGS.PRODUCTS, hideForCashier: true },
+  { key: 'warehouse',  path: '/warehouse',  icon: Warehouse,       group: 'ops',   featureFlag: FEATURE_FLAGS.WAREHOUSE, hideForCashier: true },
+  { key: 'expenses',   path: '/expenses',   icon: Receipt,         group: 'ops',   featureFlag: FEATURE_FLAGS.EXPENSES, hideForCashier: true },
+  { key: 'accounts',   path: '/accounts',   icon: Landmark,        group: 'ops',   featureFlag: FEATURE_FLAGS.ACCOUNTS, hideForCashier: true },
+  { key: 'reports',    path: '/reports',    icon: BarChart3,       group: 'admin', featureFlag: FEATURE_FLAGS.REPORTS, hideForCashier: true },
   { key: 'settings',   path: '/settings',   icon: Settings,        group: 'admin' },
 ];
 
@@ -50,6 +53,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const { hasFeature } = useLicense();
+  const { role } = useAuth();
+  const isCashier = role?.name === 'cashier';
   return (
     <aside className={`${collapsed ? 'w-[78px]' : 'w-[256px]'} min-h-screen bg-[#1C5F6F] flex flex-col shrink-0 transition-[width] duration-200 border-l border-white/6 shadow-[0_20px_40px_-24px_rgb(0_0_0_/_0.6)]`}>
       {/* Logo area */}
@@ -77,6 +82,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           const isLocked = item.featureFlag !== undefined && !hasFeature(item.featureFlag);
           const isActive = !isLocked && location.pathname.startsWith(item.path);
           const showDivider = idx > 0 && navItems[idx - 1].group !== item.group;
+
+          if (isCashier && item.hideForCashier) return null;
 
           if (isLocked) {
             return (

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, Minus, Plus, DollarSign, Smartphone, X } from 'lucide-react';
 import * as api from '../../api';
-import type { PosSession, Sale, SessionSaleRow } from '../../types';
+import type { PosSession, Sale } from '../../types';
 import Button from '../../components/ui/Button';
 
 interface Props {
@@ -24,24 +24,12 @@ function formatDateTime(isoString: string): string {
 export default function ReturnModal({ session, onClose, onSuccess }: Props) {
   const { t } = useTranslation();
   const [returnSaleSearch, setReturnSaleSearch] = useState('');
-  const [returnSaleResults, setReturnSaleResults] = useState<SessionSaleRow[]>([]);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [returnItems, setReturnItems] = useState<Record<string, number>>({});
   const [returnRefundMethod, setReturnRefundMethod] = useState<'cash' | 'bank_transfer'>('cash');
   const [returnReason, setReturnReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (session) {
-      api.getSessionSales(session.id)
-        .then(setReturnSaleResults)
-        .catch((e: unknown) => {
-          setReturnSaleResults([]);
-          setError(e instanceof Error ? e.message : t('common.error'));
-        });
-    }
-  }, [session, t]);
 
   const searchSaleByNumber = async () => {
     if (!returnSaleSearch.trim()) return;
@@ -52,19 +40,7 @@ export default function ReturnModal({ session, onClose, onSuccess }: Props) {
       sale.items.forEach(item => { init[item.id] = 0; });
       setReturnItems(init);
     } catch {
-      setError(t('pos.saleNotFound'));
-    }
-  };
-
-  const selectSaleForReturn = async (saleId: string) => {
-    try {
-      const sale = await api.getSaleDetail(saleId);
-      setReturnSale(sale);
-      const init: Record<string, number> = {};
-      sale.items.forEach(item => { init[item.id] = 0; });
-      setReturnItems(init);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : t('common.error'));
+      setError(`لم يتم العثور على الفاتورة رقم ${returnSaleSearch.trim()}`);
     }
   };
 
@@ -128,7 +104,7 @@ export default function ReturnModal({ session, onClose, onSuccess }: Props) {
 
           {!returnSale ? (
             <>
-              <label className="block text-xs text-ink-muted mb-2">{t('pos.selectSale')}</label>
+              <label className="block text-xs font-medium text-ink-main mb-2">أدخل رقم الفاتورة للبحث عنها</label>
               <div className="flex gap-2 mb-3">
                 <input
                   type="text"
@@ -140,21 +116,8 @@ export default function ReturnModal({ session, onClose, onSuccess }: Props) {
                 />
                 <Button onClick={searchSaleByNumber} className="px-4"><Search size={14} /></Button>
               </div>
-              {returnSaleResults.length > 0 && (
-                <div className="space-y-1 max-h-60 overflow-y-auto">
-                  {returnSaleResults
-                    .filter(s => !returnSaleSearch || s.sale_number.toLowerCase().includes(returnSaleSearch.toLowerCase()))
-                    .map(sale => (
-                      <button key={sale.id} onClick={() => selectSaleForReturn(sale.id)}
-                        className="w-full text-right p-3 bg-ivory-muted border border-ivory-border rounded-xl hover:bg-primary-100 flex justify-between items-center text-sm">
-                        <div>
-                          <span className="font-medium text-ink-main">{sale.sale_number}</span>
-                          <span className="text-ink-muted text-xs me-2">({sale.items_count} {t('pos.items')})</span>
-                        </div>
-                        <span className="tabular-nums font-bold">{api.formatMoney(sale.total)}</span>
-                      </button>
-                    ))}
-                </div>
+              {returnSaleSearch && error && (
+                <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-status-danger">{error}</div>
               )}
             </>
           ) : (

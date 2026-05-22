@@ -83,7 +83,7 @@ export default function Numpad({
   return (
     <div className="bg-ivory-surface border border-ivory-border rounded-sm shadow-lg p-3 w-[240px] select-none" dir="ltr">
       {/* Display */}
-      <div className="mb-2 px-3 py-2 bg-ivory-muted rounded-sm text-lg tabular-nums text-ink-main min-h-[40px] flex items-center">
+      <div className="mb-2 px-3 py-2 bg-ivory-muted rounded-sm text-2xl font-bold tabular-nums text-ink-main min-h-[48px] flex items-center">
         {display || <span className="text-ink-placeholder">0</span>}
       </div>
 

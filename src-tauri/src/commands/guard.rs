@@ -53,17 +53,17 @@ pub fn require_permission(
 fn get_role_default_permissions(role_name: &str) -> Vec<&'static str> {
     match role_name {
         "owner" => vec![
-            "pos", "products", "products.create", "products.edit", "products.delete",
+            "pos", "pos.returns", "products", "products.create", "products.edit", "products.delete",
             "purchases", "warehouse", "sales", "expenses", "customers", "suppliers",
             "accounts", "reports", "settings", "settings.users", "settings.license",
         ],
         "manager" => vec![
-            "pos", "products", "products.create", "products.edit", "products.delete",
+            "pos", "pos.returns", "products", "products.create", "products.edit", "products.delete",
             "purchases", "warehouse", "sales", "expenses", "customers", "suppliers",
             "accounts", "reports", "settings",
         ],
         "pharmacist" => vec![
-            "pos", "products", "warehouse", "purchases", "reports",
+            "pos", "pos.returns", "products", "warehouse", "purchases", "reports",
         ],
         "cashier" => vec!["pos"],
         _ => vec![],

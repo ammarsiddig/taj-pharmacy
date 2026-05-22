@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect, type FormEvent } from 'react';
 import { Banknote, Smartphone, FileText, Wallet, Tag, Percent, AlertTriangle, Plus, X, ChevronDown } from 'lucide-react';
 import type { TFunction } from 'i18next';
-import type { CartItem, PaymentMethodSetting, CustomerRow, CustomerData } from '../../types';
+import type { CartItem, PaymentMethodSetting, CustomerRow } from '../../types';
 import Button from '../../components/ui/Button';
 import NumericInput from '../../components/ui/NumericInput';
 import Numpad from '../../components/ui/Numpad';
@@ -176,7 +176,7 @@ export default function PaymentPanel({
       {/* Payment methods + inputs */}
       <div className="app-card p-3 flex flex-col flex-1 min-h-0">
         <div className="flex-1 overflow-y-auto -mx-3 px-3">
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-2 mb-3">
             <button
               onClick={() => { onPaymentMethodChange('cash'); onPaymentMethodIdChange(null); }}
               className={`min-w-[80px] flex-1 py-2.5 rounded-xl text-sm font-medium border flex items-center justify-center gap-2 ${

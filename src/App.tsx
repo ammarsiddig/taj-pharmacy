@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './hooks/useAuth';
@@ -105,6 +105,14 @@ function FeatureGate({ flag, children }: { flag: number; children: React.ReactNo
   return <>{children}</>;
 }
 
+function RoleGate({ allowedRoles, children }: { allowedRoles: string[]; children: React.ReactNode }) {
+  const { role } = useAuth();
+  if (role && !allowedRoles.includes(role.name)) {
+    return <Navigate to="/pos" replace />;
+  }
+  return <>{children}</>;
+}
+
 function PermissionGate({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { permissions } = useAuth();
   if (!permissions.includes(permission)) return <Navigate to="/dashboard" replace />;
@@ -140,6 +148,7 @@ function BlockedScreen() {
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
+  const NON_CASHIER = ['owner', 'manager', 'pharmacist', 'admin'];
   const [syncError, setSyncError] = useState(false);
   useAutoSync(isAuthenticated, setSyncError);
   useUpdateCheck(isAuthenticated);
@@ -182,20 +191,20 @@ function AppRoutes() {
           }
         >
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/products" element={<FeatureGate flag={FEATURE_FLAGS.PRODUCTS}><Products /></FeatureGate>} />
-          <Route path="/purchases" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><Purchases /></FeatureGate>} />
-          <Route path="/purchases/new" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate>} />
-          <Route path="/purchases/:id/edit" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate>} />
-          <Route path="/purchases/:id" element={<FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseDetail /></FeatureGate>} />
+          <Route path="/products" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PRODUCTS}><Products /></FeatureGate></RoleGate>} />
+          <Route path="/purchases" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><Purchases /></FeatureGate></RoleGate>} />
+          <Route path="/purchases/new" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate></RoleGate>} />
+          <Route path="/purchases/:id/edit" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate></RoleGate>} />
+          <Route path="/purchases/:id" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseDetail /></FeatureGate></RoleGate>} />
           <Route path="/pos" element={<FeatureGate flag={FEATURE_FLAGS.POS}><POS /></FeatureGate>} />
-          <Route path="/expenses" element={<FeatureGate flag={FEATURE_FLAGS.EXPENSES}><Expenses /></FeatureGate>} />
-          <Route path="/accounts" element={<FeatureGate flag={FEATURE_FLAGS.ACCOUNTS}><Accounts /></FeatureGate>} />
-          <Route path="/customers/new" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerNew /></FeatureGate>} />
-          <Route path="/customers/:id" element={<FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerDetail /></FeatureGate>} />
-          <Route path="/suppliers/:id" element={<FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate>} />
-          <Route path="/reports" element={<FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate>} />
-          <Route path="/warehouse" element={<FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><Warehouse /></FeatureGate>} />
-          <Route path="/sales" element={<FeatureGate flag={FEATURE_FLAGS.SALES}><Sales /></FeatureGate>} />
+          <Route path="/expenses" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.EXPENSES}><Expenses /></FeatureGate></RoleGate>} />
+          <Route path="/accounts" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.ACCOUNTS}><Accounts /></FeatureGate></RoleGate>} />
+          <Route path="/customers/new" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerNew /></FeatureGate></RoleGate>} />
+          <Route path="/customers/:id" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerDetail /></FeatureGate></RoleGate>} />
+          <Route path="/suppliers/:id" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate></RoleGate>} />
+          <Route path="/reports" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate></RoleGate>} />
+          <Route path="/warehouse" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><Warehouse /></FeatureGate></RoleGate>} />
+          <Route path="/sales" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.SALES}><Sales /></FeatureGate></RoleGate>} />
           <Route path="/settings" element={<PermissionGate permission="settings"><Settings /></PermissionGate>} />
         </Route>
         <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
