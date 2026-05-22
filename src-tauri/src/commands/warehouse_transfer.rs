@@ -115,18 +115,18 @@ fn do_transfer(
             params![out_id,tenant_id,branch_id,product_id,batch_id,-take,qty_cur,new_qty,batch_id,notes,user_id],
         ).map_err(|e| e.to_string())?;
 
-        let source_unit_cost: i64 = conn.query_row(
-            "SELECT unit_cost FROM batches WHERE id = ?1",
+        let (source_unit_cost, source_batch_number): (i64, String) = conn.query_row(
+            "SELECT unit_cost, COALESCE(batch_number,'') FROM batches WHERE id = ?1",
             params![batch_id],
-            |row| row.get(0),
-        ).unwrap_or(0);
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap_or((0, String::new()));
 
         let dest_id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO batches(id,tenant_id,product_id,location_id,batch_number,
+            "INSERT INTO batches(id,tenant_id,branch_id,product_id,location_id,batch_number,
               quantity_received,quantity_current,unit_cost,status)
-              VALUES(?1,?2,?3,?4,'TRANSFER',?5,?5,?6,'active')",
-            params![dest_id,tenant_id,product_id,to_loc,take,source_unit_cost],
+              VALUES(?1,?2,?3,?4,?5,?6,?7,?7,?8,'active')",
+            params![dest_id,tenant_id,branch_id,product_id,to_loc,source_batch_number,take,source_unit_cost],
         ).map_err(|e| e.to_string())?;
 
         let in_id = Uuid::new_v4().to_string();
