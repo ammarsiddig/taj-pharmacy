@@ -151,91 +151,91 @@ router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
 
     const events = [];
 
-    // Sales
+    // Sales (is_active = integer)
     if (type === 'all' || type === 'sale') {
       const r = await query(`
         SELECT 'sale' AS event_type, sale_number AS ref,
           cashier_name AS actor, total AS amount,
-          payment_method, payment_status, is_return,
+          payment_method, payment_status AS status,
           created_at AS occurred_at
         FROM snapshot_pos_sales
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
-          AND (is_active IS NULL OR is_active != 0)
+          AND COALESCE(is_active, 1) != 0
         ORDER BY created_at DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
     }
 
-    // Purchases (supplier invoices)
+    // Purchases — is_active = boolean
     if (type === 'all' || type === 'purchase') {
       const r = await query(`
         SELECT 'purchase' AS event_type, invoice_number AS ref,
           supplier_name AS actor, total AS amount,
-          payment_status, status,
+          payment_status AS status,
           created_at AS occurred_at
         FROM snapshot_supplier_invoices
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
-          AND (is_active IS NULL OR is_active != 0)
+          AND COALESCE(is_active, true) = true
         ORDER BY created_at DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
     }
 
-    // Expenses
+    // Expenses — is_active = integer
     if (type === 'all' || type === 'expense') {
       const r = await query(`
         SELECT 'expense' AS event_type, category AS ref,
           created_by AS actor, amount,
-          payment_method, description AS status,
+          payment_method AS status,
           created_at AS occurred_at
         FROM snapshot_expenses
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
-          AND (is_active IS NULL OR is_active != 0)
+          AND COALESCE(is_active, 1) != 0
         ORDER BY created_at DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
     }
 
-    // Returns
+    // Returns — is_active = boolean
     if (type === 'all' || type === 'return') {
       const r = await query(`
         SELECT 'return' AS event_type, id AS ref,
-          '' AS actor, total_amount AS amount,
-          status, reason AS status,
+          '' AS actor, COALESCE(total_amount, 0) AS amount,
+          COALESCE(status, '') AS status,
           created_at AS occurred_at
         FROM snapshot_returns
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
-          AND (is_active IS NULL OR is_active != 0)
+          AND COALESCE(is_active, true) = true
         ORDER BY created_at DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
     }
 
-    // Products added/updated
+    // Products — is_active = boolean
     if (type === 'all' || type === 'product') {
       const r = await query(`
-        SELECT 'product' AS event_type, name AS ref,
+        SELECT 'product' AS event_type, name_ar AS ref,
           '' AS actor, sale_price AS amount,
-          category AS status, NULL AS payment_method,
+          COALESCE(category, '') AS status,
           updated_at AS occurred_at
         FROM snapshot_products
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
-          AND (is_active IS NULL OR is_active != 0)
+          AND COALESCE(is_active, true) = true
         ORDER BY updated_at DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
     }
 
-    // Payments (customer + supplier)
+    // Customer payments — is_active = integer
     if (type === 'all' || type === 'payment') {
       const r = await query(`
         SELECT 'payment' AS event_type, id AS ref,
           created_by AS actor, amount,
-          payment_method, 'customer' AS status,
+          COALESCE(payment_method, '') AS status,
           created_at AS occurred_at
         FROM snapshot_customer_payments
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
-          AND (is_active IS NULL OR is_active != 0)
+          AND COALESCE(is_active, 1) != 0
         ORDER BY created_at DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
