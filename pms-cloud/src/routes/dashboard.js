@@ -434,4 +434,30 @@ router.get('/v1/supplier-accounts', requireAuthOrJwt, async (req, res) => {
   }
 });
 
+/**
+ * GET /v1/accounts
+ * Owner read-only cash/bank accounts list from snapshot.
+ */
+router.get('/v1/accounts', requireAuthOrJwt, async (req, res) => {
+  try {
+    const branch = req.query.branch || '%';
+    const result = await query(`
+      SELECT
+        id, name, name_ar, account_type,
+        current_balance, is_default, is_active,
+        bank_provider, phone_label
+      FROM snapshot_accounts
+      WHERE tenant_id = $1
+        AND (branch_id LIKE $2)
+        AND (is_active IS NULL OR is_active != 0)
+      ORDER BY is_default DESC, name ASC
+    `, [req.tenantId, branch]);
+
+    res.json({ accounts: result.rows });
+  } catch (err) {
+    console.error('[accounts] Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
