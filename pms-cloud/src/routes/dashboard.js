@@ -102,6 +102,43 @@ router.get('/v1/dashboard', requireAuthOrJwt, async (req, res) => {
 
 /**
  * GET /v1/activity
+ * Returns 7-day sales trend for the authenticated tenant.
+ */
+router.get('/v1/dashboard/trend', requireAuthOrJwt, async (req, res) => {
+  try {
+    const branch = req.query.branch || 'main-branch';
+    const result = await query(`
+      SELECT
+        DATE(created_at) AS day,
+        COALESCE(SUM(total), 0) AS total,
+        COUNT(*) AS count
+      FROM snapshot_pos_sales
+      WHERE tenant_id = $1
+        AND branch_id = $2
+        AND is_return = false
+        AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+      GROUP BY DATE(created_at)
+      ORDER BY day ASC
+    `, [req.tenantId, branch]);
+
+    // Fill in missing days with 0
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const found = result.rows.find(r => r.day.toISOString().slice(0, 10) === dateStr);
+      days.push({ date: dateStr, total: found ? Number(found.total) : 0, count: found ? Number(found.count) : 0 });
+    }
+
+    res.json({ days });
+  } catch (err) {
+    console.error('[dashboard] Trend error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * Returns recent activity for the authenticated tenant.
  * Query params: limit (default 50, max 200), branch
  */
