@@ -2479,8 +2479,8 @@ curl -sI https://taj.systems/                        # 200 (still PWA — repurp
 | --- | --- |
 | Severity | High |
 | Audit ref | Phase 8 |
-| Owner | Unassigned |
-| Status | OPEN |
+| Owner | DeepSeek V4 Pro |
+| Status | DONE |
 | Estimated effort | 2–3 hours |
 | Depends on | — (parallel to TASK-800) |
 
@@ -2587,8 +2587,8 @@ body { font-family: var(--font-sans); background: var(--color-ivory); color: var
 | --- | --- |
 | Severity | High |
 | Audit ref | Phase 8 |
-| Owner | Unassigned |
-| Status | OPEN |
+| Owner | Claude Sonnet 4.6 |
+| Status | DONE |
 | Estimated effort | 3–4 hours |
 | Depends on | TASK-801 |
 
@@ -2654,8 +2654,8 @@ Test-Path pms-cloud/marketing/index.html   # True (created in 801 as stub)
 | --- | --- |
 | Severity | High (functional core of Phase 8.1) |
 | Audit ref | Phase 8 |
-| Owner | Unassigned |
-| Status | OPEN |
+| Owner | DeepSeek V4 Pro |
+| Status | DONE |
 | Estimated effort | 1–2 hours |
 | Depends on | TASK-801 |
 
@@ -2702,8 +2702,8 @@ Must return 200 — file is already served via Nginx static alias.
 | --- | --- |
 | Severity | Medium |
 | Audit ref | Phase 8 |
-| Owner | Unassigned |
-| Status | OPEN |
+| Owner | DeepSeek V4 Pro |
+| Status | DONE |
 | Estimated effort | 1 hour |
 | Depends on | TASK-801 |
 
@@ -2729,8 +2729,8 @@ Must return 200 — file is already served via Nginx static alias.
 | --- | --- |
 | Severity | Medium |
 | Audit ref | Phase 8 |
-| Owner | Unassigned |
-| Status | OPEN |
+| Owner | DeepSeek V4 Pro |
+| Status | DONE |
 | Estimated effort | 1 hour |
 | Depends on | TASK-801 |
 
@@ -2757,8 +2757,8 @@ Must return 200 — file is already served via Nginx static alias.
 | --- | --- |
 | Severity | Critical (final step that makes Phase 8.1 live) |
 | Audit ref | Phase 8 |
-| Owner | Unassigned |
-| Status | OPEN |
+| Owner | Claude Sonnet 4.6 |
+| Status | DONE |
 | Estimated effort | 1–2 hours |
 | Depends on | TASK-800, TASK-802, TASK-803, TASK-804, TASK-805 |
 
@@ -2804,8 +2804,8 @@ curl -sI https://taj.systems/download/TAJ-Pharmacy-Setup.exe  # 200, 5MB
 | --- | --- |
 | Severity | Medium |
 | Audit ref | Phase 8 |
-| Owner | Unassigned |
-| Status | OPEN |
+| Owner | Claude Sonnet 4.6 |
+| Status | DONE |
 | Estimated effort | 30 min |
 | Depends on | TASK-806 |
 
