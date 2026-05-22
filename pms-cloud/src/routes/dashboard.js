@@ -139,23 +139,113 @@ router.get('/v1/dashboard/trend', requireAuthOrJwt, async (req, res) => {
 });
 
 /**
- * Returns recent activity for the authenticated tenant.
- * Query params: limit (default 50, max 200), branch
+ * Returns real business activity for the authenticated tenant.
+ * Built from snapshot tables — not internal sync events.
+ * Query params: limit, branch, type (sale|purchase|expense|return|product|payment)
  */
 router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const branch = req.query.branch || 'main-branch';
+    const branch = req.query.branch || '%';
+    const type = req.query.type || 'all';
 
-    const result = await query(`
-      SELECT event_type, entity_type, entity_id, summary, amount, occurred_at, synced_at as received_at
-      FROM activity_log
-      WHERE tenant_id = $1 AND branch_id = $2
-      ORDER BY synced_at DESC
-      LIMIT $3
-    `, [req.tenantId, branch, limit]);
+    const events = [];
 
-    res.json({ tenant_id: req.tenantId, branch, activity: result.rows });
+    // Sales
+    if (type === 'all' || type === 'sale') {
+      const r = await query(`
+        SELECT 'sale' AS event_type, sale_number AS ref,
+          cashier_name AS actor, total AS amount,
+          payment_method, payment_status, is_return,
+          created_at AS occurred_at
+        FROM snapshot_pos_sales
+        WHERE tenant_id = $1 AND (branch_id LIKE $2)
+          AND (is_active IS NULL OR is_active != 0)
+        ORDER BY created_at DESC LIMIT $3
+      `, [req.tenantId, branch, limit]);
+      events.push(...r.rows);
+    }
+
+    // Purchases (supplier invoices)
+    if (type === 'all' || type === 'purchase') {
+      const r = await query(`
+        SELECT 'purchase' AS event_type, invoice_number AS ref,
+          supplier_name AS actor, total AS amount,
+          payment_status, status,
+          created_at AS occurred_at
+        FROM snapshot_supplier_invoices
+        WHERE tenant_id = $1 AND (branch_id LIKE $2)
+          AND (is_active IS NULL OR is_active != 0)
+        ORDER BY created_at DESC LIMIT $3
+      `, [req.tenantId, branch, limit]);
+      events.push(...r.rows);
+    }
+
+    // Expenses
+    if (type === 'all' || type === 'expense') {
+      const r = await query(`
+        SELECT 'expense' AS event_type, category AS ref,
+          created_by AS actor, amount,
+          payment_method, description AS status,
+          created_at AS occurred_at
+        FROM snapshot_expenses
+        WHERE tenant_id = $1 AND (branch_id LIKE $2)
+          AND (is_active IS NULL OR is_active != 0)
+        ORDER BY created_at DESC LIMIT $3
+      `, [req.tenantId, branch, limit]);
+      events.push(...r.rows);
+    }
+
+    // Returns
+    if (type === 'all' || type === 'return') {
+      const r = await query(`
+        SELECT 'return' AS event_type, id AS ref,
+          '' AS actor, total_amount AS amount,
+          status, reason AS status,
+          created_at AS occurred_at
+        FROM snapshot_returns
+        WHERE tenant_id = $1 AND (branch_id LIKE $2)
+          AND (is_active IS NULL OR is_active != 0)
+        ORDER BY created_at DESC LIMIT $3
+      `, [req.tenantId, branch, limit]);
+      events.push(...r.rows);
+    }
+
+    // Products added/updated
+    if (type === 'all' || type === 'product') {
+      const r = await query(`
+        SELECT 'product' AS event_type, name AS ref,
+          '' AS actor, sale_price AS amount,
+          category AS status, NULL AS payment_method,
+          updated_at AS occurred_at
+        FROM snapshot_products
+        WHERE tenant_id = $1 AND (branch_id LIKE $2)
+          AND (is_active IS NULL OR is_active != 0)
+        ORDER BY updated_at DESC LIMIT $3
+      `, [req.tenantId, branch, limit]);
+      events.push(...r.rows);
+    }
+
+    // Payments (customer + supplier)
+    if (type === 'all' || type === 'payment') {
+      const r = await query(`
+        SELECT 'payment' AS event_type, id AS ref,
+          created_by AS actor, amount,
+          payment_method, 'customer' AS status,
+          created_at AS occurred_at
+        FROM snapshot_customer_payments
+        WHERE tenant_id = $1 AND (branch_id LIKE $2)
+          AND (is_active IS NULL OR is_active != 0)
+        ORDER BY created_at DESC LIMIT $3
+      `, [req.tenantId, branch, limit]);
+      events.push(...r.rows);
+    }
+
+    // Sort all events by occurred_at descending and slice to limit
+    events.sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+    const sliced = events.slice(0, limit);
+
+    res.json({ tenant_id: req.tenantId, branch, activity: sliced });
   } catch (err) {
     console.error('[activity] Error:', err);
     res.status(500).json({ error: 'Internal server error' });
