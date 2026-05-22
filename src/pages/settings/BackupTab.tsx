@@ -133,6 +133,7 @@ export default function BackupTab() {
   if (loading) return <div className="py-12 text-center text-ink-muted">{t('common.loading')}</div>;
 
   return (
+    <>
     <div className="app-card max-w-3xl space-y-6 p-5">
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
@@ -331,5 +332,6 @@ export default function BackupTab() {
       onConfirm={() => { if (deleteConfirmId) { handleDeleteCloudBackup(deleteConfirmId); setDeleteConfirmId(null); } }}
       onCancel={() => setDeleteConfirmId(null)}
     />
+    </>
   );
 }

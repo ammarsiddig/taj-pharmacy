@@ -103,7 +103,7 @@ export default function CustomerNew() {
           </Button>
         </div>
       </form>
-      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

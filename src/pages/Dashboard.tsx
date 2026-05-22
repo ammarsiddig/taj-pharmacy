@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { PackageOpen, TrendingUp, DollarSign, Activity, ShoppingCart, CreditCard, Banknote, CalendarX, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import * as api from '../api';
-import type { DashboardStats, AuditLogRow } from '../types';
+import type { DashboardStats, AuditLogRow, BackupLogRow } from '../types';
 import Badge from '../components/ui/Badge';
 import Toast from '../components/ui/Toast';
 
@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [backupStatus, setBackupStatus] = useState<api.BackupLogRow | null>(null);
+  const [backupStatus, setBackupStatus] = useState<BackupLogRow | null>(null);
   const [backingUp, setBackingUp] = useState(false);
   const [backupError, setBackupError] = useState('');
   const isRtl = i18n.dir() === 'rtl';
@@ -98,7 +98,7 @@ export default function Dashboard() {
           setBackingUp(true);
           setBackupError('');
           try {
-            await api.uploadBackupToCloud(api.getUserId());
+            await api.uploadBackupToCloud(api.getAuthState().user!.id);
             const updated = await api.getAutoBackupStatus();
             setBackupStatus(updated);
           } catch {
@@ -359,7 +359,7 @@ function DailySalesChart({ days, rtl }: { days: { date: string; total: number }[
   );
 }
 
-function BackupIndicator({ status, backingUp, onBackupNow, rtl }: { status: api.BackupLogRow | null; backingUp: boolean; onBackupNow: () => void; rtl?: boolean }) {
+function BackupIndicator({ status, backingUp, onBackupNow, rtl }: { status: BackupLogRow | null; backingUp: boolean; onBackupNow: () => void; rtl?: boolean }) {
   const { t } = useTranslation();
   const now = Date.now();
   const lastAt = status?.completed_at ? new Date(status.completed_at).getTime() : null;
@@ -386,7 +386,7 @@ function BackupIndicator({ status, backingUp, onBackupNow, rtl }: { status: api.
   return (
     <div className={`flex items-center justify-between rounded-xl border px-4 py-3 ${colorClass}`}>
       <div className="flex items-center gap-3" dir={rtl ? 'rtl' : 'ltr'}>
-        <icon size={20} />
+        {(() => { const Icon = icon; return <Icon size={20} />; })()}
         <div>
           <p className="text-sm font-semibold">{t('dashboard.lastCloudBackup')}</p>
           <p className="text-xs opacity-80">{label}{detail ? ` • ${detail}` : ''}</p>

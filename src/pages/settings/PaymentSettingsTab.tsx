@@ -64,6 +64,7 @@ export default function PaymentSettingsTab() {
   const inp = "app-input w-full px-3 py-2.5 text-sm text-ink-main focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100";
 
   return (
+    <>
     <div className="app-card space-y-4 p-5">
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       <h3 className="text-base font-bold text-ink-main">{t('settings.payment.title')}</h3>
@@ -123,5 +124,6 @@ export default function PaymentSettingsTab() {
       onConfirm={() => { if (deleteMethodId) { remove(deleteMethodId); setDeleteMethodId(null); } }}
       onCancel={() => setDeleteMethodId(null)}
     />
+    </>
   );
 }

@@ -160,8 +160,8 @@ export default function Products() {
   const sortedProducts = useMemo(() => {
     if (!sortKey) return products;
     return [...products].sort((a, b) => {
-      const va = (a as Record<string, unknown>)[sortKey];
-      const vb = (b as Record<string, unknown>)[sortKey];
+      const va = (a as unknown as Record<string, unknown>)[sortKey];
+      const vb = (b as unknown as Record<string, unknown>)[sortKey];
 
       if (va == null && vb == null) return 0;
       if (va == null) return 1;
