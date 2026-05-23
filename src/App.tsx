@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { LicenseProvider, useLicense } from './hooks/useLicense';
 import { AppModeProvider } from './hooks/useAppMode';
+import { usePermissions } from './hooks/usePermissions';
+import { Can } from './components/Can';
 import { FEATURE_FLAGS } from './hooks/usePermission';
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
@@ -119,6 +121,14 @@ function PermissionGate({ permission, children }: { permission: string; children
   return <>{children}</>;
 }
 
+function SettingsGate({ children }: { children: React.ReactNode }) {
+  const { hasAny } = usePermissions();
+  if (!hasAny(['settings.users', 'settings.branches', 'settings.license', 'settings.backup', 'settings.payment_methods', 'settings.tax'])) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+}
+
 function BlockedScreen() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -148,7 +158,6 @@ function BlockedScreen() {
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
-  const NON_CASHIER = ['owner', 'manager', 'pharmacist', 'admin'];
   const [syncError, setSyncError] = useState(false);
   useAutoSync(isAuthenticated, setSyncError);
   useUpdateCheck(isAuthenticated);
@@ -191,21 +200,21 @@ function AppRoutes() {
           }
         >
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/products" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PRODUCTS}><Products /></FeatureGate></RoleGate>} />
-          <Route path="/purchases" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><Purchases /></FeatureGate></RoleGate>} />
-          <Route path="/purchases/new" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate></RoleGate>} />
-          <Route path="/purchases/:id/edit" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate></RoleGate>} />
-          <Route path="/purchases/:id" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseDetail /></FeatureGate></RoleGate>} />
+          <Route path="/products" element={<Can resource="products"><FeatureGate flag={FEATURE_FLAGS.PRODUCTS}><Products /></FeatureGate></Can>} />
+          <Route path="/purchases" element={<Can resource="purchases"><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><Purchases /></FeatureGate></Can>} />
+          <Route path="/purchases/new" element={<Can resource="purchases"><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate></Can>} />
+          <Route path="/purchases/:id/edit" element={<Can resource="purchases"><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate></Can>} />
+          <Route path="/purchases/:id" element={<Can resource="purchases"><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseDetail /></FeatureGate></Can>} />
           <Route path="/pos" element={<FeatureGate flag={FEATURE_FLAGS.POS}><POS /></FeatureGate>} />
-          <Route path="/expenses" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.EXPENSES}><Expenses /></FeatureGate></RoleGate>} />
-          <Route path="/accounts" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.ACCOUNTS}><Accounts /></FeatureGate></RoleGate>} />
-          <Route path="/customers/new" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerNew /></FeatureGate></RoleGate>} />
-          <Route path="/customers/:id" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerDetail /></FeatureGate></RoleGate>} />
-          <Route path="/suppliers/:id" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate></RoleGate>} />
-          <Route path="/reports" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate></RoleGate>} />
-          <Route path="/warehouse" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><Warehouse /></FeatureGate></RoleGate>} />
-          <Route path="/sales" element={<RoleGate allowedRoles={NON_CASHIER}><FeatureGate flag={FEATURE_FLAGS.SALES}><Sales /></FeatureGate></RoleGate>} />
-          <Route path="/settings" element={<PermissionGate permission="settings"><Settings /></PermissionGate>} />
+          <Route path="/expenses" element={<Can resource="expenses"><FeatureGate flag={FEATURE_FLAGS.EXPENSES}><Expenses /></FeatureGate></Can>} />
+          <Route path="/accounts" element={<Can resource="accounts"><FeatureGate flag={FEATURE_FLAGS.ACCOUNTS}><Accounts /></FeatureGate></Can>} />
+          <Route path="/customers/new" element={<Can resource="customers"><FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerNew /></FeatureGate></Can>} />
+          <Route path="/customers/:id" element={<Can resource="customers"><FeatureGate flag={FEATURE_FLAGS.CUSTOMERS}><CustomerDetail /></FeatureGate></Can>} />
+          <Route path="/suppliers/:id" element={<Can resource="suppliers"><FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate></Can>} />
+          <Route path="/reports" element={<Can resource="reports.sales"><FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate></Can>} />
+          <Route path="/warehouse" element={<Can resource="inventory"><FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><Warehouse /></FeatureGate></Can>} />
+          <Route path="/sales" element={<Can resource="reports.sales"><FeatureGate flag={FEATURE_FLAGS.SALES}><Sales /></FeatureGate></Can>} />
+          <Route path="/settings" element={<SettingsGate><Settings /></SettingsGate>} />
         </Route>
         <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
       </Routes>

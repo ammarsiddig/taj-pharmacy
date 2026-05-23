@@ -5,6 +5,7 @@ import * as api from '../api';
 import type { PosSession, PosProduct, CartItem, Sale, PaymentMethodSetting, CustomerRow } from '../types';
 import Button from '../components/ui/Button';
 import Toast from '../components/ui/Toast';
+import { Can } from '../components/Can';
 
 import PrintReceipt from '../components/ui/PrintReceipt';
 import { useLicense } from '../hooks/useLicense';
@@ -752,8 +753,8 @@ export default function POS() {
           </div>
           <div className="flex gap-1">
             <button onClick={() => setShowReceiptCustomizer(true)} className="p-1.5 text-ink-muted hover:text-primary-600" title={t('pos.receiptCustomizerTitle')}><ReceiptText size={16} /></button>
-            <button onClick={() => setShowReturnModal(true)} className="p-1.5 text-ink-muted hover:text-status-warning" title={t('pos.returns')}><RotateCcw size={16} /></button>
-            <button onClick={loadHistory} className="p-1.5 text-ink-muted hover:text-primary-600" title={t('pos.history')}><History size={16} /></button>
+            <Can resource="pos.returns"><button onClick={() => setShowReturnModal(true)} className="p-1.5 text-ink-muted hover:text-status-warning" title={t('pos.returns')}><RotateCcw size={16} /></button></Can>
+            <Can resource="pos.history"><button onClick={loadHistory} className="p-1.5 text-ink-muted hover:text-primary-600" title={t('pos.history')}><History size={16} /></button></Can>
             <button onClick={() => setShowCloseModal(true)} className="p-1.5 text-ink-muted hover:text-status-danger" title={t('pos.closeSession')}><LogOut size={16} /></button>
           </div>
         </div>

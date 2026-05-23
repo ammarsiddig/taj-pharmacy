@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLicense } from '../../hooks/useLicense';
-import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { FEATURE_FLAGS } from '../../hooks/usePermission';
 
 interface NavItem {
@@ -27,21 +27,32 @@ interface NavItem {
   group: 'core' | 'ops' | 'admin';
   /** Feature flag that controls access — undefined means always accessible */
   featureFlag?: number;
-  /** If true, this item is hidden for cashier role */
-  hideForCashier?: boolean;
+  /** Single permission resource required to see this item (read level) */
+  requiredPermission?: string;
+  /** Any of these permission resources grant access (read level). Takes precedence over requiredPermission if both set. */
+  requiredAnyPermission?: string[];
 }
+
+const SETTINGS_PERMISSIONS = [
+  'settings.users',
+  'settings.branches',
+  'settings.license',
+  'settings.backup',
+  'settings.payment_methods',
+  'settings.tax',
+];
 
 const navItems: NavItem[] = [
   { key: 'dashboard',  path: '/dashboard',  icon: LayoutDashboard, group: 'core' },
-  { key: 'pos',        path: '/pos',        icon: ShoppingCart,    group: 'core',  featureFlag: FEATURE_FLAGS.POS },
-  { key: 'sales',      path: '/sales',      icon: FileText,        group: 'ops',   featureFlag: FEATURE_FLAGS.SALES, hideForCashier: true },
-  { key: 'purchases',  path: '/purchases',  icon: ShoppingBag,     group: 'ops',   featureFlag: FEATURE_FLAGS.PURCHASES, hideForCashier: true },
-  { key: 'products',   path: '/products',   icon: Package,         group: 'ops',   featureFlag: FEATURE_FLAGS.PRODUCTS, hideForCashier: true },
-  { key: 'warehouse',  path: '/warehouse',  icon: Warehouse,       group: 'ops',   featureFlag: FEATURE_FLAGS.WAREHOUSE, hideForCashier: true },
-  { key: 'expenses',   path: '/expenses',   icon: Receipt,         group: 'ops',   featureFlag: FEATURE_FLAGS.EXPENSES, hideForCashier: true },
-  { key: 'accounts',   path: '/accounts',   icon: Landmark,        group: 'ops',   featureFlag: FEATURE_FLAGS.ACCOUNTS, hideForCashier: true },
-  { key: 'reports',    path: '/reports',    icon: BarChart3,       group: 'admin', featureFlag: FEATURE_FLAGS.REPORTS, hideForCashier: true },
-  { key: 'settings',   path: '/settings',   icon: Settings,        group: 'admin' },
+  { key: 'pos',        path: '/pos',        icon: ShoppingCart,    group: 'core',  featureFlag: FEATURE_FLAGS.POS, requiredPermission: 'pos.sell' },
+  { key: 'sales',      path: '/sales',      icon: FileText,        group: 'ops',   featureFlag: FEATURE_FLAGS.SALES, requiredPermission: 'reports.sales' },
+  { key: 'purchases',  path: '/purchases',  icon: ShoppingBag,     group: 'ops',   featureFlag: FEATURE_FLAGS.PURCHASES, requiredPermission: 'purchases' },
+  { key: 'products',   path: '/products',   icon: Package,         group: 'ops',   featureFlag: FEATURE_FLAGS.PRODUCTS, requiredPermission: 'products' },
+  { key: 'warehouse',  path: '/warehouse',  icon: Warehouse,       group: 'ops',   featureFlag: FEATURE_FLAGS.WAREHOUSE, requiredPermission: 'inventory' },
+  { key: 'expenses',   path: '/expenses',   icon: Receipt,         group: 'ops',   featureFlag: FEATURE_FLAGS.EXPENSES, requiredPermission: 'expenses' },
+  { key: 'accounts',   path: '/accounts',   icon: Landmark,        group: 'ops',   featureFlag: FEATURE_FLAGS.ACCOUNTS, requiredPermission: 'accounts' },
+  { key: 'reports',    path: '/reports',    icon: BarChart3,       group: 'admin', featureFlag: FEATURE_FLAGS.REPORTS, requiredPermission: 'reports.sales' },
+  { key: 'settings',   path: '/settings',   icon: Settings,        group: 'admin', requiredAnyPermission: SETTINGS_PERMISSIONS },
 ];
 
 interface SidebarProps {
@@ -53,8 +64,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const { hasFeature } = useLicense();
-  const { role } = useAuth();
-  const isCashier = role?.name === 'cashier';
+  const { has, hasAny } = usePermissions();
+
   return (
     <aside className={`${collapsed ? 'w-[78px]' : 'w-[256px]'} min-h-screen bg-[#1C5F6F] flex flex-col shrink-0 transition-[width] duration-200 border-l border-white/6 shadow-[0_20px_40px_-24px_rgb(0_0_0_/_0.6)]`}>
       {/* Logo area */}
@@ -83,7 +94,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           const isActive = !isLocked && location.pathname.startsWith(item.path);
           const showDivider = idx > 0 && navItems[idx - 1].group !== item.group;
 
-          if (isCashier && item.hideForCashier) return null;
+          if (item.requiredAnyPermission && !hasAny(item.requiredAnyPermission)) return null;
+          if (item.requiredPermission && !has(item.requiredPermission)) return null;
 
           if (isLocked) {
             return (

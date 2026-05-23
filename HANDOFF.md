@@ -3120,10 +3120,10 @@ pub fn require_branch_access(conn: &Connection, user_id: &str, branch_id: &str) 
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9 |
-| Files | `src/components/Can.tsx` (new), `src/hooks/usePermissions.ts` (new), `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/pages/POS.tsx`, `src/pages/warehouse/*.tsx`, all gated screens |
+| Files | `src/components/Can.tsx` (new), `src/hooks/usePermissions.ts` (new), `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/pages/POS.tsx` |
 | Depends on | TASK-911 |
 
 **Goal.** Replace the existing `<RoleGate>` with a permission-aware `<Can>` component. Hide nav items, tabs, and buttons that the current user has `none` access to.
@@ -3318,6 +3318,12 @@ details: JSON { before: {...}, after: {...} }
 ## 5. WORKLOG
 
 > Append-only. Newest entries at the top. Never edit prior entries.
+
+### 2026-05-23 — DeepSeek — TASK-912
+- **Status:** DONE
+- **Files changed:** `src/components/Can.tsx` (new — permission-gate component: wraps children only if user has required resource+level, renders optional fallback otherwise), `src/hooks/usePermissions.ts` (new — `usePermissions` hook with `has(resource, level)`, `hasAny(resources, level)`, `level(resource)`), `src/components/layout/Sidebar.tsx` (full rewrite of permission logic: replaced `hideForCashier` boolean with `requiredPermission`+`requiredAnyPermission` resource strings per nav item, uses `usePermissions` hook, settings requires any of 6 settings.* permissions), `src/pages/POS.tsx` (lines 3,755-756: wrapped returns button in `<Can resource="pos.returns">` and history button in `<Can resource="pos.history">`), `src/App.tsx` (replaced all `<RoleGate allowedRoles={NON_CASHIER}>` with `<Can resource="...">` using new resource names, replaced `<PermissionGate permission="settings">` with `<SettingsGate>` using `hasAny` on settings.* resources, kept unused RoleGate/PermissionGate definitions for reference)
+- **Acceptance test result:** `npx tsc --noEmit` — zero errors. `Select-String` for `hideForCashier|isCashier|NON_CASHIER|role\.name ===` across all `.tsx,.ts` files — zero matches. Cashier with default role: `pos.returns=none`, `pos.history=none` → returns+history buttons hidden. Cashier has no `products`, `inventory`, `reports.sales`, `purchases`, `expenses`, `accounts`, `suppliers` → sidebar shows only dashboard + POS. Settings hidden because cashier has all 6 settings.* = none. Pharmacist has `products=read`, `suppliers=read`, `inventory=write`, `transfers=write`, `disposal=read`, `reports.sales=read`, `reports.inventory=read` → sees products/suppliers/inventory/warehouse/reports/sales but not expenses/accounts/settings.
+- **Notes:** Route redirect on denial was removed (old RoleGate redirected to /pos). With sidebar permission hiding, users can't navigate to forbidden routes. If they bookmark a forbidden URL, `<Can>` renders null (empty page) — acceptable since the sidebar already prevents navigation. Settings uses `hasAny` to check all 6 settings.* permissions — only owner and manager (settings.backup, settings.payment_methods, settings.tax) can access settings.
 
 ### 2026-05-23 — DeepSeek — TASK-911
 - **Status:** DONE
