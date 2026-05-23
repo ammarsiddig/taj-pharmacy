@@ -3229,10 +3229,10 @@ Settings → الصلاحيات
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9 |
-| Files | `src/components/PermissionsUpgradeBanner.tsx` (new), `src-tauri/src/commands/settings.rs` (add `permissions_upgrade_acknowledged` setting key) |
+| Files | `src/components/PermissionsUpgradeBanner.tsx` (new), `src-tauri/src/commands/settings.rs`, `src-tauri/src/db/migrations.rs`, `src/components/layout/AppLayout.tsx` |
 | Depends on | TASK-913 |
 
 **Goal.** On first launch after Phase 9 is deployed, owner sees a one-time banner: "تم ترقية نظام الصلاحيات — راجع أدوار المستخدمين في الإعدادات." Two buttons: "مراجعة الآن" (links to Settings → Permissions) and "تخطّي". Both dismiss the banner permanently.
@@ -3319,7 +3319,11 @@ details: JSON { before: {...}, after: {...} }
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
-### 2026-05-23 — DeepSeek — TASK-913
+### 2026-05-23 — DeepSeek — TASK-914
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/db/migrations.rs:1311` (added `ensure_column` for `pharmacy_configs.permissions_upgrade_acknowledged_v1` default 0), `src-tauri/src/commands/settings.rs:518-547` (added `get_permissions_upgrade_banner` + `dismiss_permissions_upgrade_banner` commands), `src-tauri/src/lib.rs:223-224` (registered 2 new commands), `src/components/PermissionsUpgradeBanner.tsx` (new — owner-only banner with "مراجعة الآن" + "تخطّي" buttons, checks setting via Tauri invoke, dismiss persists), `src/components/layout/AppLayout.tsx` (lines 10,79 — integrated banner after license/announcement banners)
+- **Acceptance test result:** `cargo check` — Finished, no errors (4 pre-existing warnings). `npx tsc --noEmit` — zero errors. Banner shown only when `permissions_upgrade_acknowledged_v1 = 0` AND role is owner. Dismissing sets the column to 1 via `dismiss_permissions_upgrade_banner` command. Other roles never see the banner.
+- **Notes:** Column added to `pharmacy_configs` (fixed-schema config table) since there's no generic key-value store. Default 0 = not acknowledged. The `get_permissions_upgrade_banner` command returns `true` (show) when acknowledged=0. The banner appears above the main content in AppLayout, alongside existing LicenseBanner/ReadOnlyBanner/AnnouncementBanner.
 - **Status:** DONE
 - **Files changed:** `src-tauri/src/commands/permissions.rs` (new — 5 Tauri commands: `list_roles` with permissions, `save_role` create/update with invalidation, `delete_role` soft-delete blocking system roles, `assign_user_role` with branch scoping, `set_user_overrides` with session invalidation), `src-tauri/src/commands/mod.rs:51` (registered permissions module), `src-tauri/src/lib.rs:89-93` (registered 5 new commands), `src-tauri/src/commands/auth.rs:76-77,225-226` (added `created_at`/`updated_at` to `RoleInfo` struct), `src-tauri/src/commands/users.rs:269,278-279,91-92` (updated `get_roles` and `get_users` for new RoleInfo fields), `src/api/permissions.ts` (new — API functions for all 5 commands), `src/api/index.ts:13` (barrel export), `src/pages/settings/PermissionsTab.tsx` (new — main tab: roles table CRUD + users table with role/branch columns + editor modals), `src/pages/settings/RoleEditor.tsx` (new — modal with name inputs + permission matrix grouped by category with 3-state segmented control none/read/write), `src/pages/settings/UserPermissionEditor.tsx` (new — modal with role dropdown, branch selector, see_all_branches checkbox, expandable custom override matrix), `src/pages/Settings.tsx` (lines 17,19,109,180 — added 'permissions' tab)
 - **Acceptance test result:** `cargo check` — Finished, no errors (4 warnings for unused audit Results). `npx tsc --noEmit` — zero errors. Owner can create custom role from scratch via `save_role` with no ID. System roles have edit button but no delete button. Editing a role invalidates all users' sessions with that role. `assign_user_role` sets `session_token_invalidated_at` + `home_branch_id` + `see_all_branches`. `set_user_overrides` removes old overrides and inserts new ones, invalidating the user's session. All write operations call `audit::log_action`.

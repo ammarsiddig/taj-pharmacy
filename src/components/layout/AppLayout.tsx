@@ -8,6 +8,7 @@ import { useLicense } from '../../hooks/useLicense';
 import { useAppMode } from '../../hooks/useAppMode';
 import ReadOnlyBanner from '../ui/ReadOnlyBanner';
 import AnnouncementBanner from '../ui/AnnouncementBanner';
+import PermissionsUpgradeBanner from '../PermissionsUpgradeBanner';
 
 function LicenseBanner() {
   const { t } = useTranslation();
@@ -76,6 +77,7 @@ export default function AppLayout() {
         <LicenseBanner />
         {isReadOnly && <ReadOnlyBanner isSuspended={isSuspended} />}
         {announcement && <AnnouncementBanner message={announcement} type={announcementType} />}
+        <PermissionsUpgradeBanner />
         <main className="flex-1 overflow-auto bg-ivory-app p-5 md:p-6">
           <Outlet />
         </main>

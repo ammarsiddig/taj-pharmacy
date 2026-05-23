@@ -220,6 +220,8 @@ pub fn run() {
             commands::settings_backup::get_auto_backup_status,
             commands::settings::write_audit_log,
             commands::settings::get_audit_log,
+            commands::settings::get_permissions_upgrade_banner,
+            commands::settings::dismiss_permissions_upgrade_banner,
             commands::settings_license::get_license_info,
             commands::settings_license::activate_license,
             commands::settings_license::get_license_history,

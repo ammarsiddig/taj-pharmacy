@@ -515,4 +515,33 @@ pub fn get_audit_log(
     Ok(rows)
 }
 
+#[tauri::command]
+pub fn get_permissions_upgrade_banner(
+    db: State<'_, Database>,
+    tenant_id: String,
+) -> Result<bool, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let acknowledged: i64 = conn
+        .query_row(
+            "SELECT COALESCE(permissions_upgrade_acknowledged_v1, 0) FROM pharmacy_configs WHERE tenant_id = ?1",
+            rusqlite::params![tenant_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    Ok(acknowledged == 0)
+}
+
+#[tauri::command]
+pub fn dismiss_permissions_upgrade_banner(
+    db: State<'_, Database>,
+    tenant_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE pharmacy_configs SET permissions_upgrade_acknowledged_v1 = 1 WHERE tenant_id = ?1",
+        rusqlite::params![tenant_id],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 

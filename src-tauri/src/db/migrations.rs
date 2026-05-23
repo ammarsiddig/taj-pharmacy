@@ -1309,6 +1309,9 @@ pub fn run(conn: &Connection) -> Result<(), String> {
         [],
     ).ok();
 
+    // TASK-914: permission upgrade banner column (default 0 = not acknowledged)
+    ensure_column(&conn, "pharmacy_configs", "permissions_upgrade_acknowledged_v1", "INTEGER NOT NULL DEFAULT 0")?;
+
     log::info!("Database migrations completed successfully");
     Ok(())
 }
