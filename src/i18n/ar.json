@@ -810,7 +810,12 @@
         "confirm": "تأكيد",
         "cancel": "إلغاء",
         "login": "تسجيل دخول",
-        "backup": "نسخ احتياطي"
+        "backup": "نسخ احتياطي",
+        "role.create": "إنشاء دور",
+        "role.update": "تحديث دور",
+        "role.delete": "حذف دور",
+        "user.role_assigned": "تعيين دور",
+        "user.override_set": "تخصيص صلاحيات"
       }
     }
   },

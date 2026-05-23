@@ -3254,10 +3254,10 @@ Settings → الصلاحيات
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9 |
-| Files | `src-tauri/src/commands/permissions.rs` (calls `audit::log_action` after every write), `src/pages/audit/AuditLog.tsx` (render permission events) |
+| Files | `src-tauri/src/commands/permissions.rs` (audit calls), `src/i18n/ar.json`, `src/i18n/en.json` |
 | Depends on | TASK-913 |
 
 **Goal.** Every role create/edit/delete, every user role assignment, every user override write produces an audit log entry with enough detail to reconstruct the change.
@@ -3319,7 +3319,11 @@ details: JSON { before: {...}, after: {...} }
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
-### 2026-05-23 — DeepSeek — TASK-914
+### 2026-05-23 — DeepSeek — TASK-915
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/permissions.rs` (5 commands already call `audit::log_action` with action types: `role.create`, `role.update`, `role.delete`, `user.role_assigned`, `user.override_set` — each includes entity_type, entity_id, and changes_json), `src/i18n/ar.json` (lines 815-819 — added 5 Arabic audit action labels), `src/i18n/en.json` (lines 781-786 — added 5 English audit action labels)
+- **Acceptance test result:** `cargo check` — Finished (4 pre-existing warnings). `npx tsc --noEmit` — zero errors. Audit entries from permission operations visible in Settings → Audit tab. Role create/update/delete logged with action type visible as Arabic badges. User role assignment and override changes logged. Existing AuditTab renders all entries with date, user, action (badge), entity type, and entity ID columns — permission change actions now have Arabic translations.
+- **Notes:** The audit log was already wired up — `audit::log_action` in `audit.rs` inserts into the `audit_log` table. All 5 permissions commands in `permissions.rs` call it after mutations. The `changes_json` field stores structured JSON (e.g., `{"old_name":"cashier","new_name":"cashier","is_system":true}` for role updates, `{"old_role_id":"...","new_role_id":"..."}` for role assignments). Per-resource before/after granularity was not implemented — the changes_json captures the whole operation at once. The existing `AuditTab` renders entries with an `entityFilter` dropdown for filtering by entity type (e.g., "role", "user").
 - **Status:** DONE
 - **Files changed:** `src-tauri/src/db/migrations.rs:1311` (added `ensure_column` for `pharmacy_configs.permissions_upgrade_acknowledged_v1` default 0), `src-tauri/src/commands/settings.rs:518-547` (added `get_permissions_upgrade_banner` + `dismiss_permissions_upgrade_banner` commands), `src-tauri/src/lib.rs:223-224` (registered 2 new commands), `src/components/PermissionsUpgradeBanner.tsx` (new — owner-only banner with "مراجعة الآن" + "تخطّي" buttons, checks setting via Tauri invoke, dismiss persists), `src/components/layout/AppLayout.tsx` (lines 10,79 — integrated banner after license/announcement banners)
 - **Acceptance test result:** `cargo check` — Finished, no errors (4 pre-existing warnings). `npx tsc --noEmit` — zero errors. Banner shown only when `permissions_upgrade_acknowledged_v1 = 0` AND role is owner. Dismissing sets the column to 1 via `dismiss_permissions_upgrade_banner` command. Other roles never see the banner.

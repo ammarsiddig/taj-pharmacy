@@ -777,7 +777,12 @@
         "confirm": "Confirmed",
         "cancel": "Cancelled",
         "login": "Logged in",
-        "backup": "Backed up"
+        "backup": "Backed up",
+        "role.create": "Role Created",
+        "role.update": "Role Updated",
+        "role.delete": "Role Deleted",
+        "user.role_assigned": "Role Assigned",
+        "user.override_set": "Permissions Customized"
       }
     }
   },
