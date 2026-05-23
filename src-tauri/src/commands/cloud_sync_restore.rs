@@ -753,3 +753,68 @@ pub fn recover_cloud_credentials(
 
     Ok(RecoverResult { tenant_id, sync_token, pharmacy_name })
 }
+
+/// Called by the frontend immediately after pull_all_tables succeeds.
+/// Persists the sync token, marks onboarding complete, updates pharmacy name,
+/// and resets the local admin password to the one the user entered during restore.
+/// Without this, the app loops back to Onboarding on every restart because
+/// onboarding_completed is never set and the sync token is never saved.
+#[tauri::command]
+pub fn finalize_restore(
+    db: State<'_, Database>,
+    sync_token: String,
+    admin_password: String,
+    pharmacy_name: String,
+) -> Result<(), String> {
+    use argon2::{
+        password_hash::{rand_core::OsRng, SaltString},
+        Argon2, PasswordHasher,
+    };
+
+    if admin_password.len() < 6 {
+        return Err("كلمة المرور يجب أن تكون 6 أحرف على الأقل".into());
+    }
+
+    let salt = SaltString::generate(&mut OsRng);
+    let password_hash = Argon2::default()
+        .hash_password(admin_password.as_bytes(), &salt)
+        .map_err(|e| format!("فشل تشفير كلمة المرور: {}", e))?
+        .to_string();
+
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let local_tenant_id: String = conn
+        .query_row("SELECT id FROM tenants LIMIT 1", [], |row| row.get(0))
+        .unwrap_or_else(|_| "default-tenant".to_string());
+
+    // Persist sync token so future background syncs work
+    conn.execute(
+        "INSERT INTO cloud_sync_config (key, value) VALUES ('token', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![sync_token],
+    )
+    .map_err(|e| format!("فشل حفظ رمز المزامنة: {}", e))?;
+
+    // Mark onboarding complete and set real pharmacy name
+    conn.execute(
+        "UPDATE tenants SET onboarding_completed = 1, name = ?1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?2",
+        params![pharmacy_name.trim(), local_tenant_id],
+    )
+    .map_err(|e| format!("فشل تحديث بيانات الصيدلية: {}", e))?;
+
+    // Reset the seeded admin password to the cloud password the user just verified.
+    // After restore, users table is not pulled from cloud, so the only account
+    // available is the seeded user-admin. Setting its password to the one the user
+    // entered means they can log in immediately with username=admin + cloud password.
+    conn.execute(
+        "UPDATE users SET password_hash = ?1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = 'user-admin' AND tenant_id = ?2",
+        params![password_hash, local_tenant_id],
+    )
+    .map_err(|e| format!("فشل تحديث كلمة مرور المسؤول: {}", e))?;
+
+    Ok(())
+}

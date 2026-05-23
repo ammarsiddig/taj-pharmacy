@@ -4,7 +4,7 @@ import { CheckCircle2, Building2, User, ChevronRight, ChevronLeft, Key, RefreshC
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
-import { activateLicenseCloud, completeOnboarding, recoverCloudCredentials, pullAllTables } from '../api';
+import { activateLicenseCloud, completeOnboarding, recoverCloudCredentials, pullAllTables, finalizeRestore } from '../api';
 import type { OnboardingData, RestoreResult } from '../types';
 
 const CANONICAL_CLOUD_ENDPOINT = 'https://pharmacy.taj.systems';
@@ -253,6 +253,11 @@ export default function Onboarding({ onComplete }: Props) {
       // Step R3: pull all tables
       setRestoreProgressMsg('جاري استعادة بيانات الصيدلية من السحابة...');
       const result = await pullAllTables(CANONICAL_CLOUD_ENDPOINT, recovered.sync_token);
+
+      // Step R4: persist sync token + mark onboarding complete + reset admin password
+      setRestoreProgressMsg('جاري حفظ إعدادات الحساب...');
+      await finalizeRestore(recovered.sync_token, restorePassword, recovered.pharmacy_name);
+
       setRestoreResult(result);
       setRestoreStep('done');
     } catch (err: unknown) {
@@ -822,7 +827,7 @@ export default function Onboarding({ onComplete }: Props) {
                     <p className="text-sm font-medium text-primary-600 mb-1">{restorePharmacyName}</p>
                   )}
                   <p className="text-sm text-ink-muted max-w-sm">
-                    تم استرجاع بيانات صيدليتك. يمكنك الآن تسجيل الدخول.
+                    تم استرجاع بيانات صيدليتك. سجّل الدخول باسم المستخدم <span className="font-mono font-semibold text-ink-main">admin</span> وكلمة المرور التي أدخلتها.
                   </p>
                 </div>
                 <div className="bg-ivory-muted rounded-xl p-4 text-sm text-ink-main w-full max-w-sm text-right">

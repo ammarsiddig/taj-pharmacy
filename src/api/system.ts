@@ -198,3 +198,11 @@ export async function pullAllTables(
 ): Promise<RestoreResult> {
   return invoke('pull_all_tables', { endpoint, syncToken });
 }
+
+export async function finalizeRestore(
+  syncToken: string,
+  adminPassword: string,
+  pharmacyName: string,
+): Promise<void> {
+  return invoke('finalize_restore', { syncToken, adminPassword, pharmacyName });
+}
