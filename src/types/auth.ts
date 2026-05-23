@@ -57,6 +57,8 @@ export interface User {
   last_login_at?: string;
   created_at: string;
   updated_at: string;
+  home_branch_id?: string;
+  see_all_branches?: boolean;
   role?: Role;
   branch?: Branch;
 }

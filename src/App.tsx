@@ -7,6 +7,7 @@ import { AppModeProvider } from './hooks/useAppMode';
 import { usePermissions } from './hooks/usePermissions';
 import { Can } from './components/Can';
 import { FEATURE_FLAGS } from './hooks/usePermission';
+import PermissionsUpgradeBanner from './components/PermissionsUpgradeBanner';
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -107,20 +108,6 @@ function FeatureGate({ flag, children }: { flag: number; children: React.ReactNo
   return <>{children}</>;
 }
 
-function RoleGate({ allowedRoles, children }: { allowedRoles: string[]; children: React.ReactNode }) {
-  const { role } = useAuth();
-  if (role && !allowedRoles.includes(role.name)) {
-    return <Navigate to="/pos" replace />;
-  }
-  return <>{children}</>;
-}
-
-function PermissionGate({ permission, children }: { permission: string; children: React.ReactNode }) {
-  const { permissions } = useAuth();
-  if (!permissions.includes(permission)) return <Navigate to="/dashboard" replace />;
-  return <>{children}</>;
-}
-
 function SettingsGate({ children }: { children: React.ReactNode }) {
   const { hasAny } = usePermissions();
   if (!hasAny(['settings.users', 'settings.branches', 'settings.license', 'settings.backup', 'settings.payment_methods', 'settings.tax'])) {
@@ -190,6 +177,7 @@ function AppRoutes() {
 
   return (
     <SyncStatusContext.Provider value={{ syncError, setSyncError }}>
+      {isAuthenticated && <PermissionsUpgradeBanner />}
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route

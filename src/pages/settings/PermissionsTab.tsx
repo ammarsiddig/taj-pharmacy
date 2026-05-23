@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as api from '../../api';
 import { useAuth } from '../../hooks/useAuth';
+import type { User, Branch } from '../../types/auth';
 import RoleEditor from './RoleEditor';
 import UserPermissionEditor from './UserPermissionEditor';
-import type { RoleWithPermissions, PermissionEntry } from '../../api/permissions';
+import type { RoleWithPermissions } from '../../api/permissions';
 
 const RESOURCES_BY_CATEGORY: Record<string, string[]> = {
   'نقطة البيع': ['pos.sell', 'pos.returns', 'pos.history', 'pos.discount'],
@@ -19,13 +20,13 @@ const RESOURCES_BY_CATEGORY: Record<string, string[]> = {
 export default function PermissionsTab() {
   const { user } = useAuth();
   const [roles, setRoles] = useState<RoleWithPermissions[]>([]);
-  const [users, setUsers] = useState<api.User[]>([]);
-  const [branches, setBranches] = useState<api.Branch[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null);
   const [editingRole, setEditingRole] = useState<RoleWithPermissions | null>(null);
-  const [editingUser, setEditingUser] = useState<api.User | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const showToast = (type: 'success' | 'danger', msg: string) => setToast({ msg, type });
 

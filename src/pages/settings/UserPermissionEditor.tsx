@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { User, Branch, Role, AssignRoleData, SetUserOverridesData, PermissionEntry } from '../../api';
+import type { User, Branch } from '../../types/auth';
+import type { AssignRoleData, SetUserOverridesData, PermissionEntry } from '../../api';
 import type { RoleWithPermissions } from '../../api/permissions';
 
 interface UserPermissionEditorProps {
