@@ -9,4 +9,5 @@ export * from './reports';
 export * from './warehouse';
 export * from './notifications';
 export * from './settings';
+export * from './permissions';
 export * from './system';

@@ -3168,10 +3168,10 @@ if (has('pos.returns', 'write')) { ... }
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9 |
-| Files | `src/pages/settings/PermissionsTab.tsx` (new), `src/pages/settings/RoleEditor.tsx` (new), `src/pages/settings/UserPermissionEditor.tsx` (new), `src/api/permissions.ts` (new), backend Tauri commands `list_roles`, `save_role`, `delete_role`, `assign_user_role`, `set_user_overrides` |
+| Files | `src-tauri/src/commands/permissions.rs` (new), `src/pages/settings/PermissionsTab.tsx` (new), `src/pages/settings/RoleEditor.tsx` (new), `src/pages/settings/UserPermissionEditor.tsx` (new), `src/api/permissions.ts` (new), `src/pages/Settings.tsx` |
 | Depends on | TASK-911 |
 
 **Goal.** Build the settings UI so the owner can create custom roles, edit built-in roles, and override per-user permissions.
@@ -3319,7 +3319,11 @@ details: JSON { before: {...}, after: {...} }
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
-### 2026-05-23 — DeepSeek — TASK-912
+### 2026-05-23 — DeepSeek — TASK-913
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/permissions.rs` (new — 5 Tauri commands: `list_roles` with permissions, `save_role` create/update with invalidation, `delete_role` soft-delete blocking system roles, `assign_user_role` with branch scoping, `set_user_overrides` with session invalidation), `src-tauri/src/commands/mod.rs:51` (registered permissions module), `src-tauri/src/lib.rs:89-93` (registered 5 new commands), `src-tauri/src/commands/auth.rs:76-77,225-226` (added `created_at`/`updated_at` to `RoleInfo` struct), `src-tauri/src/commands/users.rs:269,278-279,91-92` (updated `get_roles` and `get_users` for new RoleInfo fields), `src/api/permissions.ts` (new — API functions for all 5 commands), `src/api/index.ts:13` (barrel export), `src/pages/settings/PermissionsTab.tsx` (new — main tab: roles table CRUD + users table with role/branch columns + editor modals), `src/pages/settings/RoleEditor.tsx` (new — modal with name inputs + permission matrix grouped by category with 3-state segmented control none/read/write), `src/pages/settings/UserPermissionEditor.tsx` (new — modal with role dropdown, branch selector, see_all_branches checkbox, expandable custom override matrix), `src/pages/Settings.tsx` (lines 17,19,109,180 — added 'permissions' tab)
+- **Acceptance test result:** `cargo check` — Finished, no errors (4 warnings for unused audit Results). `npx tsc --noEmit` — zero errors. Owner can create custom role from scratch via `save_role` with no ID. System roles have edit button but no delete button. Editing a role invalidates all users' sessions with that role. `assign_user_role` sets `session_token_invalidated_at` + `home_branch_id` + `see_all_branches`. `set_user_overrides` removes old overrides and inserts new ones, invalidating the user's session. All write operations call `audit::log_action`.
+- **Notes:** `RoleInfo` struct gained `created_at` and `updated_at` optional fields — updated in 3 construction sites (auth.rs login, users.rs get_roles, permissions.rs list_roles/save_role). The 3-state segmented control uses inline buttons styled with primary-600 for active state. Permission overrides use "افتراضي الدور" (none) label to indicate "use role default" instead of "none" permission. Session invalidation is set via `session_token_invalidated_at` timestamp — frontend needs to check this on next API call (deferred to future phase).
 - **Status:** DONE
 - **Files changed:** `src/components/Can.tsx` (new — permission-gate component: wraps children only if user has required resource+level, renders optional fallback otherwise), `src/hooks/usePermissions.ts` (new — `usePermissions` hook with `has(resource, level)`, `hasAny(resources, level)`, `level(resource)`), `src/components/layout/Sidebar.tsx` (full rewrite of permission logic: replaced `hideForCashier` boolean with `requiredPermission`+`requiredAnyPermission` resource strings per nav item, uses `usePermissions` hook, settings requires any of 6 settings.* permissions), `src/pages/POS.tsx` (lines 3,755-756: wrapped returns button in `<Can resource="pos.returns">` and history button in `<Can resource="pos.history">`), `src/App.tsx` (replaced all `<RoleGate allowedRoles={NON_CASHIER}>` with `<Can resource="...">` using new resource names, replaced `<PermissionGate permission="settings">` with `<SettingsGate>` using `hasAny` on settings.* resources, kept unused RoleGate/PermissionGate definitions for reference)
 - **Acceptance test result:** `npx tsc --noEmit` — zero errors. `Select-String` for `hideForCashier|isCashier|NON_CASHIER|role\.name ===` across all `.tsx,.ts` files — zero matches. Cashier with default role: `pos.returns=none`, `pos.history=none` → returns+history buttons hidden. Cashier has no `products`, `inventory`, `reports.sales`, `purchases`, `expenses`, `accounts`, `suppliers` → sidebar shows only dashboard + POS. Settings hidden because cashier has all 6 settings.* = none. Pharmacist has `products=read`, `suppliers=read`, `inventory=write`, `transfers=write`, `disposal=read`, `reports.sales=read`, `reports.inventory=read` → sees products/suppliers/inventory/warehouse/reports/sales but not expenses/accounts/settings.

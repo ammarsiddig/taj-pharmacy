@@ -92,6 +92,8 @@ pub fn get_users(
                 name: row.get(14).unwrap_or_default(),
                 name_ar: row.get(15).ok().flatten(),
                 is_system: row.get(16).unwrap_or(false),
+                created_at: None,
+                updated_at: None,
             }),
             branch: row.get::<_, Option<String>>(17)?.map(|id| BranchInfo {
                 id,
@@ -264,7 +266,7 @@ pub fn get_roles(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, tenant_id, name, name_ar, is_system
+        "SELECT id, tenant_id, name, name_ar, is_system, created_at, updated_at
          FROM roles WHERE tenant_id = ?1 AND deleted_at IS NULL ORDER BY name"
     ).map_err(|e| e.to_string())?;
 
@@ -275,6 +277,8 @@ pub fn get_roles(
             name: row.get(2)?,
             name_ar: row.get(3)?,
             is_system: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
         })
     }).map_err(|e| e.to_string())?
       .filter_map(|r| r.ok())

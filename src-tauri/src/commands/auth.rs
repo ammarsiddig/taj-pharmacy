@@ -73,6 +73,8 @@ pub struct RoleInfo {
     pub name: String,
     pub name_ar: Option<String>,
     pub is_system: bool,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -220,6 +222,8 @@ pub fn login(
                 name: row.get(15)?,
                 name_ar: row.get(16)?,
                 is_system: row.get(17)?,
+                created_at: None,
+                updated_at: None,
             },
         ))
     });

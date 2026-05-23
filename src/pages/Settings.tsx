@@ -15,8 +15,9 @@ import BackupTab from './settings/BackupTab';
 import LicenseTab from './settings/LicenseTab';
 import CloudSyncTab from './settings/CloudSyncTab';
 import UnitManagementTab from './settings/UnitManagementTab';
+import PermissionsTab from './settings/PermissionsTab';
 
-type TabKey = 'general' | 'users' | 'branches' | 'notifications' | 'backup' | 'license' | 'cloud_sync' | 'units';
+type TabKey = 'general' | 'users' | 'branches' | 'notifications' | 'backup' | 'license' | 'cloud_sync' | 'units' | 'permissions';
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -105,6 +106,7 @@ export default function Settings() {
                 ['license', t('settings.licenseTab')],
                 ['cloud_sync', t('settings.cloudSyncTab')],
                 ['units', t('settings.unitsTab')],
+                ['permissions', 'الصلاحيات'],
               ] as [TabKey, string][]).map(([k, label]) => (
                 <button key={k} onClick={() => setTab(k)}
                   className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
@@ -176,6 +178,7 @@ export default function Settings() {
         {tab === 'license' && <LicenseTab />}
         {tab === 'cloud_sync' && <CloudSyncTab />}
         {tab === 'units' && <UnitManagementTab />}
+        {tab === 'permissions' && <PermissionsTab />}
       </div>
 
       {panelOpen && (
