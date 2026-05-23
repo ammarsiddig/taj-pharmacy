@@ -1312,6 +1312,18 @@ pub fn run(conn: &Connection) -> Result<(), String> {
     // TASK-914: permission upgrade banner column (default 0 = not acknowledged)
     ensure_column(&conn, "pharmacy_configs", "permissions_upgrade_acknowledged_v1", "INTEGER NOT NULL DEFAULT 0")?;
 
+    // TASK-916: add branch_id to batches table (was missing — transfers broke in v0.2.2)
+    ensure_column(&conn, "batches", "branch_id", "TEXT REFERENCES branches(id)")?;
+    conn.execute(
+        "UPDATE batches SET branch_id = (
+            SELECT branch_id FROM storage_locations WHERE id = batches.location_id
+         ) WHERE branch_id IS NULL",
+        [],
+    ).ok();
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_batches_branch ON batches(tenant_id, branch_id) WHERE deleted_at IS NULL;"
+    ).map_err(|e| e.to_string())?;
+
     log::info!("Database migrations completed successfully");
     Ok(())
 }

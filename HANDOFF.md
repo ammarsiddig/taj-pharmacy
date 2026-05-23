@@ -3288,8 +3288,8 @@ details: JSON { before: {...}, after: {...} }
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9.5 |
 | Priority | 🔴 URGENT — transfers broken in production |
 | Files | `src-tauri/src/db/migrations.rs` (add a new numbered migration), `pms-cloud/migrations/NNN_batches_branch_id.sql` |
@@ -3501,6 +3501,12 @@ Rate-limited (10/min per IP) to prevent enumeration.
 ## 5. WORKLOG
 
 > Append-only. Newest entries at the top. Never edit prior entries.
+
+### 2026-05-23 — DeepSeek — TASK-916
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/db/migrations.rs` (lines 1316-1328 — TASK-916 migration: `ensure_column("batches", "branch_id")`, backfill UPDATE from `storage_locations.branch_id`, `CREATE INDEX IF NOT EXISTS idx_batches_branch`)
+- **Acceptance test result:** `cargo check` — Finished, no errors (4 pre-existing warnings). `npm run build` — `✓ built in 9.03s`, zero TS errors, exit 0. Cloud side: `snapshot_batches` in PG migration 001 already has `branch_id TEXT NOT NULL DEFAULT 'main-branch'` — no PG migration needed. `sync.js` batches TABLE_SCHEMAS already includes `branch_id` as a column.
+- **Notes:** The cloud side was already correct — `snapshot_batches.branch_id` existed in migration 001 with default 'main-branch', and `sync.js` included it in columns. Only the desktop `batches` table was missing the column. The backfill uses `storage_locations.branch_id` to populate existing rows. Transfer code in `warehouse_transfer.rs:127` already inserts `branch_id` — now it won't error.
 
 ### 2026-05-23 — DeepSeek — TASK-915
 - **Status:** DONE
