@@ -80,6 +80,9 @@ export default function Onboarding({ onComplete }: Props) {
   const [activationState, setActivationState] = useState<'idle' | 'success' | 'error'>('idle');
   const [activationMessage, setActivationMessage] = useState('');
   const [activating, setActivating] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [emailAvailable, setEmailAvailable] = useState(false);
 
   // ── Restore flow state ────────────────────────────────────────────────────
   const [restoreStep, setRestoreStep] = useState<RestoreStep>('form');
@@ -107,7 +110,38 @@ export default function Onboarding({ onComplete }: Props) {
     }
     if (adminPassword !== adminConfirmPassword) return 'كلمتا المرور غير متطابقتين';
     if (!ownerEmail.trim()) return 'البريد الإلكتروني مطلوب لربط الحساب السحابي';
+    if (emailError) return emailError;
+    if (emailAvailable && !emailChecking) return null;
+    if (ownerEmail.includes('@') && !emailAvailable && !emailChecking) return 'جاري التحقق من البريد الإلكتروني...';
     return null;
+  };
+
+  const checkEmail = async () => {
+    const email = ownerEmail.trim();
+    if (!email || !email.includes('@')) return;
+    setEmailChecking(true);
+    setEmailError('');
+    setEmailAvailable(false);
+    try {
+      const res = await fetch(`${CANONICAL_CLOUD_ENDPOINT}/v1/auth/check-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.exists) {
+        setEmailError('هذا البريد مسجّل بصيدلية أخرى. استخدم بريداً مختلفاً أو سجّل دخولك من خيار \'استعادة صيدلية موجودة\'.');
+        setEmailAvailable(false);
+      } else {
+        setEmailError('');
+        setEmailAvailable(true);
+      }
+    } catch {
+      // Allow proceeding if cloud is unreachable
+      setEmailAvailable(true);
+    } finally {
+      setEmailChecking(false);
+    }
   };
 
   const handleNext = (e: FormEvent) => {
@@ -470,8 +504,23 @@ export default function Onboarding({ onComplete }: Props) {
                           onChange={(e) => setBranchName(e.target.value)}
                           placeholder={t('onboarding.mainBranchPlaceholder')}
                           dir="ltr"
-                          required
-                        />
+                        required
+                      />
+                      {emailChecking && (
+                        <div className="flex items-center gap-2 text-xs text-ink-muted">
+                          <RefreshCw size={12} className="animate-spin" />
+                          جاري التحقق من البريد...
+                        </div>
+                      )}
+                      {emailError && (
+                        <div className="text-xs text-status-danger">{emailError}</div>
+                      )}
+                      {emailAvailable && !emailChecking && ownerEmail.includes('@') && (
+                        <div className="flex items-center gap-1 text-xs text-green-600">
+                          <CheckCircle2 size={12} />
+                          البريد متاح
+                        </div>
+                      )}
                         <Input
                           label="اسم الفرع (عربي)"
                           name="branchNameAr"
@@ -526,7 +575,8 @@ export default function Onboarding({ onComplete }: Props) {
                         name="ownerEmail"
                         type="email"
                         value={ownerEmail}
-                        onChange={(e) => setOwnerEmail(e.target.value)}
+                        onChange={(e) => { setOwnerEmail(e.target.value); setEmailAvailable(false); setEmailError(''); }}
+                        onBlur={checkEmail}
                         placeholder={t('onboarding.emailPlaceholder')}
                         dir="ltr"
                         autoComplete="email"
@@ -653,7 +703,15 @@ export default function Onboarding({ onComplete }: Props) {
                         رجوع
                       </Button>
                     )}
-                    <Button type="submit" size="lg" disabled={saving}>
+                    <Button
+                      type="submit"
+                      size="lg"
+                      disabled={
+                        saving ||
+                        (step === 1 && !pharmacyName.trim()) ||
+                        (step === 2 && (emailChecking || (ownerEmail.includes('@') && !emailAvailable)))
+                      }
+                    >
                       {saving ? 'جاري الحفظ...' : step === 2 ? 'حفظ والمتابعة' : 'التالي'}
                       {!saving && <ChevronRight size={16} />}
                     </Button>

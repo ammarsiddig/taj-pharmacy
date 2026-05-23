@@ -6,6 +6,15 @@ import crypto from 'crypto';
 import { query, transaction } from '../db.js';
 import { requireAuth, requireAuthOrJwt, requireJwt } from '../auth.js';
 import { loginLimiter, activateLimiter } from '../middleware/rate-limit.js';
+import rateLimit from 'express-rate-limit';
+
+const checkEmailLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many email checks. Try again in 1 minute.' },
+});
 
 const router = Router();
 
@@ -628,6 +637,29 @@ router.get('/v1/branches/friendly-names', requireAuthOrJwt, async (req, res) => 
     res.json({ tenant_id: req.tenantId, branches: result.rows });
   } catch (err) {
     console.error('[branches] error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// TASK-919: check email uniqueness during onboarding
+router.post('/v1/auth/check-email', checkEmailLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+    const normalized = email.trim().toLowerCase();
+    const result = await req.pool.query(
+      'SELECT t.id, t.pharmacy_name FROM tenants t JOIN owners o ON o.tenant_id = t.id WHERE LOWER(o.email) = $1 LIMIT 1',
+      [normalized]
+    );
+    if (result.rows.length > 0) {
+      res.json({ exists: true, tenant_id: result.rows[0].id });
+    } else {
+      res.json({ exists: false });
+    }
+  } catch (err) {
+    console.error('[check-email] error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
