@@ -2910,7 +2910,373 @@ Either expand into a sub-folder `pms-cloud/marketing/docs/` with one HTML per to
 
 ---
 
-## 4. BACKLOG
+### Phase 9 — Permissions Redesign (resource × level + custom roles + branch scoping)
+
+> **Why this phase exists.** Current permissions are hardcoded role strings checked in `src-tauri/src/commands/guard.rs` with coarse names like `"warehouse"` and `"pos.returns"`. Owners can't create custom roles, there's no per-user override, no branch scoping, and "no read access" doesn't hide UI — buttons just error on click. Phase 9 replaces the entire model with a flexible `(resource × level)` system plus custom roles, per-user overrides, and branch-level data isolation.
+>
+> **Design decisions locked-in (2026-05-23 with owner):**
+> 1. **Model:** `(resource, level)` where level is `none` | `read` | `write`. Write implies read.
+> 2. **Custom roles:** owner can create new roles. Built-in roles (owner/manager/pharmacist/cashier) are editable but not deletable.
+> 3. **Per-user overrides:** any user's specific permission can be overridden without changing the role.
+> 4. **Branch scoping:** every user has `home_branch_id`; only users with `see_all_branches=1` can see other branches' data. No `user_branches` junction in v1.
+> 5. **Hidden vs read-only:** `level=none` means the UI element doesn't render at all (not greyed out). `level=read` shows but disables write actions.
+> 6. **Logout on permission change:** when admin changes a user's role/permissions, that user's active session is invalidated and they must re-login.
+> 7. **Audit log:** every permission/role/user change is logged to the existing `audit_log` table.
+> 8. **Migration UX:** on first launch after upgrade, show a one-time banner: "تم ترقية نظام الصلاحيات — راجع أدوار المستخدمين في الإعدادات."
+
+#### Resources (the 22 things you can permission on)
+
+| Category | Resource | Examples of UI it controls |
+|---|---|---|
+| **POS** | `pos.sell` | Sell tab in POS |
+| | `pos.returns` | Returns button (hidden if `none`) |
+| | `pos.history` | "سجل الجلسة" tab |
+| | `pos.discount` | Discount field in cart |
+| **Sessions** | `sessions` | Open/close session buttons + session list |
+| **Inventory** | `products` | Products page (read = view list, write = add/edit/delete) |
+| | `inventory` | Stock by location, batches, quantity adjustments |
+| | `transfers` | Stock transfer between locations |
+| | `disposal` | Dispose batches button + recall |
+| **Buying** | `purchases` | Purchases tab + new purchase invoice |
+| | `supplier_returns` | Supplier returns tab |
+| | `suppliers` | Suppliers list page |
+| **Sales side** | `customers` | Customers page (read = view, write = add/edit, balance always visible if read) |
+| | `customer_payments` | "تحصيل دفعة" button |
+| **Money** | `accounts` | Cash registers + bank accounts |
+| | `account_transfers` | Money transfer between accounts |
+| | `expenses` | Expenses page |
+| **Reports** | `reports.sales` | Sales report |
+| | `reports.inventory` | Inventory report |
+| | `reports.financial` | P&L, cash flow, account statements |
+| **System** | `audit` | Activity log page |
+| | `settings.users` | Users & permissions tab |
+| | `settings.branches` | Branches tab |
+| | `settings.license` | License tab |
+| | `settings.backup` | Backup tab |
+| | `settings.payment_methods` | Payment methods tab |
+| | `settings.tax` | Tax settings tab |
+
+#### Default role permission matrix
+
+| Resource | Owner | Manager | Pharmacist | Cashier |
+|---|:-:|:-:|:-:|:-:|
+| pos.sell | W | W | W | W |
+| pos.returns | W | W | W | **N** |
+| pos.history | W | W | W | **N** |
+| pos.discount | W | W | W | N |
+| sessions | W | W | W | W |
+| products | W | W | R | N |
+| inventory | W | W | W | N |
+| transfers | W | W | W | N |
+| disposal | W | W | R | N |
+| purchases | W | W | N | N |
+| supplier_returns | W | W | N | N |
+| suppliers | W | W | R | N |
+| customers | W | W | R | R |
+| customer_payments | W | W | W | N |
+| accounts | W | R | N | N |
+| account_transfers | W | N | N | N |
+| expenses | W | W | N | N |
+| reports.sales | W | W | R | N |
+| reports.inventory | W | W | R | N |
+| reports.financial | W | N | N | N |
+| audit | W | R | N | N |
+| settings.users | W | N | N | N |
+| settings.branches | W | N | N | N |
+| settings.license | W | N | N | N |
+| settings.backup | W | R | N | N |
+| settings.payment_methods | W | W | N | N |
+| settings.tax | W | W | N | N |
+
+W=Write, R=Read, N=None.
+
+---
+
+### TASK-910 — Phase 9 DB schema migration
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9 |
+| Files | `src-tauri/migrations/NNN_permissions_redesign.sql` (next number), `pms-cloud/migrations/NNN_permissions_snapshot.sql` |
+| Depends on | none |
+
+**Goal.** Create the new permissions tables. Seed the four built-in roles with the default matrix above. Migrate existing users from their old `role` column to the new `role_id`.
+
+**SQLite migration (desktop):**
+```sql
+-- roles table
+CREATE TABLE IF NOT EXISTS roles (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  name TEXT NOT NULL,            -- 'owner', 'manager', 'pharmacist', 'cashier', or custom
+  name_ar TEXT,                  -- Arabic display name
+  is_system INTEGER NOT NULL DEFAULT 0,  -- 1 = built-in (editable, not deletable)
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(tenant_id, name)
+);
+
+-- role permissions
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  resource TEXT NOT NULL,         -- 'pos.sell', 'inventory', etc.
+  level TEXT NOT NULL CHECK (level IN ('none','read','write')),
+  PRIMARY KEY (role_id, resource)
+);
+
+-- per-user overrides
+CREATE TABLE IF NOT EXISTS user_permission_overrides (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  resource TEXT NOT NULL,
+  level TEXT NOT NULL CHECK (level IN ('none','read','write')),
+  PRIMARY KEY (user_id, resource)
+);
+
+-- extend users
+ALTER TABLE users ADD COLUMN role_id TEXT REFERENCES roles(id);
+ALTER TABLE users ADD COLUMN home_branch_id TEXT REFERENCES branches(id);
+ALTER TABLE users ADD COLUMN see_all_branches INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN session_token_invalidated_at TEXT; -- forces re-login when permission changes
+
+-- seed 4 built-in roles per tenant
+-- (the migration script enumerates existing tenants and inserts owner/manager/pharmacist/cashier
+--  with the default permission matrix from Phase 9 doc)
+
+-- migrate users: map old `role` string → new role_id (owner→owner role, etc.)
+-- set see_all_branches = 1 for users with role='owner'
+-- set home_branch_id = users.branch_id (existing column)
+```
+
+**PG snapshot migration (cloud):** mirror the three new tables + new user columns into snapshot space so cloud sync stays in lockstep. Same `level` CHECK constraint.
+
+**Acceptance test.**
+1. Run the migration on a fresh DB. Verify 4 roles exist per tenant.
+2. Run on the existing dev DB. Verify all existing users have `role_id` filled and `home_branch_id` set.
+3. `SELECT * FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name='cashier' AND tenant_id=?)` returns 27 rows matching the matrix above (including the `N` rows — explicit `none` is stored, not absent).
+
+**Out of scope.** Backend guard changes, frontend gates, settings UI — those are TASK-911 through TASK-915.
+
+---
+
+### TASK-911 — Backend permission guard (`require_access`) + branch filtering
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9 |
+| Files | `src-tauri/src/commands/guard.rs`, every Tauri command that currently calls `require_permission` |
+| Depends on | TASK-910 |
+
+**Goal.** Replace the string-permission check with a `(resource, level)` check. Add a branch-scoping helper that all data queries use.
+
+**New guard signature.**
+```rust
+pub enum Level { None, Read, Write }
+
+/// Returns Ok if the user has at least `min_level` access to the resource,
+/// considering: (1) user_permission_overrides first, (2) role_permissions second.
+pub fn require_access(conn: &Connection, user_id: &str, resource: &str, min_level: Level) -> Result<(), String>;
+
+/// Returns the list of branch IDs the user can act on.
+/// If see_all_branches=1, returns all active branches for the tenant.
+/// Else returns vec![home_branch_id].
+pub fn allowed_branches(conn: &Connection, user_id: &str) -> Result<Vec<String>, String>;
+
+/// Convenience: errors if the requested branch_id is not in allowed_branches.
+pub fn require_branch_access(conn: &Connection, user_id: &str, branch_id: &str) -> Result<(), String>;
+```
+
+**Migration of existing call sites.** Every `require_permission(conn, user_id, "warehouse")` becomes `require_access(conn, user_id, "inventory", Level::Write)`. Build a mapping table for the curator to review:
+
+| Old call | New call |
+|---|---|
+| `require_permission(c, u, "pos")` | `require_access(c, u, "pos.sell", Write)` |
+| `require_permission(c, u, "pos.returns")` | `require_access(c, u, "pos.returns", Write)` |
+| `require_permission(c, u, "warehouse")` | `require_access(c, u, "inventory", Write)` |
+| `require_permission(c, u, "purchases")` | `require_access(c, u, "purchases", Write)` |
+| `require_permission(c, u, "customers")` | `require_access(c, u, "customers", Write)` |
+| `require_permission(c, u, "expenses")` | `require_access(c, u, "expenses", Write)` |
+| `require_permission(c, u, "accounts")` | `require_access(c, u, "accounts", Write)` |
+| `require_permission(c, u, "reports")` | `require_access(c, u, "reports.sales", Read)` |
+| (any list-query command) | also add `require_branch_access` for the queried branch_id |
+
+**Branch filter in queries.** Every `SELECT … WHERE tenant_id=?` that returns branch-scoped data must also filter by `branch_id IN (allowed_branches)`. This catches: products (no branch column → unaffected), batches, sales, expenses, transfers, accounts (some accounts are branch-scoped).
+
+**Acceptance test.**
+1. Login as cashier. Try to call `transfer_stock` via Tauri — should error with "صلاحية غير كافية".
+2. Login as manager whose home_branch=B1. Call `pos_list_today` — should return only sales from B1.
+3. Login as owner with `see_all_branches=1`. Same call returns sales from all branches.
+4. Set per-user override: user X has `inventory=none` despite manager role. Call `list_batches` → 403.
+
+**Out of scope.** Frontend gates, settings UI.
+
+---
+
+### TASK-912 — Frontend `<Can>` component + nav hiding
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9 |
+| Files | `src/components/Can.tsx` (new), `src/hooks/usePermissions.ts` (new), `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/pages/POS.tsx`, `src/pages/warehouse/*.tsx`, all gated screens |
+| Depends on | TASK-911 |
+
+**Goal.** Replace the existing `<RoleGate>` with a permission-aware `<Can>` component. Hide nav items, tabs, and buttons that the current user has `none` access to.
+
+**API:**
+```tsx
+<Can resource="pos.returns" level="read">
+  <ReturnsButton />
+</Can>
+
+// fallback when the user has read-only but not write:
+<Can resource="inventory" level="write" fallback={<ReadOnlyInventoryView />}>
+  <FullInventoryEditor />
+</Can>
+
+// hook form for conditional rendering / logic
+const { has, level } = usePermissions();
+if (has('pos.returns', 'write')) { ... }
+```
+
+**Behavior.**
+- `level="none"` ⇒ always renders (everyone has at least none — useless but valid).
+- `level="read"` ⇒ renders if user's effective level is read OR write.
+- `level="write"` ⇒ renders only if user has write.
+- `fallback` is optional. No fallback = element doesn't render at all.
+
+**Sidebar/TopBar.** Each nav item declares its required permission. Items the user can't access are dropped entirely (no greyed items). E.g. the cashier's sidebar shows only: نقطة البيع, إغلاق الجلسة, تسجيل الخروج.
+
+**Branch switcher.** Show only if `see_all_branches=1`.
+
+**Acceptance test.**
+1. Login as cashier (default role). Sidebar shows: POS, Logout. No المخزن, no التقارير, no الإعدادات.
+2. POS screen shows the cart and product search, but no "المرتجعات" button anywhere.
+3. Login as manager whose `pos.returns` was overridden to `none`. Same: no returns button.
+4. Manager with `inventory=read` sees the inventory page but no "تعديل" / "تحويل" buttons.
+
+**Out of scope.** Settings UI to manage all of this.
+
+---
+
+### TASK-913 — Settings → Permissions tab (role editor + user editor)
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9 |
+| Files | `src/pages/settings/PermissionsTab.tsx` (new), `src/pages/settings/RoleEditor.tsx` (new), `src/pages/settings/UserPermissionEditor.tsx` (new), `src/api/permissions.ts` (new), backend Tauri commands `list_roles`, `save_role`, `delete_role`, `assign_user_role`, `set_user_overrides` |
+| Depends on | TASK-911 |
+
+**Goal.** Build the settings UI so the owner can create custom roles, edit built-in roles, and override per-user permissions.
+
+**UI structure.**
+
+```
+Settings → الصلاحيات
+├── الأدوار (Roles)
+│   ├── [list of roles with edit/delete buttons]
+│   ├── [+] إنشاء دور جديد
+│   └── [editor panel]
+│       ├── اسم الدور (ar/en)
+│       └── grid grouped by category:
+│           نقطة البيع
+│             ├ pos.sell             [ بدون | قراءة | تعديل ]
+│             ├ pos.returns          [ بدون | قراءة | تعديل ]
+│             └ ...
+│           المخزون
+│             ├ products             [ بدون | قراءة | تعديل ]
+│             └ ...
+│           [حفظ] [إلغاء]
+│
+└── المستخدمون (Users)
+    ├── [list of users with role badge + home branch]
+    └── [editor panel]
+        ├── اسم المستخدم, البريد
+        ├── الدور: [dropdown of roles]
+        ├── الفرع الأساسي: [dropdown of branches]
+        ├── [ ] رؤية جميع الفروع
+        └── ▾ صلاحيات مخصصة (لإلغاء افتراضي الدور)
+            ├ same resource grid, with extra "افتراضي الدور" option per row
+            └ [حفظ التخصيصات]
+```
+
+**3-state segmented control component.** Reusable. Stores `none` | `read` | `write`. Visual: pill with three segments, selected one filled in primary color, others ghost.
+
+**Permission change side effects.**
+- When admin saves a role or user override, invalidate that user's `session_token_invalidated_at`. Frontend, on next API call, sees 401 → forces re-login (Arabic message: "تم تحديث صلاحياتك — يرجى تسجيل الدخول مرة أخرى").
+- Write to audit log: `audit_log(action='permission_change', target=user_id, details={resource, old_level, new_level})`.
+
+**Built-in role guard.** Delete button disabled with tooltip "أدوار النظام لا يمكن حذفها — يمكن تعديلها فقط".
+
+**Acceptance test.**
+1. Owner creates a new role "صيدلي نوبتي" with `pos.sell=write`, `sessions=write`, everything else `none`. Assigns user Y to this role. User Y logs in → only POS visible.
+2. Owner edits the built-in cashier role to add `pos.returns=write`. Active cashier user gets logged out on next click. Logs back in → returns button now visible.
+3. Owner edits user Z (manager role) and overrides `accounts=none`. Z's accounts page disappears.
+4. Owner sets user W to "رؤية جميع الفروع" + assigns home_branch=B1. W sees branch switcher.
+
+**Out of scope.** Migration banner — that's TASK-914.
+
+---
+
+### TASK-914 — One-time migration banner
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9 |
+| Files | `src/components/PermissionsUpgradeBanner.tsx` (new), `src-tauri/src/commands/settings.rs` (add `permissions_upgrade_acknowledged` setting key) |
+| Depends on | TASK-913 |
+
+**Goal.** On first launch after Phase 9 is deployed, owner sees a one-time banner: "تم ترقية نظام الصلاحيات — راجع أدوار المستخدمين في الإعدادات." Two buttons: "مراجعة الآن" (links to Settings → Permissions) and "تخطّي". Both dismiss the banner permanently.
+
+**Logic.**
+- Add a setting key `permissions_upgrade_acknowledged_v1` (default `false`).
+- Migration TASK-910 sets it to `false` for all tenants.
+- On app load, if user is owner AND this key is `false`, render the banner at the top of every page until dismissed.
+- Dismissing sets the key to `true` for that tenant (not just user).
+
+**Acceptance test.**
+1. Run migration on an existing pharmacy DB. Launch app, log in as owner. Banner appears.
+2. Click "تخطّي". Reload. Banner gone.
+3. Other users (manager, cashier) never see the banner.
+
+---
+
+### TASK-915 — Audit log integration for permission changes
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9 |
+| Files | `src-tauri/src/commands/permissions.rs` (calls `audit::log_action` after every write), `src/pages/audit/AuditLog.tsx` (render permission events) |
+| Depends on | TASK-913 |
+
+**Goal.** Every role create/edit/delete, every user role assignment, every user override write produces an audit log entry with enough detail to reconstruct the change.
+
+**Audit event shape.**
+```
+action: 'role.create' | 'role.update' | 'role.delete' |
+        'user.role_assigned' | 'user.override_set' | 'user.override_cleared' |
+        'user.branch_changed' | 'user.see_all_branches_changed'
+target_type: 'role' | 'user'
+target_id: <id>
+details: JSON { before: {...}, after: {...} }
+```
+
+**Acceptance test.**
+1. Owner changes cashier role's `pos.returns` from `none` → `write`. Audit log shows one entry: action=`role.update`, target=cashier role id, details={resource:"pos.returns", before:"none", after:"write"}.
+2. Owner overrides user X. Audit log entry: action=`user.override_set`.
+
+---
 
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
 
