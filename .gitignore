@@ -63,3 +63,6 @@ src-tauri/cargo_err.txt
 Thumbs.db
 .claude/
 build/
+
+# Tauri signing keys (NEVER commit)
+.keys/

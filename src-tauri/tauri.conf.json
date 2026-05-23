@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TAJ Pharmacy",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "identifier": "com.taj.pharmacy",
   "build": {
     "frontendDist": "../dist",
@@ -31,7 +31,7 @@
   "plugins": {
     "updater": {
       "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCMjEyMzUyNkUwM0VFNEUKUldSTzdnTnVVaU1oMnc2ZnE2cnY4RFJCTkF0QmR4bHVMcW10MzMxa2xUTUR5R3dpWkNTRjdZUFkK",
+      "pubkey": "ZFc1MGNuVnpkR1ZrSUdOdmJXMWxiblE2SUcxcGJtbHphV2R1SUhCMVlteHBZeUJyWlhrNklFTXdRak0yTmpORlF6STVOalEzTWtFS1VsZFJjVkkxWWtOUWJXRjZkMEZUVURsVVVtTTNaMDR5T0dGWU4wRjVMM0kwVEROT2FYVnJXRVZ4YVc5RFpucHpVVTlZY0RWaGF5OEs=",
       "endpoints": [
         "https://github.com/ammarsiddig/taj-pharmacy/releases/latest/download/latest.json"
       ]
