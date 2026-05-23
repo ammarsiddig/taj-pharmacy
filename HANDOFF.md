@@ -3278,6 +3278,189 @@ details: JSON { before: {...}, after: {...} }
 
 ---
 
+### Phase 9.5 — Follow-up fixes (UX gaps + 1 critical bug discovered post-launch)
+
+> **Why this phase exists.** During Phase 9 build-out and the v0.2.2 transfer fix, the owner identified five issues that block real usage. TASK-916 is a regression introduced by the v0.2.2 transfer fix and is **URGENT** — transfers are currently broken in installed builds. The other four are UX/feature gaps that should ship together as v0.2.3.
+
+---
+
+### TASK-916 — URGENT — Add `branch_id` column to `batches` table
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9.5 |
+| Priority | 🔴 URGENT — transfers broken in production |
+| Files | `src-tauri/src/db/migrations.rs` (add a new numbered migration), `pms-cloud/migrations/NNN_batches_branch_id.sql` |
+| Depends on | none |
+
+**The bug.** In v0.2.2 (commit `b5b8ab7`), `warehouse_transfer.rs::do_transfer` was changed to insert `branch_id` into the `batches` table. But the `batches` table schema in `src-tauri/src/db/migrations.rs:268` does NOT have a `branch_id` column. Every transfer attempt errors out: `"table batches has no column named branch_id"`.
+
+**Verification before fixing.**
+```bash
+grep -A 15 "CREATE TABLE IF NOT EXISTS batches" src-tauri/src/db/migrations.rs
+# Expected: no `branch_id` column. Confirm before adding the migration.
+```
+
+**Fix.**
+1. Add a new SQLite migration (next sequential number after the highest existing migration). SQL:
+   ```sql
+   ALTER TABLE batches ADD COLUMN branch_id TEXT REFERENCES branches(id);
+   -- Backfill existing rows: a batch's branch_id = its location's branch_id
+   UPDATE batches SET branch_id = (
+     SELECT branch_id FROM storage_locations WHERE id = batches.location_id
+   ) WHERE branch_id IS NULL;
+   CREATE INDEX IF NOT EXISTS idx_batches_branch ON batches(tenant_id, branch_id) WHERE deleted_at IS NULL;
+   ```
+2. Cloud snapshot mirror in a PG migration:
+   ```sql
+   ALTER TABLE snapshot_batches ADD COLUMN IF NOT EXISTS branch_id TEXT;
+   ```
+3. Verify `pms-cloud/src/routes/sync.js` accepts `branch_id` in the `snapshot_batches` insert/upsert.
+
+**Acceptance test.**
+1. Wipe local AppData → fresh onboard → add a product → set initial stock at "الثلاجة" → transfer 3 units to "رف المنتجات". Transfer completes with no error.
+2. Re-open the app. Stock by Location for "رف المنتجات" shows the transferred batch with the source's batch_number (not "TRANSFER"). Stock by Location for "الثلاجة" shows the remaining quantity.
+3. Re-run on an existing pre-v0.2.3 DB. Migration backfills all batches' `branch_id` from `storage_locations.branch_id`. No NULLs remain.
+4. After sync, cloud `snapshot_batches.branch_id` matches.
+
+**Out of scope.** Changing branch-scoping query logic elsewhere — TASK-911 already handles that.
+
+---
+
+### TASK-917 — Add product search to Purchase invoice
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9.5 |
+| Files | `src/pages/Purchases.tsx` (or whichever subcomponent renders the new-purchase form) |
+| Depends on | none |
+
+**Goal.** When creating a new purchase invoice, the user must currently scroll or remember product names. Add a search input that filters the product picker the same way POS does (fuzzy match on trade_name + trade_name_ar + barcode).
+
+**Reference.** Look at how POS handles product search (`src/pages/pos/SearchResults.tsx` and the API call in `src/api/`). Reuse the same component or extract a shared `<ProductPicker>` if duplication is non-trivial.
+
+**UX rules.**
+- Search input at the top of the line-items section.
+- Debounce 150ms.
+- Results dropdown shows: trade_name_ar (primary), barcode (muted), current stock (right-aligned).
+- Enter or click adds it as a new line in the invoice. Search resets, ready for next product.
+- Arabic placeholder: "ابحث عن منتج...".
+
+**Acceptance test.**
+1. Open Purchases → New Purchase. Search field is visible at top of items section.
+2. Type "para" → dropdown shows Panadol and any other product with "para" in name. Type "بان" → same result (Arabic search works).
+3. Click a result → new line added. Search input resets.
+
+---
+
+### TASK-918 — Smart search consistency across the app
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9.5 |
+| Files | every page with a search input. Audit list: `src/pages/Products.tsx`, `src/pages/Customers.tsx`, `src/pages/Suppliers.tsx`, `src/pages/Purchases.tsx`, `src/pages/warehouse/*.tsx`, `src/pages/pos/SearchResults.tsx`, `src/pages/Sales.tsx`, `src/pages/accounts/*.tsx` |
+| Depends on | none |
+
+**Goal.** Every search box in the app follows consistent behavior. Currently some are exact-match, some are case-sensitive, some don't search the Arabic name.
+
+**Standard search behavior (must apply everywhere):**
+1. **Case-insensitive.**
+2. **Diacritic-insensitive for Arabic** — searching "بان" matches "بَانَدُول".
+3. **Multi-field** — products: trade_name + trade_name_ar + barcode + generic_name. Customers: full_name + full_name_ar + phone. Suppliers: name + name_ar + phone. List the fields in the relevant component.
+4. **Debounced** — 150ms.
+5. **Empty input = show all** (don't show "no results").
+6. **No results state** — Arabic message "لا توجد نتائج لـ <query>".
+7. **Backend search (Tauri command)** — when the table has > 200 rows, search hits the DB with a LIKE query, not in-memory filter. For each page, check the current implementation and switch to backend search if needed.
+
+**Reference implementation.** `src/pages/pos/SearchResults.tsx` is the gold standard — copy its pattern.
+
+**Acceptance test.**
+1. For each listed page: open it, type a partial Arabic query, a partial English query, a barcode. All three find expected items.
+2. Type nonsense. Empty state shows the Arabic "no results" message.
+3. Clear the input. All items return.
+
+**Out of scope.** Building a global "search anything" Cmd+K palette — future task.
+
+---
+
+### TASK-919 — Onboarding: smart next/previous + email uniqueness check
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9.5 |
+| Files | `src/pages/Onboarding.tsx`, `pms-cloud/src/routes/auth.js` (new endpoint `POST /v1/auth/check-email`) |
+| Depends on | none |
+
+**Goal.** Make onboarding feel like a real multi-step wizard with:
+1. Visible step indicator (e.g. `1 / 4 — معلومات الصيدلية`).
+2. **Previous** button on every step except step 1.
+3. **Next** button disabled until current step is valid; enabled and labeled clearly when ready.
+4. **Email uniqueness check** — when the user types an email and blurs the field, hit a cloud endpoint that checks if any other pharmacy is already registered with that email. If yes, show inline error: "هذا البريد مسجّل بصيدلية أخرى. استخدم بريداً مختلفاً أو سجّل دخولك من خيار 'استعادة صيدلية موجودة'".
+
+**Cloud endpoint to add.**
+```
+POST /v1/auth/check-email
+Body: { "email": "x@y.com" }
+Returns: { "exists": true|false, "tenant_id"?: "..." }
+```
+Rate-limited (10/min per IP) to prevent enumeration.
+
+**UX rules.**
+- Step indicator at the top: pill row with numbers, current step filled, completed steps with checkmark.
+- Previous = ghost button, Next = primary button. Both bottom-aligned, RTL-aware.
+- Email check fires on blur, not on every keystroke. Small inline spinner while checking.
+- After error, user can type a different email and the check re-fires on next blur.
+
+**Acceptance test.**
+1. Open onboarding. Step 1: only Next visible. Type valid pharmacy name → Next enabled.
+2. Click Next → Step 2 shows "السابق" alongside Next.
+3. On the email step, type `ammarsdeeg@gmail.com` (already registered) → blur → inline error appears in Arabic.
+4. Change to a fresh email → blur → spinner → no error → Next enabled.
+5. Click Previous on Step 3 → go back to Step 2 with previously-entered data still filled.
+
+**Out of scope.** OTP email verification (separate future task).
+
+---
+
+### TASK-920 — Dashboard permission gate (`reports.financial`)
+
+| Field | Value |
+| --- | --- |
+| Status | OPEN |
+| Owner | — |
+| Phase | 9.5 |
+| Files | `src/pages/Dashboard.tsx`, `src/App.tsx` (route guard), `src/components/layout/Sidebar.tsx` (nav item hide), backend dashboard queries in `src-tauri/src/commands/dashboard.rs` |
+| Depends on | TASK-911, TASK-912 |
+
+**Goal.** The dashboard shows revenue, profit, cash flow, and other financial figures. Cashiers and pharmacists must NOT see this. Tie dashboard visibility to the existing `reports.financial` permission (already in the Phase 9 matrix: owner=W, manager=N, pharmacist=N, cashier=N by default — owner can adjust).
+
+**Changes.**
+1. Wrap the `<Dashboard />` route in `App.tsx` with `<Can resource="reports.financial" level="read" fallback={<Navigate to="/pos" />}>`.
+2. Remove the dashboard nav item from sidebar for users without that permission.
+3. Backend: add `guard::require_access(&conn, &user_id, "reports.financial", Level::Read)` at the top of every dashboard data command (revenue summary, profit summary, recent activity, etc.).
+4. When a user without permission tries `/dashboard` directly, redirect to `/pos`.
+5. **Default landing page logic** — if the user can't see the dashboard, on login redirect to: `/pos` if they have `pos.sell`, else first page they can access.
+
+**Acceptance test.**
+1. Login as cashier → no Dashboard in sidebar. Manually navigate to `/dashboard` → redirected to `/pos`.
+2. Login as manager (default config — no `reports.financial`) → same: no Dashboard.
+3. Owner edits manager role to grant `reports.financial=read`. Manager logs back in → Dashboard appears in sidebar.
+4. Login as owner → Dashboard works as before.
+
+**Out of scope.** Building a separate "cashier home" screen — they use POS as home.
+
+---
+
+## 4. BACKLOG
+
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
 
 ### Phase 1 — Lock Money Paths (IN PROGRESS — see section 3)
