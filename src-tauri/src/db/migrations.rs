@@ -1207,6 +1207,108 @@ pub fn run(conn: &Connection) -> Result<(), String> {
          CREATE INDEX IF NOT EXISTS idx_account_transactions_tenant ON account_transactions(tenant_id);"
     ).map_err(|e| e.to_string())?;
 
+    // TASK-910: Phase 9 Permissions Redesign
+    // Add is_active to roles
+    ensure_column(&conn, "roles", "is_active", "INTEGER NOT NULL DEFAULT 1")?;
+
+    // New permission tables
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS role_permissions (
+            role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+            resource TEXT NOT NULL,
+            level TEXT NOT NULL CHECK (level IN ('none','read','write')),
+            PRIMARY KEY (role_id, resource)
+        );
+        CREATE TABLE IF NOT EXISTS user_permission_overrides (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            resource TEXT NOT NULL,
+            level TEXT NOT NULL CHECK (level IN ('none','read','write')),
+            PRIMARY KEY (user_id, resource)
+        );"
+    ).map_err(|e| e.to_string())?;
+
+    // Extend users table
+    ensure_column(&conn, "users", "home_branch_id", "TEXT REFERENCES branches(id)")?;
+    ensure_column(&conn, "users", "see_all_branches", "INTEGER NOT NULL DEFAULT 0")?;
+    ensure_column(&conn, "users", "session_token_invalidated_at", "TEXT")?;
+
+    // Seed default role permissions for built-in roles
+    let default_role_perms: Vec<(&str, Vec<(&str, &str)>)> = vec![
+        ("owner", vec![
+            ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
+            ("pos.discount","write"), ("sessions","write"), ("products","write"),
+            ("inventory","write"), ("transfers","write"), ("disposal","write"),
+            ("purchases","write"), ("supplier_returns","write"), ("suppliers","write"),
+            ("customers","write"), ("customer_payments","write"),
+            ("accounts","write"), ("account_transfers","write"), ("expenses","write"),
+            ("reports.sales","write"), ("reports.inventory","write"), ("reports.financial","write"),
+            ("audit","write"), ("settings.users","write"), ("settings.branches","write"),
+            ("settings.license","write"), ("settings.backup","write"),
+            ("settings.payment_methods","write"), ("settings.tax","write"),
+        ]),
+        ("manager", vec![
+            ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
+            ("pos.discount","write"), ("sessions","write"), ("products","write"),
+            ("inventory","write"), ("transfers","write"), ("disposal","write"),
+            ("purchases","write"), ("supplier_returns","write"), ("suppliers","write"),
+            ("customers","write"), ("customer_payments","write"),
+            ("accounts","read"), ("account_transfers","none"), ("expenses","write"),
+            ("reports.sales","write"), ("reports.inventory","write"), ("reports.financial","none"),
+            ("audit","read"), ("settings.users","none"), ("settings.branches","none"),
+            ("settings.license","none"), ("settings.backup","read"),
+            ("settings.payment_methods","write"), ("settings.tax","write"),
+        ]),
+        ("pharmacist", vec![
+            ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
+            ("pos.discount","write"), ("sessions","write"), ("products","read"),
+            ("inventory","write"), ("transfers","write"), ("disposal","read"),
+            ("purchases","none"), ("supplier_returns","none"), ("suppliers","read"),
+            ("customers","read"), ("customer_payments","write"),
+            ("accounts","none"), ("account_transfers","none"), ("expenses","none"),
+            ("reports.sales","read"), ("reports.inventory","read"), ("reports.financial","none"),
+            ("audit","none"), ("settings.users","none"), ("settings.branches","none"),
+            ("settings.license","none"), ("settings.backup","none"),
+            ("settings.payment_methods","none"), ("settings.tax","none"),
+        ]),
+        ("cashier", vec![
+            ("pos.sell","write"), ("pos.returns","none"), ("pos.history","none"),
+            ("pos.discount","none"), ("sessions","write"), ("products","none"),
+            ("inventory","none"), ("transfers","none"), ("disposal","none"),
+            ("purchases","none"), ("supplier_returns","none"), ("suppliers","none"),
+            ("customers","read"), ("customer_payments","none"),
+            ("accounts","none"), ("account_transfers","none"), ("expenses","none"),
+            ("reports.sales","none"), ("reports.inventory","none"), ("reports.financial","none"),
+            ("audit","none"), ("settings.users","none"), ("settings.branches","none"),
+            ("settings.license","none"), ("settings.backup","none"),
+            ("settings.payment_methods","none"), ("settings.tax","none"),
+        ]),
+    ];
+
+    for (role_name, perms) in &default_role_perms {
+        let role_id: String = conn.query_row(
+            "SELECT id FROM roles WHERE name = ?1 AND deleted_at IS NULL LIMIT 1",
+            rusqlite::params![role_name],
+            |row| row.get(0),
+        ).unwrap_or_default();
+        if role_id.is_empty() { continue; }
+        for (resource, level) in perms {
+            conn.execute(
+                "INSERT OR IGNORE INTO role_permissions (role_id, resource, level) VALUES (?1, ?2, ?3)",
+                rusqlite::params![role_id, resource, level],
+            ).ok();
+        }
+    }
+
+    // Migrate existing users: set home_branch_id and see_all_branches
+    conn.execute(
+        "UPDATE users SET home_branch_id = branch_id WHERE home_branch_id IS NULL",
+        [],
+    ).ok();
+    conn.execute(
+        "UPDATE users SET see_all_branches = 1 WHERE role_id IN (SELECT id FROM roles WHERE name = 'owner' AND deleted_at IS NULL)",
+        [],
+    ).ok();
+
     log::info!("Database migrations completed successfully");
     Ok(())
 }

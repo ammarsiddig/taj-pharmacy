@@ -2996,10 +2996,10 @@ W=Write, R=Read, N=None.
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9 |
-| Files | `src-tauri/migrations/NNN_permissions_redesign.sql` (next number), `pms-cloud/migrations/NNN_permissions_snapshot.sql` |
+| Files | `src-tauri/src/db/migrations.rs` (lines 1211-1308), `pms-cloud/migrations/033_permissions_redesign_snapshot.sql` |
 | Depends on | none |
 
 **Goal.** Create the new permissions tables. Seed the four built-in roles with the default matrix above. Migrate existing users from their old `role` column to the new `role_id`.
@@ -3318,6 +3318,12 @@ details: JSON { before: {...}, after: {...} }
 ## 5. WORKLOG
 
 > Append-only. Newest entries at the top. Never edit prior entries.
+
+### 2026-05-23 — DeepSeek — TASK-910
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/db/migrations.rs` (lines 1211-1308 — TASK-910 migration block: ensured `roles.is_active`, created `role_permissions` + `user_permission_overrides` tables, added `users.home_branch_id` / `users.see_all_branches` / `users.session_token_invalidated_at`, seeded 4×27=108 default role permissions from the Phase 9 matrix, migrated existing users so `home_branch_id = branch_id` and owners get `see_all_branches = 1`), `pms-cloud/migrations/033_permissions_redesign_snapshot.sql` (new — extended `snapshot_users` with 3 new columns, created `snapshot_role_permissions` + `snapshot_user_permission_overrides` tables with CHECK constraints)
+- **Acceptance test result:** `cargo check` — Finished in 13.93s, no errors. Verified cashier role has exactly 27 entries (including explicit `none` rows). All `ensure_column` calls are idempotent. `INSERT OR IGNORE` seeding is safe across repeated migration runs.
+- **Notes:** `users.role_id` already existed in the initial CREATE TABLE (line 70) — the spec's ALTER TABLE for it was redundant and skipped. `users` has no legacy `role` string column (it's always been `role_id`), so the "migrate old role string" step was a no-op. `pharmacy_configs` is a fixed-schema table (not key-value), so the banner setting column (`permissions_upgrade_acknowledged_v1`) is deferred to TASK-914. Cloud sync wiring (sync.js + cloud_sync_snapshot.rs) for the new tables is out of scope per spec and deferred to a follow-up.
 
 <!--
 TEMPLATE — copy this block when adding a new entry:
