@@ -581,16 +581,34 @@ pub fn pull_all_tables(
     endpoint: String,
     sync_token: String,
 ) -> Result<RestoreResult, String> {
+    // Abort only if the user has made real activity (sales). Demo products
+    // and expense categories are injected by seed.rs on every fresh install,
+    // so checking `products` here would always abort restore. Sales are
+    // never seeded — any row in `sales` means the user has used the app.
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM products", [], |row| row.get(0))
+        let sales_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sales", [], |row| row.get(0))
             .unwrap_or(0);
-        if count > 0 {
+        let expenses_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM expenses", [], |row| row.get(0))
+            .unwrap_or(0);
+        let customers_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM customers", [], |row| row.get(0))
+            .unwrap_or(0);
+        if sales_count > 0 || expenses_count > 0 || customers_count > 0 {
             return Err(
                 "الاستعادة تتطلب تثبيتاً جديداً. يوجد بيانات محلية موجودة بالفعل.".to_string(),
             );
         }
+
+        // Clear seed demo rows so the restored DB doesn't carry phantom
+        // Panadol / Test Supplier / default expense-category entries
+        // alongside the real cloud data. Safe because the gate above
+        // confirmed no real activity exists.
+        let _ = conn.execute("DELETE FROM products", []);
+        let _ = conn.execute("DELETE FROM suppliers", []);
+        let _ = conn.execute("DELETE FROM expense_categories", []);
     }
 
     let client = cloud_sync::build_cloud_sync_client()?;

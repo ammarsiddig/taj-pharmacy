@@ -2,9 +2,6 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
-const DEFAULT_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2MkFGNDE5RTU0NjI0QzEKUldUQkpFYmxHZlFxaGhsb3QwRkM1c01qSjlIcExVeFhnY2l1VldDYlU1Q0c2K1BpZHM2QnNkaHUK";
-const DEFAULT_ENDPOINT: &str = "https://github.com/ammarsiddig/pms-pharmacy-v4/releases/latest/download/latest.json";
-
 #[derive(Debug, Serialize)]
 pub struct UpdateCheckResult {
     pub configured: bool,
@@ -21,23 +18,32 @@ pub struct InstallResult {
     pub message: String,
 }
 
+// The endpoint and pubkey come from `plugins.updater` in tauri.conf.json.
+// PMS_UPDATE_ENDPOINT / PMS_UPDATE_PUBKEY env vars can override at runtime
+// (useful for QA pointing at a staging release JSON).
 pub(crate) fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
-    let endpoint = std::env::var("PMS_UPDATE_ENDPOINT")
+    let endpoint_override = std::env::var("PMS_UPDATE_ENDPOINT")
         .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_ENDPOINT.into());
-    let pubkey = std::env::var("PMS_UPDATE_PUBKEY")
+        .filter(|s| !s.trim().is_empty());
+    let pubkey_override = std::env::var("PMS_UPDATE_PUBKEY")
         .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_PUBKEY.into());
+        .filter(|s| !s.trim().is_empty());
 
-    let endpoint_url = url::Url::parse(&endpoint)
-        .map_err(|e| format!("رابط تحديث غير صالح: {}", e))?;
+    let mut builder = app.updater_builder();
 
-    app.updater_builder()
-        .endpoints(vec![endpoint_url])
-        .map_err(|e: tauri_plugin_updater::Error| e.to_string())?
-        .pubkey(pubkey)
+    if let Some(endpoint) = endpoint_override {
+        let endpoint_url = url::Url::parse(&endpoint)
+            .map_err(|e| format!("رابط تحديث غير صالح: {}", e))?;
+        builder = builder
+            .endpoints(vec![endpoint_url])
+            .map_err(|e: tauri_plugin_updater::Error| e.to_string())?;
+    }
+
+    if let Some(pubkey) = pubkey_override {
+        builder = builder.pubkey(pubkey);
+    }
+
+    builder
         .build()
         .map_err(|e: tauri_plugin_updater::Error| e.to_string())
 }
