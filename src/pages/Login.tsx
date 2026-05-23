@@ -8,7 +8,7 @@ import Input from '../components/ui/Input';
 export default function Login() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, permissions } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,8 +16,13 @@ export default function Login() {
   const usernameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isAuthenticated) navigate('/dashboard', { replace: true });
-  }, [isAuthenticated, navigate]);
+    if (!isAuthenticated) return;
+    if (permissions.includes('reports.financial')) {
+      navigate('/dashboard', { replace: true });
+    } else {
+      navigate('/pos', { replace: true });
+    }
+  }, [isAuthenticated, permissions, navigate]);
 
   useEffect(() => {
     usernameRef.current?.focus();
@@ -29,7 +34,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(username, password);
-      navigate('/dashboard', { replace: true });
+      // Redirect handled by useEffect watching isAuthenticated + permissions
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('auth.loginError');
       setError(msg);

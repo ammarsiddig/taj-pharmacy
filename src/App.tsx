@@ -187,7 +187,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         >
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Can resource="reports.financial" level="read" fallback={<Navigate to="/pos" replace />}><Dashboard /></Can>} />
           <Route path="/products" element={<Can resource="products"><FeatureGate flag={FEATURE_FLAGS.PRODUCTS}><Products /></FeatureGate></Can>} />
           <Route path="/purchases" element={<Can resource="purchases"><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><Purchases /></FeatureGate></Can>} />
           <Route path="/purchases/new" element={<Can resource="purchases"><FeatureGate flag={FEATURE_FLAGS.PURCHASES}><PurchaseNew /></FeatureGate></Can>} />

@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::db::Database;
+use crate::commands::guard;
+use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 #[derive(Debug, Serialize)]
 pub struct DashboardDailySales {
@@ -158,8 +160,12 @@ pub fn get_dashboard_stats(
     db: State<'_, Database>,
     tenant_id: String,
     branch_id: String,
+    user_id: String,
+    auth_session: State<'_, AuthSessionState>,
 ) -> Result<DashboardStats, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, &branch_id)?;
+    guard::require_access(&conn, &user_id, "reports.financial", guard::Level::Read)?;
 
     let (today_sales_total, today_sales_count): (i64, i64) = conn.query_row(
         "SELECT COALESCE(SUM(total), 0), COUNT(*)

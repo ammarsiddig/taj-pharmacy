@@ -5,10 +5,11 @@ import type {
   CustomerCreditReport, BalanceSheetSummary, TaxReport,
   InvoiceSaleRow, InvoiceSaleCreateData, Sale,
 } from '../types';
-import { getTenantId } from './core';
+import { getTenantId, getAuthState } from './core';
 
 export async function getDashboardStats(branchId: string): Promise<DashboardStats> {
-  return invoke('get_dashboard_stats', { tenantId: getTenantId(), branchId });
+  const auth = getAuthState();
+  return invoke('get_dashboard_stats', { tenantId: getTenantId(), branchId, userId: auth.user?.id || '' });
 }
 
 export async function getSalesReport(branchId: string, filters: SalesReportFilters): Promise<SalesReport> {

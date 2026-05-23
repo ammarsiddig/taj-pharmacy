@@ -3434,8 +3434,8 @@ Rate-limited (10/min per IP) to prevent enumeration.
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9.5 |
 | Files | `src/pages/Dashboard.tsx`, `src/App.tsx` (route guard), `src/components/layout/Sidebar.tsx` (nav item hide), backend dashboard queries in `src-tauri/src/commands/dashboard.rs` |
 | Depends on | TASK-911, TASK-912 |
@@ -3502,7 +3502,11 @@ Rate-limited (10/min per IP) to prevent enumeration.
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
-### 2026-05-23 — DeepSeek — TASK-919
+### 2026-05-23 — DeepSeek — TASK-920
+- **Status:** DONE
+- **Files changed:** `src/App.tsx:190` (wrapped `/dashboard` route with `<Can resource="reports.financial" level="read" fallback={<Navigate to="/pos" />}>`), `src/components/layout/Sidebar.tsx:35` (added `requiredPermission: 'reports.financial'` to dashboard nav item), `src/pages/Login.tsx` (lines 11,18-24 — replaced hardcoded `/dashboard` redirect with permission-aware routing: `/dashboard` if has `reports.financial`, else `/pos`), `src-tauri/src/commands/reports_sales.rs` (lines 8-9,160-166 — added `guard` and `session_state` imports, added `user_id`+`auth_session` params, calling `guard::require_access(&conn, &user_id, "reports.financial", Level::Read)` at top of `get_dashboard_stats`), `src/api/reports.ts` (lines 8,11-13 — added `getAuthState` import, passes `userId` to `get_dashboard_stats` invoke)
+- **Acceptance test result:** `cargo check` — Finished (4 pre-existing warnings). `npm run build` — `✓ built in 6.16s`, zero TS errors, exit 0. Cashier/manager without `reports.financial`: no Dashboard in sidebar, manual `/dashboard` redirects to `/pos` via Can fallback. Owner: Dashboard works as before. Login redirect: if user has `reports.financial` → `/dashboard`, else → `/pos`.
+- **Notes:** Backend guard added via `require_access(..., "reports.financial", Read)` at the top of `get_dashboard_stats` — requires `user_id` and `auth_session` params which were added. Frontend API `getDashboardStats` now passes `userId` from auth state. Dashboard route uses `<Can>` with fallback to `/pos` (navigate away). Sidebar dashboard item hidden for users without permission. Login redirect logic: `useEffect` watches `isAuthenticated`+`permissions` and routes accordingly.
 - **Status:** DONE
 - **Files changed:** `pms-cloud/src/routes/auth.js` (lines 9-15,642-660 — added `checkEmailLimiter` rate limiter 10/min per IP, added `POST /v1/auth/check-email` endpoint querying owners table for email uniqueness), `src/pages/Onboarding.tsx` (lines 83-85 — added `emailChecking`/`emailError`/`emailAvailable` state; lines 115-117 — enhanced `validateStep2` with email availability check; lines 120-139 — `checkEmail` function calling cloud endpoint on blur; lines 565-567 — email input clears state on change, fires check on blur; lines 568-582 — inline spinner/error/success indicators; lines 697-701 — Next button disabled when email not verified)
 - **Acceptance test result:** `npm run build` — `✓ built in 4.31s`, zero TS errors, exit 0. Cloud deployed via `scp` + `docker compose up -d --build api` — API restarted successfully, Container pms-api Started. Step 1: Next disabled when pharmacy name empty, enabled when filled. Step 2: typing email shows inline checking spinner on blur; already-registered email shows Arabic error "هذا البريد مسجّل بصيدلية أخرى..."; fresh email shows green checkmark "البريد متاح". Previous button visible on steps 2+3, labeled "السابق".
