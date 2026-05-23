@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Settings2, ShoppingCart, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, ChevronLeft } from 'lucide-react';
@@ -24,6 +24,8 @@ export default function Products() {
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimer = useRef<number | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [panelOpen, setPanelOpen] = useState(false);
@@ -42,7 +44,7 @@ export default function Products() {
     try {
       const isActive = statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : null;
       const [prods, cats] = await Promise.all([
-        api.getProducts(search || undefined, categoryFilter || undefined, isActive),
+        api.getProducts(debouncedSearch || undefined, categoryFilter || undefined, isActive),
         api.getProductCategories(),
       ]);
       setProducts(prods);
@@ -53,7 +55,7 @@ export default function Products() {
     } finally {
       setLoading(false);
     }
-  }, [search, categoryFilter, statusFilter]);
+  }, [debouncedSearch, categoryFilter, statusFilter]);
 
   useEffect(() => {
     loadData();
@@ -236,7 +238,12 @@ export default function Products() {
               type="text"
               placeholder={t('products.search')}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSearch(v);
+                if (searchTimer.current) clearTimeout(searchTimer.current);
+                searchTimer.current = window.setTimeout(() => setDebouncedSearch(v), 150);
+              }}
               className="app-input w-full px-3 py-2.5 text-sm text-ink-main placeholder:text-ink-placeholder focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
             />
           </div>
@@ -264,8 +271,10 @@ export default function Products() {
         {/* Table or Empty state */}
         {loading ? (
           <div className="text-center py-12 text-ink-muted">{t('common.loading')}</div>
-        ) : products.length === 0 && !search && !categoryFilter && !statusFilter ? (
+        ) : products.length === 0 && !debouncedSearch && !categoryFilter && !statusFilter ? (
           <EmptyState onAdd={handleAdd} />
+        ) : products.length === 0 ? (
+          <div className="text-center py-12 text-ink-muted text-sm">لا توجد نتائج للبحث</div>
         ) : (
           <div className="sales-form-table-wrap app-card overflow-hidden">
             <table className="sales-form-table w-full text-sm">

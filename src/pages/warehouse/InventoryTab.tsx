@@ -53,6 +53,7 @@ export default function InventoryTab({ branchId }: Props) {
   const filtered = search
     ? batches.filter(b =>
         b.product_name.toLowerCase().includes(search.toLowerCase()) ||
+        (b.product_name_ar && b.product_name_ar.toLowerCase().includes(search.toLowerCase())) ||
         (b.batch_number ?? '').toLowerCase().includes(search.toLowerCase())
       )
     : batches;

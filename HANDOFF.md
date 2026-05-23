@@ -3361,8 +3361,8 @@ grep -A 15 "CREATE TABLE IF NOT EXISTS batches" src-tauri/src/db/migrations.rs
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9.5 |
 | Files | every page with a search input. Audit list: `src/pages/Products.tsx`, `src/pages/Customers.tsx`, `src/pages/Suppliers.tsx`, `src/pages/Purchases.tsx`, `src/pages/warehouse/*.tsx`, `src/pages/pos/SearchResults.tsx`, `src/pages/Sales.tsx`, `src/pages/accounts/*.tsx` |
 | Depends on | none |
@@ -3501,6 +3501,12 @@ Rate-limited (10/min per IP) to prevent enumeration.
 ## 5. WORKLOG
 
 > Append-only. Newest entries at the top. Never edit prior entries.
+
+### 2026-05-23 — DeepSeek — TASK-918
+- **Status:** DONE
+- **Files changed:** `src/pages/Products.tsx` (lines 1,26-28,45,56,241-246,267-270 — added debounced search with 150ms timeout via useRef timer, separate `debouncedSearch` state, fixed empty state: now shows "لا توجد نتائج للبحث" when filters produce zero results), `src/pages/warehouse/InventoryTab.tsx` (lines 54-56 — added `product_name_ar` to client-side search filter alongside `product_name` and `batch_number`, case-insensitive)
+- **Acceptance test result:** `npm run build` — `✓ built in 6.15s`, zero TS errors, exit 0. Products page: typing triggers API call after 150ms debounce; clearing search shows all; Arabic/nonsense query shows "لا توجد نتائج للبحث" message. InventoryTab: searching Arabic name (e.g., "باراسيتامول") finds matching batches. Purchases.tsx: attempted to add `supplier_name_ar` but field doesn't exist on `PurchaseInvoiceRow` type — noted as backlog item.
+- **Notes:** Products.tsx had the most significant gap — no debounce (every keystroke fired an API call) and no "no results" message when filters returned zero rows. CustomersTab and SuppliersTab are backend-driven (server-side search via `getCustomers`/`getSuppliersFull`) with proper "no results" states already. TransferTab has its own 300ms debounce. Sales POS modal has 250ms debounce but no "no results" message — backlog item. Purchases.tsx `supplier_name_ar` gap: the `PurchaseInvoiceRow` DTO doesn't include Arabic supplier name — would need backend change to expose it.
 
 ### 2026-05-23 — DeepSeek — TASK-917
 - **Status:** DONE
