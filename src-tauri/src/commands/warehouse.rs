@@ -501,7 +501,7 @@ pub fn confirm_supplier_return(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
+    guard::require_access(&conn, &user_id, "supplier_returns", guard::Level::Write)?;
 
     let status: String = conn.query_row(
         "SELECT status FROM supplier_returns WHERE id=?1 AND tenant_id=?2 AND deleted_at IS NULL",

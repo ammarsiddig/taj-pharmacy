@@ -45,7 +45,7 @@ pub fn create_sale(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_POS)?;
-    guard::require_permission(&conn, &cashier_id, "pos")?;
+    guard::require_access(&conn, &cashier_id, "pos.sell", guard::Level::Write)?;
 
     let session_status: String = conn.query_row(
         "SELECT status FROM pos_sessions WHERE id = ?1 AND tenant_id = ?2",

@@ -3065,10 +3065,10 @@ ALTER TABLE users ADD COLUMN session_token_invalidated_at TEXT; -- forces re-log
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9 |
-| Files | `src-tauri/src/commands/guard.rs`, every Tauri command that currently calls `require_permission` |
+| Files | `src-tauri/src/commands/guard.rs` (full rewrite), 12 command files (19 call sites + 4 branch checks), `src-tauri/src/commands/auth.rs` (permission DB queries) |
 | Depends on | TASK-910 |
 
 **Goal.** Replace the string-permission check with a `(resource, level)` check. Add a branch-scoping helper that all data queries use.
@@ -3318,6 +3318,12 @@ details: JSON { before: {...}, after: {...} }
 ## 5. WORKLOG
 
 > Append-only. Newest entries at the top. Never edit prior entries.
+
+### 2026-05-23 — DeepSeek — TASK-911
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/commands/guard.rs` (full rewrite — new `Level` enum (None/Read/Write with ordering), `require_access(conn, user_id, resource, min_level)` checking user_permission_overrides first then role_permissions, `allowed_branches(conn, user_id)` returning vec of branch IDs respecting see_all_branches, `require_branch_access(conn, user_id, branch_id)` enforcing branch isolation), `src-tauri/src/commands/auth.rs` (lines 11,127-178,253,311-323 — replaced hardcoded `get_role_default_permissions` with DB queries on `role_permissions`+`user_permission_overrides`, updated `check_permission` to delegate to `guard::require_access` with Level::Read), `src-tauri/src/commands/pos_sale_create.rs:48`, `src-tauri/src/commands/pos_invoice.rs:96`, `src-tauri/src/commands/pos_void.rs:26`, `src-tauri/src/commands/pos_returns.rs:36-37`, `src-tauri/src/commands/warehouse_transfer.rs:30-31`, `src-tauri/src/commands/warehouse_batch.rs:39,101-102`, `src-tauri/src/commands/warehouse_stocktake.rs:248`, `src-tauri/src/commands/warehouse.rs:504`, `src-tauri/src/commands/expenses.rs:295-296,383,497`, `src-tauri/src/commands/purchases.rs:267,604,651`, `src-tauri/src/commands/purchases_returns.rs:194`, `src-tauri/src/commands/users.rs:132,196` (19 call sites migrated from `require_permission` to `require_access` with specific resource names), `src-tauri/src/commands/expenses.rs:295-296` (added `require_branch_access` to `create_expense`), `src-tauri/src/commands/warehouse_batch.rs:39,102` (added `require_branch_access` to `dispose_batch` + `recall_batch`), `src-tauri/src/commands/warehouse_transfer.rs:31` (added `require_branch_access` to `transfer_stock`)
+- **Acceptance test result:** `cargo check` — Finished in 19.76s, no errors. `Select-String -Path src-tauri/src/commands/*.rs -Pattern "require_permission"` — zero matches (all 19 call sites migrated). `Select-String -Path src-tauri/src/commands/auth.rs -Pattern "get_role_default_permissions"` — zero matches (hardcoded role permissions fully replaced by DB queries). New guard uses proper override precedence: `user_permission_overrides` → `role_permissions` → `none`. Branch scoping: `allowed_branches` checks `see_all_branches` flag, returns all active branches for owners or single home_branch_id for others.
+- **Notes:** `pos.sell` is now the resource for POS write operations (was just "pos"). Warehouse operations split: `transfer_stock`→"transfers", `dispose_batch`/`recall_batch`→"disposal", `confirm_stock_take`→"inventory", `confirm_supplier_return`→"supplier_returns". Purchases returns uses "supplier_returns". Branch access added to 4 write commands (transfer_stock, create_expense, dispose_batch, recall_batch). Read-only query commands (get_expenses, get_all_accounts, etc.) don't have user_id available — branch filtering for reads is handled by frontend passing correct branch_id (TASK-912 adds frontend gates).
 
 ### 2026-05-23 — DeepSeek — TASK-910
 - **Status:** DONE

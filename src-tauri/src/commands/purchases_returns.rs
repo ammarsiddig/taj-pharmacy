@@ -191,7 +191,7 @@ pub fn create_purchase_return(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "main-branch")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_PURCHASES)?;
-    guard::require_permission(&conn, &user_id, "purchases")?;
+    guard::require_access(&conn, &user_id, "supplier_returns", guard::Level::Write)?;
 
     let return_id = do_purchase_return(&conn, &tenant_id, &invoice_id, &user_id, &data)?;
 

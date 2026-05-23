@@ -27,7 +27,8 @@ pub fn transfer_stock(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
+    guard::require_access(&conn, &user_id, "transfers", guard::Level::Write)?;
+    guard::require_branch_access(&conn, &user_id, &branch_id)?;
 
     let available: i64 = conn.query_row(
         "SELECT COALESCE(SUM(quantity_current),0) FROM batches

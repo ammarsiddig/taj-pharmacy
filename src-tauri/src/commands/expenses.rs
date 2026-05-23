@@ -292,7 +292,8 @@ pub fn create_expense(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_EXPENSES)?;
-    guard::require_permission(&conn, &user_id, "expenses")?;
+    guard::require_access(&conn, &user_id, "expenses", guard::Level::Write)?;
+    guard::require_branch_access(&conn, &user_id, &branch_id)?;
 
     // Validate account
     let (acct_active, acct_balance): (bool, i64) = conn.query_row(
@@ -380,7 +381,7 @@ pub fn update_expense(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_EXPENSES)?;
-    guard::require_permission(&conn, &user_id, "expenses")?;
+    guard::require_access(&conn, &user_id, "expenses", guard::Level::Write)?;
 
     // Get original expense
     let (orig_amount, orig_account_id): (i64, String) = conn.query_row(
@@ -494,7 +495,7 @@ pub fn delete_expense(
     let (_tid, _uid, bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "main-branch")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_EXPENSES)?;
-    guard::require_permission(&conn, &user_id, "expenses")?;
+    guard::require_access(&conn, &user_id, "expenses", guard::Level::Write)?;
 
     let (amount, account_id, deleted_at): (i64, String, Option<String>) = conn.query_row(
         "SELECT amount, account_id, deleted_at FROM expenses WHERE id = ?1 AND tenant_id = ?2",

@@ -129,7 +129,7 @@ pub fn create_user(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &actor_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
-    guard::require_permission(&conn, &actor_id, "settings")?;
+    guard::require_access(&conn, &actor_id, "settings.users", guard::Level::Write)?;
     license_guard::check_user_limit(&conn, &tenant_id)?;
 
     // Check username uniqueness
@@ -193,7 +193,7 @@ pub fn update_user(
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &actor_id, "")?;
-    guard::require_permission(&conn, &actor_id, "settings")?;
+    guard::require_access(&conn, &actor_id, "settings.users", guard::Level::Write)?;
 
     // Check username uniqueness (exclude self)
     let exists: bool = conn.query_row(

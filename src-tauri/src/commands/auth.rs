@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 
 use crate::db::Database;
 use crate::commands::session_state::{AuthSession, AuthSessionState, resolve_identity};
+use crate::commands::guard;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -124,56 +125,53 @@ fn verify_token(token: &str) -> Result<String, String> {
     Ok(parts[0].to_string())
 }
 
-fn get_role_default_permissions(role_name: &str) -> Vec<String> {
-    match role_name {
-        "owner" => vec![
-            "pos", "products", "products.create", "products.edit", "products.delete",
-            "purchases", "warehouse", "sales", "expenses", "customers", "suppliers",
-            "accounts", "reports", "settings", "settings.users", "settings.license",
-        ],
-        "manager" => vec![
-            "pos", "products", "products.create", "products.edit", "products.delete",
-            "purchases", "warehouse", "sales", "expenses", "customers", "suppliers",
-            "accounts", "reports", "settings",
-        ],
-        "pharmacist" => vec![
-            "pos", "products", "warehouse", "purchases", "reports",
-        ],
-        "cashier" => vec!["pos"],
-        _ => vec![],
-    }
-    .into_iter()
-    .map(String::from)
-    .collect()
+fn get_role_permissions_from_db(conn: &rusqlite::Connection, role_id: &str) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare("SELECT resource FROM role_permissions WHERE role_id = ?1 AND level IN ('read','write')")
+        .map_err(|e| e.to_string())?;
+    let perms: Vec<String> = stmt
+        .query_map(params![role_id], |row| row.get(0))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(perms)
 }
 
-fn get_user_permissions(db: &Database, user_id: &str, role_name: &str) -> Result<Vec<String>, String> {
+fn get_user_permissions(db: &Database, user_id: &str) -> Result<Vec<String>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let mut stmt = conn
-        .prepare("SELECT feature, allowed FROM permissions WHERE user_id = ?1 AND deleted_at IS NULL")
-        .map_err(|e| e.to_string())?;
+    let role_id: String = conn
+        .query_row(
+            "SELECT role_id FROM users WHERE id = ?1 AND deleted_at IS NULL",
+            params![user_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "المستخدم غير موجود".to_string())?;
 
-    let overrides: Vec<(String, bool)> = stmt
-        .query_map(params![user_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
-        })
+    let mut perms = get_role_permissions_from_db(&conn, &role_id)?;
+
+    // Apply user_permission_overrides
+    let mut stmt = conn
+        .prepare("SELECT resource, level FROM user_permission_overrides WHERE user_id = ?1")
+        .map_err(|e| e.to_string())?;
+    let overrides: Vec<(String, String)> = stmt
+        .query_map(params![user_id], |row| Ok((row.get(0)?, row.get(1)?)))
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
 
-    if overrides.is_empty() {
-        return Ok(get_role_default_permissions(role_name));
-    }
-
-    let mut perms = get_role_default_permissions(role_name);
-    for (feature, allowed) in overrides {
-        if allowed && !perms.contains(&feature) {
-            perms.push(feature);
-        } else if !allowed {
-            perms.retain(|p| p != &feature);
+    for (resource, level) in overrides {
+        match level.as_str() {
+            "none" => perms.retain(|p| p != &resource),
+            "read" | "write" => {
+                if !perms.contains(&resource) {
+                    perms.push(resource);
+                }
+            }
+            _ => {}
         }
     }
+
     Ok(perms)
 }
 
@@ -250,7 +248,7 @@ pub fn login(
     drop(conn);
 
     let token = generate_token(&user.id)?;
-    let permissions = get_user_permissions(&db, &user.id, &role.name)?;
+    let permissions = get_user_permissions(&db, &user.id)?;
 
     auth_session_state.set(AuthSession {
         user_id: user.id.clone(),
@@ -316,20 +314,11 @@ pub fn check_permission(
 ) -> Result<bool, String> {
     let user_id = verify_token(&token)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    let role_name: String = conn
-        .query_row(
-            "SELECT r.name FROM users u JOIN roles r ON u.role_id = r.id
-             WHERE u.id = ?1 AND u.deleted_at IS NULL",
-            params![user_id],
-            |row| row.get(0),
-        )
-        .map_err(|_| "المستخدم غير موجود".to_string())?;
-
-    drop(conn);
-
-    let permissions = get_user_permissions(&db, &user_id, &role_name)?;
-    Ok(permissions.contains(&feature))
+    let result = guard::require_access(&conn, &user_id, &feature, guard::Level::Read);
+    match result {
+        Ok(()) => Ok(true),
+        Err(_) => Ok(false),
+    }
 }
 
 #[tauri::command]

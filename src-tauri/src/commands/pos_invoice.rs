@@ -93,7 +93,7 @@ pub fn create_invoice_sale(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &cashier_id, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_POS)?;
-    guard::require_permission(&conn, &cashier_id, "pos")?;
+    guard::require_access(&conn, &cashier_id, "pos.sell", guard::Level::Write)?;
 
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
 

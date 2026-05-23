@@ -245,7 +245,7 @@ pub fn confirm_stock_take(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
+    guard::require_access(&conn, &user_id, "inventory", guard::Level::Write)?;
 
     // Validate status
     let status: String = conn.query_row(

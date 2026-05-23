@@ -33,8 +33,8 @@ pub fn create_return(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &created_by, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_POS)?;
-    guard::require_permission(&conn, &created_by, "pos")?;
-    guard::require_permission(&conn, &created_by, "pos.returns")?;
+    guard::require_access(&conn, &created_by, "pos.sell", guard::Level::Write)?;
+    guard::require_access(&conn, &created_by, "pos.returns", guard::Level::Write)?;
 
     let sale_number: String = conn.query_row(
         "SELECT sale_number FROM sales WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",

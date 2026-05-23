@@ -36,7 +36,8 @@ pub fn dispose_batch(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
+    guard::require_access(&conn, &user_id, "disposal", guard::Level::Write)?;
+    guard::require_branch_access(&conn, &user_id, &branch_id)?;
 
     // Verify batch exists
     let (qty_current, product_id): (i64, String) = conn.query_row(
@@ -98,7 +99,8 @@ pub fn recall_batch(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, &branch_id)?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_WAREHOUSE)?;
-    guard::require_permission(&conn, &user_id, "warehouse")?;
+    guard::require_access(&conn, &user_id, "disposal", guard::Level::Write)?;
+    guard::require_branch_access(&conn, &user_id, &branch_id)?;
 
     let mut stmt = conn.prepare(
         "SELECT b.id, b.product_id, p.trade_name, b.batch_number, b.location_id,

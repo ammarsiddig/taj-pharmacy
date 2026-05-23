@@ -264,7 +264,7 @@ pub fn confirm_purchase_with_payment(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "main-branch")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_PURCHASES)?;
-    guard::require_permission(&conn, &user_id, "purchases")?;
+    guard::require_access(&conn, &user_id, "purchases", guard::Level::Write)?;
 
     // Validate payment_mode values
     match payment_info.payment_mode.as_str() {
@@ -601,7 +601,7 @@ pub fn delete_purchase_draft(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "main-branch")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_PURCHASES)?;
-    guard::require_permission(&conn, &user_id, "purchases")?;
+    guard::require_access(&conn, &user_id, "purchases", guard::Level::Write)?;
 
     // Verify status = draft
     let current_status: String = conn.query_row(
@@ -648,7 +648,7 @@ pub fn return_purchase_to_draft(
     let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "main-branch")?;
     license_guard::require_active(&conn, &tenant_id)?;
     license_guard::require_feature(&conn, &tenant_id, FLAG_PURCHASES)?;
-    guard::require_permission(&conn, &user_id, "purchases")?;
+    guard::require_access(&conn, &user_id, "purchases", guard::Level::Write)?;
     // Verify status = confirmed
     let (current_status, payment_status): (String, String) = conn.query_row(
         "SELECT status, payment_status FROM supplier_invoices WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",
