@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Plus, Trash2, Save, PackagePlus, Truck, ReceiptText } from 'lucide-react';
+import { ArrowRight, Plus, Trash2, Save, PackagePlus, Truck, ReceiptText, Search } from 'lucide-react';
 
 import * as api from '../api';
 import type { Product as ProductType, Supplier, SupplierFormData, PurchaseInvoiceCreateData } from '../types';
@@ -49,6 +49,47 @@ export default function PurchaseNew() {
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [newSupplier, setNewSupplier] = useState<SupplierFormData>({ name: '', phone: '', address: '', notes: '', opening_balance: 0 });
   const branchId = api.getBranchId();
+  const [productSearch, setProductSearch] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  const filteredProducts = useMemo(() => {
+    if (!productSearch.trim()) return [];
+    const q = productSearch.toLowerCase();
+    return products.filter((p) =>
+      p.name.toLowerCase().includes(q) ||
+      (p.barcode && p.barcode.toLowerCase().includes(q))
+    ).slice(0, 15);
+  }, [productSearch, products]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectProduct = (product: LocalProduct) => {
+    setItems((prev) => [
+      ...prev,
+      {
+        key: ++itemKeyCounter,
+        product_id: product.id,
+        product_name: product.name,
+        batch_number: '',
+        expiry_date: '',
+        quantity: 1,
+        cost_price: 0,
+        sell_price: 0,
+      },
+    ]);
+    setProductSearch('');
+    setShowSearchResults(false);
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -241,6 +282,42 @@ export default function PurchaseNew() {
                 <Plus size={16} />
                 {t('purchases.addItem')}
               </Button>
+            </div>
+
+            {/* Product search */}
+            <div ref={searchRef} className="relative mb-3">
+              <div className="relative">
+                <Search size={16} className="absolute end-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => { setProductSearch(e.target.value); setShowSearchResults(true); }}
+                  onFocus={() => { if (productSearch.trim()) setShowSearchResults(true); }}
+                  placeholder="ابحث عن منتج..."
+                  className="app-input w-full pe-10 ps-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+              {showSearchResults && productSearch.trim() && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-ivory-border rounded-xl shadow-lg max-h-64 overflow-y-auto">
+                  {filteredProducts.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-ink-muted">
+                      لا توجد نتائج لـ "{productSearch}"
+                    </div>
+                  ) : (
+                    filteredProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => selectProduct(p)}
+                        className="w-full text-right px-4 py-2.5 text-sm hover:bg-primary-50 border-b border-ivory-border last:border-0"
+                      >
+                        <span className="font-medium text-ink-main">{p.name}</span>
+                        {p.barcode && <span className="text-xs text-ink-muted ms-2">{p.barcode}</span>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="app-card overflow-auto min-h-[420px]">

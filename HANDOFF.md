@@ -3333,8 +3333,8 @@ grep -A 15 "CREATE TABLE IF NOT EXISTS batches" src-tauri/src/db/migrations.rs
 
 | Field | Value |
 | --- | --- |
-| Status | OPEN |
-| Owner | — |
+| Status | DONE |
+| Owner | DeepSeek |
 | Phase | 9.5 |
 | Files | `src/pages/Purchases.tsx` (or whichever subcomponent renders the new-purchase form) |
 | Depends on | none |
@@ -3501,6 +3501,12 @@ Rate-limited (10/min per IP) to prevent enumeration.
 ## 5. WORKLOG
 
 > Append-only. Newest entries at the top. Never edit prior entries.
+
+### 2026-05-23 — DeepSeek — TASK-917
+- **Status:** DONE
+- **Files changed:** `src/pages/PurchaseNew.tsx` (lines 1,4,53-93 — added product search input with dropdown results above items table; imported `useRef`, `useMemo`, `Search` icon; `productSearch`/`showSearchResults` state; `filteredProducts` memo filtering by name+barcode; `selectProduct` adds item row; click-outside closes dropdown)
+- **Acceptance test result:** `npm run build` — `✓ built in 4.18s`, zero TS errors, exit 0. Search input appears at top of line-items section with Arabic placeholder "ابحث عن منتج...". Typing filters by name and barcode (case-insensitive). Clicking a result adds it as a new table row. Search input resets after selection. Empty search shows "لا توجد نتائج لـ ...".
+- **Notes:** Used in-memory client-side filtering (no debounce needed for < 1000 products). The existing per-row `<select>` dropdown remains for changing product on existing rows. Search results limited to 15 items. Click-outside handler closes dropdown. Reuses existing `LocalProduct` type with `id`, `name`, `barcode`.
 
 ### 2026-05-23 — DeepSeek — TASK-916
 - **Status:** DONE
