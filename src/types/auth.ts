@@ -63,25 +63,24 @@ export interface User {
   branch?: Branch;
 }
 
-export interface Permission {
-  id: string;
-  tenant_id: string;
-  user_id: string;
-  feature: string;
-  allowed: boolean;
+export type PermissionLevel = 'none' | 'read' | 'write';
+
+export interface PermissionEntry {
+  resource: string;
+  level: 'read' | 'write';
 }
 
 export interface LoginResponse {
   user: User;
   role: Role;
-  permissions: string[];
+  permissions: PermissionEntry[];
   token: string;
 }
 
 export interface AuthState {
   user: User | null;
   role: Role | null;
-  permissions: string[];
+  permissions: PermissionEntry[];
   token: string | null;
   tenant_id: string;
   isAuthenticated: boolean;
@@ -95,5 +94,4 @@ export type UserFormData = {
   role_id: string;
   branch_id: string;
   is_active: boolean;
-  permissions?: Record<string, boolean>;
 };

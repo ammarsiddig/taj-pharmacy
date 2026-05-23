@@ -5,14 +5,6 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 
-const PERMISSION_GROUPS = [
-  { key: 'pos', features: ['pos'] },
-  { key: 'products', features: ['products', 'products.create', 'products.edit', 'products.delete'] },
-  { key: 'purchases', features: ['purchases'] },
-  { key: 'reports', features: ['reports'] },
-  { key: 'settings', features: ['settings', 'settings.users', 'settings.license'] },
-];
-
 interface UserPanelProps {
   user: User | null;
   roles: Role[];
@@ -26,7 +18,6 @@ export default function UserPanel({ user, roles, branches, onSave, onClose }: Us
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
 
   const [form, setForm] = useState<UserFormData>({
     full_name: user?.full_name ?? '',
@@ -59,7 +50,7 @@ export default function UserPanel({ user, roles, branches, onSave, onClose }: Us
     if (!validate()) return;
     setSaving(true);
     try {
-      await onSave({ ...form, permissions });
+      await onSave(form);
     } finally {
       setSaving(false);
     }
@@ -125,28 +116,11 @@ export default function UserPanel({ user, roles, branches, onSave, onClose }: Us
           <span className="text-sm text-ink-main">{t('settings.active')}</span>
         </label>
 
-        <div className="app-panel p-4">
-          <h4 className="text-sm font-bold text-ink-main mb-3">{t('settings.permissions')}</h4>
-          {PERMISSION_GROUPS.map((group) => (
-            <div key={group.key} className="mb-3">
-              <span className="text-xs font-medium text-ink-muted block mb-1">
-                {t(`settings.permissionGroups.${group.key}`)}
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {group.features.map((f) => (
-                  <label key={f} className="flex items-center gap-1 text-xs cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={permissions[f] !== false}
-                      onChange={(e) => setPermissions((p) => ({ ...p, [f]: e.target.checked }))}
-                      className="w-3.5 h-3.5 accent-primary-600"
-                    />
-                    <span className="text-ink-muted">{t(`settings.permissionLabels.${f}`)}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="app-panel p-4 bg-primary-50/40 border border-primary-100">
+          <p className="text-xs text-ink-muted leading-relaxed">
+            تُدار الصلاحيات الآن من تبويب <span className="font-bold text-primary-700">«الصلاحيات»</span>:
+            عيّن للمستخدم دوراً ثم خصّص أي صلاحية على حدة من شاشة الصلاحيات.
+          </p>
         </div>
 
         <div className="flex gap-3 mt-auto pt-4 border-t border-ivory-border">

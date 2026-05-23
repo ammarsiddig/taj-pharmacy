@@ -1,16 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from './useAuth';
 import { getLicenseInfo } from '../api';
 
-export function usePermission(feature: string): boolean {
-  const { permissions } = useAuth();
-  return permissions.includes(feature);
-}
-
-export function useHasAnyPermission(features: string[]): boolean {
-  const { permissions } = useAuth();
-  return features.some((f) => permissions.includes(f));
-}
+// Permission checks moved to `usePermissions` (plural) in v0.2.7.
+// This file now hosts feature-flag helpers only.
 
 // ─── Feature Flags (bitmask from tenant.feature_flags) ─────────────────────
 // Bit positions for subscription features

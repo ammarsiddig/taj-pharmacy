@@ -3,7 +3,6 @@ use tauri::State;
 use rusqlite::params;
 use uuid::Uuid;
 use argon2::{Argon2, PasswordHasher, password_hash::{SaltString, rand_core::OsRng}};
-use std::collections::HashMap;
 
 use crate::db::Database;
 use crate::commands::auth::RoleInfo;
@@ -49,7 +48,6 @@ pub struct UserData {
     pub role_id: String,
     pub branch_id: String,
     pub is_active: bool,
-    pub permissions: Option<HashMap<String, bool>>,
 }
 
 #[tauri::command]
@@ -153,22 +151,13 @@ pub fn create_user(
 
     let id = Uuid::new_v4().to_string();
 
+    // Default home_branch_id = branch_id (single-branch users see only their branch by default).
+    // Permission overrides are managed exclusively via the Permissions tab (TASK-913).
     conn.execute(
-        "INSERT INTO users (id, tenant_id, branch_id, role_id, username, password_hash, full_name, full_name_ar, is_active)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO users (id, tenant_id, branch_id, home_branch_id, role_id, username, password_hash, full_name, full_name_ar, is_active)
+         VALUES (?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![id, tenant_id, data.branch_id, data.role_id, data.username, password_hash, data.full_name, data.full_name_ar, data.is_active as i32],
     ).map_err(|e| format!("فشل إنشاء المستخدم: {}", e))?;
-
-    if let Some(ref perms) = data.permissions {
-        for (feature, &allowed) in perms {
-            let perm_id = Uuid::new_v4().to_string();
-            conn.execute(
-                "INSERT INTO permissions (id, tenant_id, user_id, feature, allowed)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![perm_id, tenant_id, id, feature, allowed as i32],
-            ).map_err(|e| format!("فشل حفظ الصلاحية: {}", e))?;
-        }
-    }
 
     if let Err(e) = audit::log_action(&conn, &tenant_id, &actor_id, "create", "user", &id, None) {
         log::warn!("audit log failed after create_user: {}", e);
@@ -234,20 +223,8 @@ pub fn update_user(
         }
     }
 
-    if let Some(ref perms) = data.permissions {
-        conn.execute(
-            "DELETE FROM permissions WHERE user_id = ?1",
-            params![user_id],
-        ).map_err(|e| e.to_string())?;
-        for (feature, &allowed) in perms {
-            let perm_id = Uuid::new_v4().to_string();
-            conn.execute(
-                "INSERT INTO permissions (id, tenant_id, user_id, feature, allowed)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![perm_id, tenant_id, user_id, feature, allowed as i32],
-            ).map_err(|e| format!("فشل حفظ الصلاحية: {}", e))?;
-        }
-    }
+    // Permission overrides are managed exclusively via the Permissions tab (TASK-913).
+    // Legacy `permissions` table writes were removed in v0.2.7 — see Phase 9.6.
 
     if let Err(e) = audit::log_action(&conn, &tenant_id, &actor_id, "update", "user", &user_id, None) {
         log::warn!("audit log failed after update_user: {}", e);

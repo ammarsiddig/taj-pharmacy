@@ -1,21 +1,24 @@
 import { useAuth } from './useAuth';
+import type { PermissionLevel } from '../types/auth';
+
+const RANK: Record<PermissionLevel, number> = { none: 0, read: 1, write: 2 };
 
 export function usePermissions() {
   const { permissions } = useAuth();
 
-  function has(resource: string, minLevel: 'none' | 'read' | 'write' = 'read'): boolean {
-    if (minLevel === 'none') return true;
-    return permissions.includes(resource);
+  function level(resource: string): PermissionLevel {
+    const entry = permissions.find((p) => p.resource === resource);
+    return entry ? (entry.level as PermissionLevel) : 'none';
   }
 
-  function hasAny(resources: string[], minLevel: 'none' | 'read' | 'write' = 'read'): boolean {
+  function has(resource: string, minLevel: PermissionLevel = 'read'): boolean {
     if (minLevel === 'none') return true;
-    return resources.some((r) => permissions.includes(r));
+    return RANK[level(resource)] >= RANK[minLevel];
   }
 
-  function level(resource: string): 'none' | 'read' | 'write' {
-    if (permissions.includes(resource)) return 'write';
-    return 'none';
+  function hasAny(resources: string[], minLevel: PermissionLevel = 'read'): boolean {
+    if (minLevel === 'none') return true;
+    return resources.some((r) => has(r, minLevel));
   }
 
   return { has, hasAny, level };

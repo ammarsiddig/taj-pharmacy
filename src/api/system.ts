@@ -8,13 +8,14 @@ import type {
   DisposeAssetData, DepreciationEntry, DepreciationRunResult, AssetSummary,
   PharmacyConfig, PharmacyConfigInput,
   RecoverResult, RestoreResult,
+  PermissionEntry,
 } from '../types';
 import { getTenantId } from './core';
 
 // ---
 
 export async function login(username: string, password: string) {
-  return invoke<{ token: string; user: User; role: Role; permissions: string[]; tenant_id: string }>(
+  return invoke<{ token: string; user: User; role: Role; permissions: PermissionEntry[]; tenant_id: string }>(
     'login', { username, password, tenantId: getTenantId() }
   );
 }

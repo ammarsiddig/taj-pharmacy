@@ -77,11 +77,17 @@ pub struct RoleInfo {
     pub updated_at: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PermissionEntry {
+    pub resource: String,
+    pub level: String, // "read" | "write"
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
     pub user: UserInfo,
     pub role: RoleInfo,
-    pub permissions: Vec<String>,
+    pub permissions: Vec<PermissionEntry>,
     pub token: String,
 }
 
@@ -127,19 +133,21 @@ fn verify_token(token: &str) -> Result<String, String> {
     Ok(parts[0].to_string())
 }
 
-fn get_role_permissions_from_db(conn: &rusqlite::Connection, role_id: &str) -> Result<Vec<String>, String> {
+fn get_role_permissions_from_db(conn: &rusqlite::Connection, role_id: &str) -> Result<Vec<PermissionEntry>, String> {
     let mut stmt = conn
-        .prepare("SELECT resource FROM role_permissions WHERE role_id = ?1 AND level IN ('read','write')")
+        .prepare("SELECT resource, level FROM role_permissions WHERE role_id = ?1 AND level IN ('read','write')")
         .map_err(|e| e.to_string())?;
-    let perms: Vec<String> = stmt
-        .query_map(params![role_id], |row| row.get(0))
+    let perms: Vec<PermissionEntry> = stmt
+        .query_map(params![role_id], |row| {
+            Ok(PermissionEntry { resource: row.get(0)?, level: row.get(1)? })
+        })
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
     Ok(perms)
 }
 
-fn get_user_permissions(db: &Database, user_id: &str) -> Result<Vec<String>, String> {
+fn get_user_permissions(db: &Database, user_id: &str) -> Result<Vec<PermissionEntry>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let role_id: String = conn
@@ -152,7 +160,8 @@ fn get_user_permissions(db: &Database, user_id: &str) -> Result<Vec<String>, Str
 
     let mut perms = get_role_permissions_from_db(&conn, &role_id)?;
 
-    // Apply user_permission_overrides
+    // Apply user_permission_overrides: replace role level with override level,
+    // or remove the entry when override level is 'none'.
     let mut stmt = conn
         .prepare("SELECT resource, level FROM user_permission_overrides WHERE user_id = ?1")
         .map_err(|e| e.to_string())?;
@@ -164,10 +173,12 @@ fn get_user_permissions(db: &Database, user_id: &str) -> Result<Vec<String>, Str
 
     for (resource, level) in overrides {
         match level.as_str() {
-            "none" => perms.retain(|p| p != &resource),
+            "none" => perms.retain(|p| p.resource != resource),
             "read" | "write" => {
-                if !perms.contains(&resource) {
-                    perms.push(resource);
+                if let Some(entry) = perms.iter_mut().find(|p| p.resource == resource) {
+                    entry.level = level;
+                } else {
+                    perms.push(PermissionEntry { resource, level });
                 }
             }
             _ => {}
