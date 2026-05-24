@@ -7,7 +7,6 @@ import { AppModeProvider } from './hooks/useAppMode';
 import { usePermissions } from './hooks/usePermissions';
 import { Can } from './components/Can';
 import { FEATURE_FLAGS } from './hooks/usePermission';
-import PermissionsUpgradeBanner from './components/PermissionsUpgradeBanner';
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -177,8 +176,7 @@ function AppRoutes() {
 
   return (
     <SyncStatusContext.Provider value={{ syncError, setSyncError }}>
-      {isAuthenticated && <PermissionsUpgradeBanner />}
-      <Routes>
+<Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route
           element={
