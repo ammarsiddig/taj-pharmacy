@@ -34,6 +34,7 @@ pub mod warehouse;
 pub mod warehouse_transfer;
 pub mod warehouse_stocktake;
 pub mod warehouse_batch;
+pub mod warehouse_opening_stock;
 pub mod notifications;
 pub mod settings;
 pub mod settings_license;

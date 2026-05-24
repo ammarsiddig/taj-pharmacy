@@ -302,7 +302,7 @@ pub fn run(conn: &Connection) -> Result<(), String> {
                 CHECK(movement_type IN (
                     'receive','sell','customer_return',
                     'supplier_return','transfer_in','transfer_out',
-                    'adjust','dispose'
+                    'adjust','dispose','opening_stock'
                 )),
             quantity_change INTEGER NOT NULL,
             quantity_before INTEGER NOT NULL,
@@ -1326,6 +1326,77 @@ pub fn run(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_batches_branch ON batches(tenant_id, branch_id) WHERE deleted_at IS NULL;"
     ).map_err(|e| e.to_string())?;
+
+    // TASK-926: setup_mode flag — controls whether the tenant can still enter
+    // opening stock (الجرد الافتتاحي). Default 1 for fresh installs so the
+    // onboarding wizard can populate inventory before the first sale. Existing
+    // tenants that already have sales get auto-flipped to 0 below so live
+    // pharmacies don't suddenly unlock the feature.
+    ensure_column(&conn, "tenants", "setup_mode", "INTEGER NOT NULL DEFAULT 1")?;
+    conn.execute(
+        "UPDATE tenants SET setup_mode = 0
+         WHERE id IN (SELECT DISTINCT tenant_id FROM sales)",
+        [],
+    ).ok();
+
+    // TASK-926: extend stock_movements.movement_type CHECK to allow 'opening_stock'.
+    // SQLite cannot ALTER a CHECK constraint in place, so we use the documented
+    // rename-recreate-copy pattern. Safe because no FKs reference stock_movements.
+    let needs_rebuild: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_movements'
+             AND sql NOT LIKE '%opening_stock%'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .ok()
+        .map(|_| true)
+        .unwrap_or(false);
+    if needs_rebuild {
+        conn.execute_batch(
+            "BEGIN;
+            ALTER TABLE stock_movements RENAME TO stock_movements_old_926;
+            CREATE TABLE stock_movements (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                branch_id TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                batch_id TEXT NOT NULL,
+                movement_type TEXT NOT NULL
+                    CHECK(movement_type IN (
+                        'receive','sell','customer_return',
+                        'supplier_return','transfer_in','transfer_out',
+                        'adjust','dispose','opening_stock'
+                    )),
+                quantity_change INTEGER NOT NULL,
+                quantity_before INTEGER NOT NULL,
+                quantity_after INTEGER NOT NULL,
+                reference_type TEXT,
+                reference_id TEXT,
+                notes TEXT,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                FOREIGN KEY (product_id) REFERENCES products(id),
+                FOREIGN KEY (batch_id) REFERENCES batches(id),
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            );
+            INSERT INTO stock_movements
+                (id, tenant_id, branch_id, product_id, batch_id, movement_type,
+                 quantity_change, quantity_before, quantity_after,
+                 reference_type, reference_id, notes, created_by, created_at, updated_at)
+            SELECT id, tenant_id, branch_id, product_id, batch_id, movement_type,
+                   quantity_change, quantity_before, quantity_after,
+                   reference_type, reference_id, notes, created_by, created_at,
+                   COALESCE(updated_at, '')
+            FROM stock_movements_old_926;
+            DROP TABLE stock_movements_old_926;
+            CREATE INDEX IF NOT EXISTS idx_movements_product ON stock_movements(product_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_movements_batch ON stock_movements(batch_id);
+            COMMIT;"
+        ).map_err(|e| format!("rebuild stock_movements: {}", e))?;
+    }
 
     // TASK-925: backfill dashboard.view permission for existing installs.
     // Built-in roles seeded before this change don't have the resource at all,

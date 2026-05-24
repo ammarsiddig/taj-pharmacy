@@ -142,3 +142,78 @@ export async function recallBatch(
 export async function getLowStockProducts(branchId: string): Promise<LowStockProduct[]> {
   return invoke('get_low_stock_products', { tenantId: getTenantId(), branchId });
 }
+
+// ─── Opening Stock (الجرد الافتتاحي) ─────────────────────────────────────────
+
+export interface SetupModeStatus { setup_mode: boolean }
+
+export interface OpeningStockEntry {
+  product_id: string;
+  location_id: string;
+  quantity: number;
+  unit_cost?: number | null;
+  batch_number?: string | null;
+  expiry_date?: string | null;
+}
+
+export interface OpeningStockResult { batch_id: string; movement_id: string }
+
+export interface BulkOpeningStockRow {
+  barcode?: string | null;
+  trade_name?: string | null;
+  trade_name_ar?: string | null;
+  generic_name?: string | null;
+  category?: string | null;
+  unit?: string | null;
+  sale_price?: number | null;
+  quantity: number;
+  unit_cost?: number | null;
+  batch_number?: string | null;
+  expiry_date?: string | null;
+  location_id?: string | null;
+}
+
+export interface BulkOpeningStockRowResult {
+  row_index: number;
+  success: boolean;
+  product_id: string | null;
+  batch_id: string | null;
+  created_product: boolean;
+  error: string | null;
+}
+
+export interface BulkOpeningStockResult {
+  total: number;
+  success_count: number;
+  error_count: number;
+  created_products: number;
+  rows: BulkOpeningStockRowResult[];
+}
+
+export async function getSetupMode(): Promise<SetupModeStatus> {
+  return invoke('get_setup_mode', { tenantId: getTenantId() });
+}
+
+export async function finalizeSetupMode(userId: string): Promise<void> {
+  return invoke('finalize_setup_mode', { tenantId: getTenantId(), userId });
+}
+
+export async function addOpeningStockBatch(
+  branchId: string,
+  userId: string,
+  entry: OpeningStockEntry,
+): Promise<OpeningStockResult> {
+  return invoke('add_opening_stock_batch', {
+    tenantId: getTenantId(), branchId, userId, entry,
+  });
+}
+
+export async function importOpeningStockBulk(
+  branchId: string,
+  userId: string,
+  rows: BulkOpeningStockRow[],
+): Promise<BulkOpeningStockResult> {
+  return invoke('import_opening_stock_bulk', {
+    tenantId: getTenantId(), branchId, userId, rows,
+  });
+}

@@ -23,6 +23,7 @@ import CustomerNew from './pages/CustomerNew';
 import SupplierDetail from './pages/SupplierDetail';
 import Reports from './pages/Reports';
 import Warehouse from './pages/Warehouse';
+import OpeningStock from './pages/OpeningStock';
 import Sales from './pages/Sales';
 import Onboarding from './pages/Onboarding';
 import { checkOnboarding, syncAllTablesNow, initTenantId } from './api';
@@ -199,6 +200,7 @@ function AppRoutes() {
           <Route path="/suppliers/:id" element={<Can resource="suppliers"><FeatureGate flag={FEATURE_FLAGS.SUPPLIERS}><SupplierDetail /></FeatureGate></Can>} />
           <Route path="/reports" element={<Can resource="reports.sales"><FeatureGate flag={FEATURE_FLAGS.REPORTS}><Reports /></FeatureGate></Can>} />
           <Route path="/warehouse" element={<Can resource="inventory"><FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><Warehouse /></FeatureGate></Can>} />
+          <Route path="/warehouse/opening-stock" element={<Can resource="inventory" level="write"><FeatureGate flag={FEATURE_FLAGS.WAREHOUSE}><OpeningStock /></FeatureGate></Can>} />
           <Route path="/sales" element={<Can resource="reports.sales"><FeatureGate flag={FEATURE_FLAGS.SALES}><Sales /></FeatureGate></Can>} />
           <Route path="/settings" element={<SettingsGate><Settings /></SettingsGate>} />
         </Route>
