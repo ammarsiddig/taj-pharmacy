@@ -880,6 +880,16 @@ pub fn finalize_restore(
         .map_err(|e| format!("فشل حفظ عنوان الخادم: {}", e))?;
     }
 
+    // Sync code paths (cloud_sync_snapshot / cloud_sync_outbox / scheduler)
+    // read PMS_OWNER_SYNC_TOKEN + PMS_OWNER_SYNC_ENDPOINT from process env, not from DB.
+    // Without this overwrite, the post-restore sync keeps sending whatever stale
+    // token was loaded at startup (or from a previous failed activation) and the
+    // cloud responds 403 "Invalid or revoked token". Mirrors settings_onboarding.rs:322.
+    std::env::set_var("PMS_OWNER_SYNC_TOKEN", &sync_token);
+    if !endpoint.trim().is_empty() {
+        std::env::set_var("PMS_OWNER_SYNC_ENDPOINT", endpoint.trim());
+    }
+
     // Mark onboarding complete and set real pharmacy name
     conn.execute(
         "UPDATE tenants SET onboarding_completed = 1, name = ?1,
