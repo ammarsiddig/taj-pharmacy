@@ -201,8 +201,9 @@ export async function pullAllTables(
 
 export async function finalizeRestore(
   syncToken: string,
+  endpoint: string,
   adminPassword: string,
   pharmacyName: string,
 ): Promise<void> {
-  return invoke('finalize_restore', { syncToken, adminPassword, pharmacyName });
+  return invoke('finalize_restore', { syncToken, endpoint, adminPassword, pharmacyName });
 }

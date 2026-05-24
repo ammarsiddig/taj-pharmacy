@@ -781,8 +781,19 @@ pub fn restore_from_cloud(
         return Err("النسخ الاحتياطي السحابي غير مكون".into());
     }
 
+    let staging_dir = restore_stage_dir(&app_handle)?;
+
     let staged_path = if let Some(existing) = staged_file_path.filter(|v| !v.trim().is_empty()) {
-        PathBuf::from(existing)
+        let p = PathBuf::from(&existing);
+        // Validate the path is inside the expected staging directory (prevent path traversal).
+        let canonical = p.canonicalize()
+            .map_err(|_| "مسار الملف المؤقت غير صالح".to_string())?;
+        let canonical_staging = staging_dir.canonicalize()
+            .map_err(|_| "فشل التحقق من مجلد الاستعادة المؤقت".to_string())?;
+        if !canonical.starts_with(&canonical_staging) {
+            return Err("مسار الملف المؤقت خارج المجلد المسموح به".to_string());
+        }
+        p
     } else {
         stage_cloud_backup(&app_handle, &tenant_id, &config.cloud_endpoint, &config.cloud_token, &remote_id)?
     };
@@ -806,6 +817,10 @@ pub fn restore_from_cloud(
         .map_err(|e| format!("فشل إنشاء نسخة احتياطية آمنة: {}", e))?;
 
     apply_restore_from_staged(&conn, &staged_path)?;
+
+    // Clean up the staged file now that restore is complete.
+    fs::remove_file(&staged_path).ok();
+
     Ok(verification)
 }
 

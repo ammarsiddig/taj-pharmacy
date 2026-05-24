@@ -3502,6 +3502,36 @@ Rate-limited (10/min per IP) to prevent enumeration.
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
+### 2026-05-24 — Claude Code — TASK-923 (v0.2.11) — Audit fixes: restore schema mismatches + updater auth + path validation
+
+- **Status:** DONE
+- **Files changed:**
+  - `src-tauri/src/commands/cloud_sync_restore.rs`: Fixed `restore_pos_sales` (removed non-existent `is_active` column; added value normalization for `sale_type`/`payment_method`/`payment_status`; `session_id` and `customer_id` now use `ov()` so they insert NULL instead of empty string). Fixed `restore_stock_movements` (added required `quantity_before` and `quantity_after` NOT NULL columns; skip rows with empty `batch_id`; movement_type normalization; created_by fallback). Fixed `restore_supplier_invoices` (added missing `created_by NOT NULL` column; fallback to `user-admin`). Extended `finalize_restore` signature to accept `endpoint: String`; now writes both `token` and `endpoint` to `cloud_sync_config`.
+  - `src/api/system.ts`: Updated `finalizeRestore` wrapper to accept and pass `endpoint` param.
+  - `src/pages/Onboarding.tsx`: Pass `CANONICAL_CLOUD_ENDPOINT` to `finalizeRestore` call.
+  - `src-tauri/src/commands/updater.rs`: Added `AuthSessionState` import and guard to both `check_for_update` and `install_update` — requires active session before executing. Removed error-swallowing `match build_updater { Err(_) => return Ok(configured:false) }` pattern; errors now propagate via `Err(...)` so the frontend sees real error messages.
+  - `src-tauri/src/commands/settings_backup.rs`: Added staged path canonicalization + `starts_with(staging_dir)` validation in `restore_from_cloud` to prevent path traversal. Added `fs::remove_file(&staged_path)` cleanup after successful `apply_restore_from_staged`.
+  - `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json`: bumped version to `0.2.11`.
+- **Root causes fixed:**
+  - `restore_pos_sales`: `is_active` column was never added to the local `sales` schema. Every INSERT failed silently → 0 sales restored. `session_id`/`customer_id` as empty strings violated FK constraints.
+  - `restore_stock_movements`: `quantity_before` and `quantity_after` are `NOT NULL` in the local schema with no DEFAULT. INSERT without them always hit a constraint violation → 0 stock movements restored (silently, via `ok()`).
+  - `restore_supplier_invoices`: `created_by TEXT NOT NULL REFERENCES users(id)` required. Missing from INSERT → 0 purchase invoices restored.
+  - `finalize_restore` endpoint: background sync reads `cloud_sync_config.endpoint` after login. Not setting it meant sync would use the migration default (`https://pharmacy.taj.systems`), which happens to be correct, but it's now explicit and correct for any future custom-endpoint deployment.
+  - Updater auth: `check_for_update`/`install_update` had no auth guard — any IPC caller could trigger them. Now require active session.
+  - Staged path: `restore_from_cloud` accepted any filesystem path as `staged_file_path` IPC param without validation.
+- **Acceptance test result:** `cargo check` — 0 new errors/warnings. `npx tsc --noEmit` — 0 errors.
+
+---
+
+### 2026-05-24 — Claude Code — TASK-922 (v0.2.10) — role_permissions seeded after seed.rs
+
+- **Status:** DONE
+- **Files changed:** `src-tauri/src/db/mod.rs` (added `ensure_role_permissions()` call after `run_seed()`; new method seeds all 4 built-in roles' permission matrix from `default_perms`; idempotent via `COUNT(*) FROM role_permissions > 0` guard; also sets `see_all_branches=1` for owner users), `src-tauri/tauri.conf.json` + `src-tauri/Cargo.toml` + `package.json` (bumped to 0.2.10)
+- **Root cause:** The TASK-910 migration runs before `seed.rs` inserts the built-in roles (owner/manager/pharmacist/cashier). At migration time the `roles` table is empty, so `SELECT id FROM roles WHERE name = 'owner'` returns nothing and `INSERT OR IGNORE INTO role_permissions` inserts zero rows. Result: every fresh install and every restore had empty `role_permissions`. Since all sidebar routes use `<Can resource="...">` guards (except POS), only POS was visible. Fixed by moving role_permissions seeding to an idempotent `ensure_role_permissions()` that runs after seed.
+- **Acceptance test result:** `cargo check` clean. `npx tsc --noEmit` zero errors.
+
+---
+
 ### 2026-05-24 — Claude Code — TASK-921 (v0.2.9)
 - **Status:** DONE
 - **Files changed:** `src-tauri/src/commands/cloud_sync_restore.rs` (new `finalize_restore` command at EOF — ~60 lines), `src-tauri/src/lib.rs` (registered `finalize_restore`), `src/api/system.ts` (added `finalizeRestore` wrapper), `src/pages/Onboarding.tsx` (import + call `finalizeRestore` after `pullAllTables`; updated done-screen login hint)

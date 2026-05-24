@@ -248,12 +248,16 @@ fn restore_supplier_invoices(conn: &rusqlite::Connection, rows: &[Value]) -> i64
             if d.is_empty() { sv(row, "created_at") } else { d }
         };
         let total = iv(row, "total");
+        let created_by = {
+            let cb = sv(row, "created_by");
+            if cb.is_empty() { "user-admin".to_string() } else { cb }
+        };
         let ok = conn.execute(
             "INSERT OR IGNORE INTO supplier_invoices
                (id, tenant_id, branch_id, supplier_id, invoice_number, invoice_date,
                 status, payment_status, subtotal, discount, tax_amount, total, amount_paid,
-                created_at, updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
+                created_by, created_at, updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
             params![
                 id,
                 sv(row, "tenant_id"),
@@ -268,6 +272,7 @@ fn restore_supplier_invoices(conn: &rusqlite::Connection, rows: &[Value]) -> i64
                 0i64,
                 total,
                 iv(row, "amount_paid"),
+                created_by,
                 sv(row, "created_at"),
                 sv(row, "updated_at"),
             ],
@@ -370,34 +375,54 @@ fn restore_pos_sales(conn: &rusqlite::Connection, rows: &[Value]) -> i64 {
     for row in rows {
         let id = sv(row, "id");
         if id.is_empty() { continue; }
+        let sale_type = {
+            let t = sv(row, "sale_type");
+            match t.as_str() {
+                "pos" | "invoice" => t,
+                _ => "pos".to_string(),
+            }
+        };
+        let payment_method = {
+            let pm = sv(row, "payment_method");
+            match pm.as_str() {
+                "cash" | "bank_transfer" | "credit" | "partial" => pm,
+                _ => "cash".to_string(),
+            }
+        };
+        let payment_status = {
+            let ps = sv(row, "payment_status");
+            match ps.as_str() {
+                "paid" | "credit" | "partial" => ps,
+                _ => "paid".to_string(),
+            }
+        };
         let ok = conn.execute(
             "INSERT OR IGNORE INTO sales
                (id, tenant_id, branch_id, sale_number, sale_type, session_id, cashier_id,
                 customer_id, subtotal, discount, tax_amount, total, amount_paid, change_amount,
                 payment_method, payment_method_id, payment_method_name, payment_status, notes,
-                void_reason, is_active, created_at, updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,'',?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22)",
+                void_reason, created_at, updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6,'',?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)",
             params![
                 id,
                 sv(row, "tenant_id"),
                 sv(row, "branch_id"),
                 sv(row, "sale_number"),
-                sv(row, "sale_type"),
-                sv(row, "session_id"),
-                sv(row, "customer_id"),
+                sale_type,
+                ov(row, "session_id"),
+                ov(row, "customer_id"),
                 iv(row, "total"),
                 iv(row, "discount"),
                 iv(row, "tax_amount"),
                 iv(row, "total"),
                 iv(row, "amount_paid"),
                 iv(row, "change_amount"),
-                sv(row, "payment_method"),
+                payment_method,
                 ov(row, "payment_method_id"),
                 ov(row, "payment_method_name"),
-                sv(row, "payment_status"),
+                payment_status,
                 ov(row, "notes"),
                 ov(row, "void_reason"),
-                iv(row, "is_active"),
                 sv(row, "created_at"),
                 sv(row, "created_at"),
             ],
@@ -506,23 +531,44 @@ fn restore_stock_movements(conn: &rusqlite::Connection, rows: &[Value]) -> i64 {
     for row in rows {
         let id = sv(row, "id");
         if id.is_empty() { continue; }
+        let batch_id = sv(row, "batch_id");
+        if batch_id.is_empty() { continue; }
+        let quantity_change = iv(row, "quantity_change").max(iv(row, "quantity"));
+        let quantity_before = iv(row, "quantity_before");
+        let quantity_after = iv(row, "quantity_after")
+            .max(quantity_before + quantity_change);
+        let movement_type = {
+            let mt = sv(row, "movement_type");
+            match mt.as_str() {
+                "receive" | "sell" | "customer_return" | "supplier_return"
+                | "transfer_in" | "transfer_out" | "adjust" | "dispose" => mt,
+                _ => "adjust".to_string(),
+            }
+        };
+        let created_by = {
+            let cb = sv(row, "created_by");
+            if cb.is_empty() { "user-admin".to_string() } else { cb }
+        };
         let ok = conn.execute(
             "INSERT OR IGNORE INTO stock_movements
                (id, tenant_id, branch_id, product_id, batch_id, movement_type,
-                quantity_change, reference_type, reference_id, notes, created_by, created_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+                quantity_change, quantity_before, quantity_after,
+                reference_type, reference_id, notes, created_by, created_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",
             params![
                 id,
                 sv(row, "tenant_id"),
                 sv(row, "branch_id"),
                 sv(row, "product_id"),
-                ov(row, "batch_id"),
-                sv(row, "movement_type"),
-                iv(row, "quantity"),
+                batch_id,
+                movement_type,
+                quantity_change,
+                quantity_before,
+                quantity_after,
                 ov(row, "reference_type"),
                 ov(row, "reference_id"),
                 ov(row, "notes"),
-                sv(row, "created_by"),
+                created_by,
                 sv(row, "created_at"),
             ],
         );
@@ -755,7 +801,7 @@ pub fn recover_cloud_credentials(
 }
 
 /// Called by the frontend immediately after pull_all_tables succeeds.
-/// Persists the sync token, marks onboarding complete, updates pharmacy name,
+/// Persists the sync token + endpoint, marks onboarding complete, updates pharmacy name,
 /// and resets the local admin password to the one the user entered during restore.
 /// Without this, the app loops back to Onboarding on every restart because
 /// onboarding_completed is never set and the sync token is never saved.
@@ -763,6 +809,7 @@ pub fn recover_cloud_credentials(
 pub fn finalize_restore(
     db: State<'_, Database>,
     sync_token: String,
+    endpoint: String,
     admin_password: String,
     pharmacy_name: String,
 ) -> Result<(), String> {
@@ -787,13 +834,22 @@ pub fn finalize_restore(
         .query_row("SELECT id FROM tenants LIMIT 1", [], |row| row.get(0))
         .unwrap_or_else(|_| "default-tenant".to_string());
 
-    // Persist sync token so future background syncs work
+    // Persist sync token and endpoint so future background syncs work
     conn.execute(
         "INSERT INTO cloud_sync_config (key, value) VALUES ('token', ?1)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![sync_token],
     )
     .map_err(|e| format!("فشل حفظ رمز المزامنة: {}", e))?;
+
+    if !endpoint.trim().is_empty() {
+        conn.execute(
+            "INSERT INTO cloud_sync_config (key, value) VALUES ('endpoint', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![endpoint.trim()],
+        )
+        .map_err(|e| format!("فشل حفظ عنوان الخادم: {}", e))?;
+    }
 
     // Mark onboarding complete and set real pharmacy name
     conn.execute(

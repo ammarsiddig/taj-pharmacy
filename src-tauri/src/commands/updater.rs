@@ -2,6 +2,8 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
+use crate::commands::session_state::AuthSessionState;
+
 #[derive(Debug, Serialize)]
 pub struct UpdateCheckResult {
     pub configured: bool,
@@ -49,22 +51,16 @@ pub(crate) fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Upd
 }
 
 #[tauri::command]
-pub async fn check_for_update(app: AppHandle) -> Result<UpdateCheckResult, String> {
+pub async fn check_for_update(
+    app: AppHandle,
+    auth_session: tauri::State<'_, AuthSessionState>,
+) -> Result<UpdateCheckResult, String> {
+    // Require an active session — only logged-in users may trigger update checks.
+    auth_session.get().map_err(|_| "يجب تسجيل الدخول أولاً".to_string())?;
+
     let current = app.package_info().version.to_string();
 
-    let updater = match build_updater(&app) {
-        Ok(u) => u,
-        Err(_) => {
-            return Ok(UpdateCheckResult {
-                configured: false,
-                available: false,
-                version: String::new(),
-                current_version: current,
-                notes: None,
-                pub_date: None,
-            });
-        }
-    };
+    let updater = build_updater(&app).map_err(|e| format!("خادم التحديث غير مكون: {}", e))?;
 
     match updater
         .check()
@@ -91,16 +87,14 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateCheckResult, Strin
 }
 
 #[tauri::command]
-pub async fn install_update(app: AppHandle) -> Result<InstallResult, String> {
-    let updater = match build_updater(&app) {
-        Ok(u) => u,
-        Err(e) => {
-            return Ok(InstallResult {
-                success: false,
-                message: format!("خادم التحديث غير مكون: {}", e),
-            });
-        }
-    };
+pub async fn install_update(
+    app: AppHandle,
+    auth_session: tauri::State<'_, AuthSessionState>,
+) -> Result<InstallResult, String> {
+    // Require an active session — only logged-in users may install updates.
+    auth_session.get().map_err(|_| "يجب تسجيل الدخول أولاً".to_string())?;
+
+    let updater = build_updater(&app).map_err(|e| format!("خادم التحديث غير مكون: {}", e))?;
 
     match updater
         .check()
