@@ -1235,6 +1235,7 @@ pub fn run(conn: &Connection) -> Result<(), String> {
     // Seed default role permissions for built-in roles
     let default_role_perms: Vec<(&str, Vec<(&str, &str)>)> = vec![
         ("owner", vec![
+            ("dashboard.view","write"),
             ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
             ("pos.discount","write"), ("sessions","write"), ("products","write"),
             ("inventory","write"), ("transfers","write"), ("disposal","write"),
@@ -1247,6 +1248,7 @@ pub fn run(conn: &Connection) -> Result<(), String> {
             ("settings.payment_methods","write"), ("settings.tax","write"),
         ]),
         ("manager", vec![
+            ("dashboard.view","write"),
             ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
             ("pos.discount","write"), ("sessions","write"), ("products","write"),
             ("inventory","write"), ("transfers","write"), ("disposal","write"),
@@ -1259,6 +1261,7 @@ pub fn run(conn: &Connection) -> Result<(), String> {
             ("settings.payment_methods","write"), ("settings.tax","write"),
         ]),
         ("pharmacist", vec![
+            ("dashboard.view","read"),
             ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
             ("pos.discount","write"), ("sessions","write"), ("products","read"),
             ("inventory","write"), ("transfers","write"), ("disposal","read"),
@@ -1323,6 +1326,33 @@ pub fn run(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_batches_branch ON batches(tenant_id, branch_id) WHERE deleted_at IS NULL;"
     ).map_err(|e| e.to_string())?;
+
+    // TASK-925: backfill dashboard.view permission for existing installs.
+    // Built-in roles seeded before this change don't have the resource at all,
+    // so the Permissions tab cannot show it and Sidebar gating cannot rely on it.
+    // INSERT OR IGNORE is safe — re-runs are a no-op.
+    let dashboard_defaults: &[(&str, &str)] = &[
+        ("owner", "write"),
+        ("manager", "write"),
+        ("pharmacist", "read"),
+        // cashier intentionally omitted — keeps them off the dashboard by default
+    ];
+    for (role_name, level) in dashboard_defaults {
+        let mut rstmt = conn.prepare(
+            "SELECT id FROM roles WHERE name = ?1 AND deleted_at IS NULL"
+        ).map_err(|e| e.to_string())?;
+        let role_ids: Vec<String> = rstmt
+            .query_map(rusqlite::params![role_name], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        for rid in role_ids {
+            conn.execute(
+                "INSERT OR IGNORE INTO role_permissions (role_id, resource, level) VALUES (?1, 'dashboard.view', ?2)",
+                rusqlite::params![rid, level],
+            ).ok();
+        }
+    }
 
     log::info!("Database migrations completed successfully");
     Ok(())

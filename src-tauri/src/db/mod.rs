@@ -58,6 +58,7 @@ impl Database {
 
         let default_perms: &[(&str, &[(&str, &str)])] = &[
             ("owner", &[
+                ("dashboard.view","write"),
                 ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
                 ("pos.discount","write"), ("sessions","write"), ("products","write"),
                 ("inventory","write"), ("transfers","write"), ("disposal","write"),
@@ -70,6 +71,7 @@ impl Database {
                 ("settings.payment_methods","write"), ("settings.tax","write"),
             ]),
             ("manager", &[
+                ("dashboard.view","write"),
                 ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
                 ("pos.discount","write"), ("sessions","write"), ("products","write"),
                 ("inventory","write"), ("transfers","write"), ("disposal","write"),
@@ -82,6 +84,7 @@ impl Database {
                 ("settings.payment_methods","write"), ("settings.tax","write"),
             ]),
             ("pharmacist", &[
+                ("dashboard.view","read"),
                 ("pos.sell","write"), ("pos.returns","write"), ("pos.history","write"),
                 ("pos.discount","write"), ("sessions","write"), ("products","read"),
                 ("inventory","write"), ("transfers","write"), ("disposal","read"),

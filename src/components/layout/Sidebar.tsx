@@ -43,7 +43,7 @@ const SETTINGS_PERMISSIONS = [
 ];
 
 const navItems: NavItem[] = [
-  { key: 'dashboard',  path: '/dashboard',  icon: LayoutDashboard, group: 'core', requiredPermission: 'reports.financial' },
+  { key: 'dashboard',  path: '/dashboard',  icon: LayoutDashboard, group: 'core', requiredPermission: 'dashboard.view' },
   { key: 'pos',        path: '/pos',        icon: ShoppingCart,    group: 'core',  featureFlag: FEATURE_FLAGS.POS, requiredPermission: 'pos.sell' },
   { key: 'sales',      path: '/sales',      icon: FileText,        group: 'ops',   featureFlag: FEATURE_FLAGS.SALES, requiredPermission: 'reports.sales' },
   { key: 'purchases',  path: '/purchases',  icon: ShoppingBag,     group: 'ops',   featureFlag: FEATURE_FLAGS.PURCHASES, requiredPermission: 'purchases' },

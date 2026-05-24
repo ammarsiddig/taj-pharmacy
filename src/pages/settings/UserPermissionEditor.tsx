@@ -13,6 +13,7 @@ interface UserPermissionEditorProps {
 }
 
 const ALL_RESOURCES = [
+  'dashboard.view',
   'pos.sell', 'pos.returns', 'pos.history', 'pos.discount',
   'sessions', 'products', 'inventory', 'transfers', 'disposal',
   'purchases', 'supplier_returns', 'suppliers',

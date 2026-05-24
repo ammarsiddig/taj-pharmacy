@@ -7,6 +7,7 @@ import UserPermissionEditor from './UserPermissionEditor';
 import type { RoleWithPermissions } from '../../api/permissions';
 
 const RESOURCES_BY_CATEGORY: Record<string, string[]> = {
+  'لوحة التحكم': ['dashboard.view'],
   'نقطة البيع': ['pos.sell', 'pos.returns', 'pos.history', 'pos.discount'],
   'الجلسات': ['sessions'],
   'المخزون': ['products', 'inventory', 'transfers', 'disposal'],

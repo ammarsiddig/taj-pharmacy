@@ -17,7 +17,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (permissions.some((p) => p.resource === 'reports.financial')) {
+    if (permissions.some((p) => p.resource === 'dashboard.view')) {
       navigate('/dashboard', { replace: true });
     } else {
       navigate('/pos', { replace: true });
