@@ -3502,6 +3502,21 @@ Rate-limited (10/min per IP) to prevent enumeration.
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
+### 2026-05-24 — Claude Code — TASK-924 (v0.2.12) — Restore: license data not re-applied after cloud restore
+
+- **Status:** DONE
+- **Files changed:**
+  - `pms-cloud/src/routes/auth.js`: Updated `POST /auth/recover` response to also return `subscription_plan`, `subscription_status`, `subscription_expiry`, `max_users`, `max_branches`, `license_key` — pulled from `license_keys` and `tenants` tables.
+  - `src-tauri/src/commands/cloud_sync_restore.rs`: Extended `RecoverResult` struct with 6 new optional fields. Extended `finalize_restore` command to accept those fields. After password reset, now also: (a) UPDATEs `tenants` with plan/status/expiry/max_users/max_branches/feature_flags; (b) INSERTs a `license_keys` row (keyed by SHA-256 hash of the key) so license history tab shows data. `feature_flags` derived from plan: `basic=0x0F`, `professional/enterprise=0xFF`.
+  - `src/types/system.ts`: Extended `RecoverResult` interface with 6 new nullable fields.
+  - `src/api/system.ts`: Extended `finalizeRestore` wrapper to accept and forward the 6 license fields.
+  - `src/pages/Onboarding.tsx`: Updated `finalizeRestore` call to pass `recovered.subscription_*`, `recovered.max_*`, `recovered.license_key`.
+  - `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json`: bumped to 0.2.12.
+- **Root cause:** After `pull_all_tables`, the local `tenants` row keeps its migration-default values (`subscription_plan='basic'`, `subscription_status='active'`, `feature_flags=0`, `max_users=2`). `feature_flags=0` means ALL features gated — `hasFeature()` returns false everywhere. Additionally the local `license_keys` table was empty so the Settings → License tab showed "لا توجد معلومات ترخيص". The server correctly blocks reactivating a 'used' key, so users were stuck. Fix: `recover_cloud_credentials` returns the live subscription snapshot from the cloud; `finalize_restore` applies it in one UPDATE and inserts a license_keys record.
+- **Acceptance test result:** `cargo check` — 0 new errors. `npx tsc --noEmit` — 0 errors.
+
+---
+
 ### 2026-05-24 — Claude Code — TASK-923 (v0.2.11) — Audit fixes: restore schema mismatches + updater auth + path validation
 
 - **Status:** DONE

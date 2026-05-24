@@ -432,15 +432,35 @@ router.post('/auth/recover', loginLimiter, async (req, res) => {
     );
 
     const tenantResult = await query(
-      'SELECT pharmacy_name FROM tenants WHERE id = $1',
+      'SELECT pharmacy_name, expires_at, is_suspended FROM tenants WHERE id = $1',
       [lic.tenant_id]
     );
+
+    const licDetailResult = await query(
+      "SELECT plan, max_users, max_branches, expires_at FROM license_keys WHERE key = $1",
+      [key]
+    );
+    const licDetail = licDetailResult.rows[0] || {};
+
+    const tenant = tenantResult.rows[0] || {};
+    const expiresAt = licDetail.expires_at || tenant.expires_at || null;
+    const plan = licDetail.plan || 'basic';
+    const isSuspended = tenant.is_suspended || false;
+    const subscriptionStatus = isSuspended ? 'suspended'
+      : (expiresAt && new Date(expiresAt) < new Date()) ? 'expired'
+      : 'active';
 
     res.json({
       tenant_id: lic.tenant_id,
       sync_token: syncToken,
       owner_id: owner.id,
-      pharmacy_name: tenantResult.rows[0]?.pharmacy_name || '',
+      pharmacy_name: tenant.pharmacy_name || '',
+      subscription_plan: plan,
+      subscription_status: subscriptionStatus,
+      subscription_expiry: expiresAt ? new Date(expiresAt).toISOString() : null,
+      max_users: licDetail.max_users ?? 2,
+      max_branches: licDetail.max_branches ?? 1,
+      license_key: key,
     });
   } catch (err) {
     console.error('[auth] recover error:', err);

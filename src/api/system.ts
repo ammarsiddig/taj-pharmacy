@@ -204,6 +204,16 @@ export async function finalizeRestore(
   endpoint: string,
   adminPassword: string,
   pharmacyName: string,
+  subscriptionPlan: string | null,
+  subscriptionStatus: string | null,
+  subscriptionExpiry: string | null,
+  maxUsers: number | null,
+  maxBranches: number | null,
+  licenseKey: string | null,
 ): Promise<void> {
-  return invoke('finalize_restore', { syncToken, endpoint, adminPassword, pharmacyName });
+  return invoke('finalize_restore', {
+    syncToken, endpoint, adminPassword, pharmacyName,
+    subscriptionPlan, subscriptionStatus, subscriptionExpiry,
+    maxUsers, maxBranches, licenseKey,
+  });
 }

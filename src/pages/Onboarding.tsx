@@ -256,7 +256,15 @@ export default function Onboarding({ onComplete }: Props) {
 
       // Step R4: persist sync token + mark onboarding complete + reset admin password
       setRestoreProgressMsg('جاري حفظ إعدادات الحساب...');
-      await finalizeRestore(recovered.sync_token, CANONICAL_CLOUD_ENDPOINT, restorePassword, recovered.pharmacy_name);
+      await finalizeRestore(
+        recovered.sync_token, CANONICAL_CLOUD_ENDPOINT, restorePassword, recovered.pharmacy_name,
+        recovered.subscription_plan ?? null,
+        recovered.subscription_status ?? null,
+        recovered.subscription_expiry ?? null,
+        recovered.max_users ?? null,
+        recovered.max_branches ?? null,
+        recovered.license_key ?? null,
+      );
 
       setRestoreResult(result);
       setRestoreStep('done');

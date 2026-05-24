@@ -728,6 +728,12 @@ pub struct RecoverResult {
     pub tenant_id: String,
     pub sync_token: String,
     pub pharmacy_name: String,
+    pub subscription_plan: Option<String>,
+    pub subscription_status: Option<String>,
+    pub subscription_expiry: Option<String>,
+    pub max_users: Option<i64>,
+    pub max_branches: Option<i64>,
+    pub license_key: Option<String>,
 }
 
 #[tauri::command]
@@ -797,7 +803,24 @@ pub fn recover_cloud_credentials(
         return Err("استجابة غير متوقعة من الخادم: بيانات ناقصة".to_string());
     }
 
-    Ok(RecoverResult { tenant_id, sync_token, pharmacy_name })
+    let subscription_plan = resp_body.get("subscription_plan").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let subscription_status = resp_body.get("subscription_status").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let subscription_expiry = resp_body.get("subscription_expiry").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let max_users = resp_body.get("max_users").and_then(|v| v.as_i64());
+    let max_branches = resp_body.get("max_branches").and_then(|v| v.as_i64());
+    let license_key = resp_body.get("license_key").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+    Ok(RecoverResult {
+        tenant_id,
+        sync_token,
+        pharmacy_name,
+        subscription_plan,
+        subscription_status,
+        subscription_expiry,
+        max_users,
+        max_branches,
+        license_key,
+    })
 }
 
 /// Called by the frontend immediately after pull_all_tables succeeds.
@@ -812,6 +835,12 @@ pub fn finalize_restore(
     endpoint: String,
     admin_password: String,
     pharmacy_name: String,
+    subscription_plan: Option<String>,
+    subscription_status: Option<String>,
+    subscription_expiry: Option<String>,
+    max_users: Option<i64>,
+    max_branches: Option<i64>,
+    license_key: Option<String>,
 ) -> Result<(), String> {
     use argon2::{
         password_hash::{rand_core::OsRng, SaltString},
@@ -871,6 +900,64 @@ pub fn finalize_restore(
         params![password_hash, local_tenant_id],
     )
     .map_err(|e| format!("فشل تحديث كلمة مرور المسؤول: {}", e))?;
+
+    // Restore subscription/license data so the app doesn't block on expired/missing license.
+    let plan = subscription_plan.as_deref().unwrap_or("basic");
+    let status = subscription_status.as_deref().unwrap_or("active");
+    let max_u = max_users.unwrap_or(2);
+    let max_b = max_branches.unwrap_or(1);
+
+    // Derive feature_flags from plan (mirrors the Rust activate_license logic).
+    let feature_flags: i64 = match plan {
+        "professional" => 0xFF,
+        "enterprise"   => 0xFF,
+        _              => 0x0F,  // basic: POS + products + warehouse + expenses
+    };
+
+    conn.execute(
+        "UPDATE tenants SET
+            subscription_plan   = ?1,
+            subscription_status = ?2,
+            subscription_expiry = ?3,
+            max_users           = ?4,
+            max_branches        = ?5,
+            feature_flags       = ?6,
+            updated_at          = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?7",
+        params![
+            plan, status,
+            subscription_expiry.as_deref(),
+            max_u, max_b, feature_flags,
+            local_tenant_id,
+        ],
+    )
+    .map_err(|e| format!("فشل استعادة بيانات الترخيص: {}", e))?;
+
+    // Insert a local license_keys record so the license history tab is populated.
+    if let Some(ref key) = license_key {
+        if !key.is_empty() {
+            use uuid::Uuid;
+            use sha2::{Sha256, Digest};
+            let mut hasher = Sha256::new();
+            hasher.update(key.as_bytes());
+            let key_hash = format!("{:x}", hasher.finalize());
+
+            conn.execute(
+                "INSERT OR IGNORE INTO license_keys
+                    (id, tenant_id, key_hash, plan, activated_at, expires_at,
+                     max_branches, max_users, feature_flags, activated_by)
+                 VALUES (?1,?2,?3,?4,strftime('%Y-%m-%dT%H:%M:%fZ','now'),?5,?6,?7,?8,'user-admin')",
+                params![
+                    Uuid::new_v4().to_string(),
+                    local_tenant_id,
+                    key_hash,
+                    plan,
+                    subscription_expiry.as_deref(),
+                    max_b, max_u, feature_flags,
+                ],
+            ).ok();
+        }
+    }
 
     Ok(())
 }

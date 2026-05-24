@@ -212,6 +212,12 @@ export interface RecoverResult {
   tenant_id: string;
   sync_token: string;
   pharmacy_name: string;
+  subscription_plan: string | null;
+  subscription_status: string | null;
+  subscription_expiry: string | null;
+  max_users: number | null;
+  max_branches: number | null;
+  license_key: string | null;
 }
 
 // TASK-302: Table-level restore result
