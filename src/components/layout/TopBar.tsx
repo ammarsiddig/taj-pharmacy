@@ -290,8 +290,13 @@ export default function TopBar() {
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setInstalling(true);
-                                  try { await installUpdate(); } catch {}
-                                  setInstalling(false);
+                                  try {
+                                    await installUpdate();
+                                  } catch (err) {
+                                    window.alert(typeof err === 'string' ? err : 'فشل تثبيت التحديث');
+                                  } finally {
+                                    setInstalling(false);
+                                  }
                                 }}
                                 disabled={installing}
                                 className="px-2 py-1 text-xs font-medium rounded-md bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 flex-shrink-0 mt-0.5"

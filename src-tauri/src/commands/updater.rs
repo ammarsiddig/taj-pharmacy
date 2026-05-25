@@ -2,8 +2,6 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
-use crate::commands::session_state::AuthSessionState;
-
 #[derive(Debug, Serialize)]
 pub struct UpdateCheckResult {
     pub configured: bool,
@@ -51,13 +49,12 @@ pub(crate) fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Upd
 }
 
 #[tauri::command]
-pub async fn check_for_update(
-    app: AppHandle,
-    auth_session: tauri::State<'_, AuthSessionState>,
-) -> Result<UpdateCheckResult, String> {
-    // Require an active session — only logged-in users may trigger update checks.
-    auth_session.get().map_err(|_| "يجب تسجيل الدخول أولاً".to_string())?;
-
+pub async fn check_for_update(app: AppHandle) -> Result<UpdateCheckResult, String> {
+    // No auth check — backend AuthSessionState is in-memory and goes None on
+    // every app restart. The frontend session lives in localStorage so users
+    // think they're logged in even when the backend session is empty. Update
+    // operations are app-level (signed binaries verified via pubkey), not
+    // per-user, so user identity isn't needed. Matches check_pending_update.
     let current = app.package_info().version.to_string();
 
     let updater = build_updater(&app).map_err(|e| format!("خادم التحديث غير مكون: {}", e))?;
@@ -87,13 +84,8 @@ pub async fn check_for_update(
 }
 
 #[tauri::command]
-pub async fn install_update(
-    app: AppHandle,
-    auth_session: tauri::State<'_, AuthSessionState>,
-) -> Result<InstallResult, String> {
-    // Require an active session — only logged-in users may install updates.
-    auth_session.get().map_err(|_| "يجب تسجيل الدخول أولاً".to_string())?;
-
+pub async fn install_update(app: AppHandle) -> Result<InstallResult, String> {
+    // No auth check — see check_for_update above for rationale.
     let updater = build_updater(&app).map_err(|e| format!("خادم التحديث غير مكون: {}", e))?;
 
     match updater
