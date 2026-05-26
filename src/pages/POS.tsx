@@ -672,7 +672,7 @@ export default function POS() {
             placeholder={`${t('pos.searchProduct')} — F3`}
             className="app-input w-full ps-10 pe-3 py-3 text-sm text-ink-main placeholder:text-ink-placeholder focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
           />
-          {searchResults.length > 0 && (
+          {searchResults.length > 0 ? (
             <SearchResults
               results={searchResults}
               cart={cart}
@@ -685,7 +685,11 @@ export default function POS() {
               t={t}
               formatMoney={api.formatMoney}
             />
-          )}
+          ) : searchQuery.trim() ? (
+            <div className="absolute z-20 mt-1 w-full rounded-xl border border-ivory-border bg-white shadow-[var(--shadow-float)] px-4 py-3 text-center text-sm text-ink-muted">
+              لا توجد منتجات مطابقة لـ "{searchQuery}"
+            </div>
+          ) : null}
         </div>
 
         {/* Cart bar */}

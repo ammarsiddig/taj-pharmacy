@@ -230,7 +230,7 @@ function NewInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
                 </div>
                 <div className="relative">
                   <input ref={searchRef} value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder={t('sales.searchProduct')} className="app-input w-full px-4 py-3 text-sm text-ink-main placeholder:text-ink-placeholder focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" />
-                  {searchResults.length > 0 && (
+                  {searchResults.length > 0 ? (
                     <div className="absolute inset-x-0 top-full mt-2 max-h-72 overflow-y-auto rounded-2xl border border-ivory-border bg-white shadow-[var(--shadow-float)] z-20">
                       {searchResults.map((product) => (
                         <div key={product.product_id} className="border-b border-ivory-border last:border-0">
@@ -251,7 +251,11 @@ function NewInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
                         </div>
                       ))}
                     </div>
-                  )}
+                  ) : searchQuery.trim() && !searching ? (
+                    <div className="absolute inset-x-0 top-full mt-2 rounded-2xl border border-ivory-border bg-white shadow-[var(--shadow-float)] z-20 px-4 py-3 text-center text-sm text-ink-muted">
+                      لا توجد منتجات مطابقة لـ "{searchQuery}"
+                    </div>
+                  ) : null}
                 </div>
               </section>
               <section className="grid grid-cols-1 md:grid-cols-4 gap-4">

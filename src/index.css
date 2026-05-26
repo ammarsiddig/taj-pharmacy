@@ -462,3 +462,30 @@ table button, table [role="button"] {
   size: 80mm auto;
   margin: 0;
 }
+
+/* TASK-930: pointer cursor on every interactive element.
+   Browser default for <button> is `cursor: default`, not pointer — Tailwind
+   doesn't override this. Forces hand cursor on all clickable controls so
+   users get the expected affordance. Disabled controls stay default-cursor. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+a[href],
+summary,
+label[for],
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="file"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+input[type="button"]:not(:disabled),
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}

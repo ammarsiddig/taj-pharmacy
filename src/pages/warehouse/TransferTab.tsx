@@ -82,16 +82,24 @@ export default function TransferTab({ branchId }: Props) {
           ) : (
             <>
               <input className={inp} placeholder={t('purchases.searchProduct')} value={productSearch} onChange={e => setProductSearch(e.target.value)} />
-              {productResults.length > 0 && (
-                <ul className="absolute z-20 mt-1 w-full rounded-xl border border-ivory-border bg-white shadow-[var(--shadow-float)]">
-                  {productResults.map(p => (
-                    <li key={p.id}>
-                      <button className="w-full px-3 py-2 text-start text-sm hover:bg-ivory-muted" onClick={() => { setSelectedProduct({ id: p.id, name: p.trade_name_ar || p.trade_name }); setProductSearch(''); setProductResults([]); }}>
-                        {p.trade_name_ar || p.trade_name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              {productSearch.trim() && (
+                <div className="absolute z-20 mt-1 w-full rounded-xl border border-ivory-border bg-white shadow-[var(--shadow-float)]">
+                  {productResults.length > 0 ? (
+                    <ul>
+                      {productResults.map(p => (
+                        <li key={p.id}>
+                          <button className="w-full px-3 py-2 text-start text-sm hover:bg-ivory-muted" onClick={() => { setSelectedProduct({ id: p.id, name: p.trade_name_ar || p.trade_name }); setProductSearch(''); setProductResults([]); }}>
+                            {p.trade_name_ar || p.trade_name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="px-3 py-3 text-center text-xs text-ink-muted">
+                      لا توجد نتائج لـ "{productSearch}"
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}

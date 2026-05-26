@@ -118,7 +118,7 @@ export default function SubstitutesSection({ product }: SubstitutesSectionProps)
         {searching && (
           <RefreshCw size={13} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 animate-spin text-ink-muted" />
         )}
-        {searchResults.length > 0 && (
+        {searchResults.length > 0 ? (
           <ul className="absolute inset-x-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-xl border border-ivory-border bg-white shadow-[var(--shadow-float)]">
             {searchResults.slice(0, 8).map(p => (
               <li key={p.id}>
@@ -133,7 +133,11 @@ export default function SubstitutesSection({ product }: SubstitutesSectionProps)
               </li>
             ))}
           </ul>
-        )}
+        ) : searchQuery.trim() && !searching ? (
+          <div className="absolute inset-x-0 top-full z-30 mt-1 rounded-xl border border-ivory-border bg-white shadow-[var(--shadow-float)] px-3 py-3 text-center text-xs text-ink-muted">
+            لا توجد نتائج لـ "{searchQuery}"
+          </div>
+        ) : null}
       </div>
     </div>
   );
