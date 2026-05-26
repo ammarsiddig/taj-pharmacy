@@ -20,6 +20,12 @@ export async function login(username: string, password: string) {
   );
 }
 
+export async function refreshSession(token: string) {
+  return invoke<{ token: string; user: User; role: Role; permissions: PermissionEntry[] }>(
+    'refresh_session', { token }
+  );
+}
+
 // ---
 
 export async function writeAuditLog(userId: string, entry: AuditLogEntry): Promise<void> {

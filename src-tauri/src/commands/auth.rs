@@ -321,6 +321,81 @@ pub fn clear_auth_session(
     auth_session_state.clear()
 }
 
+/// Re-fetch user, role, and permissions for an existing token.
+///
+/// Frontend calls this on app start to overwrite the localStorage-cached
+/// AuthState. Without this, any permission added by a migration (e.g.
+/// `dashboard.view` introduced in TASK-925) is invisible to users until
+/// they explicitly log out and log back in. Also re-populates the in-memory
+/// AuthSessionState so backend commands that call `auth_session.get()` work
+/// across app restarts.
+#[tauri::command]
+pub fn refresh_session(
+    db: State<'_, Database>,
+    token: String,
+    auth_session_state: State<'_, AuthSessionState>,
+) -> Result<LoginResponse, String> {
+    let user_id = verify_token(&token)?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let row = conn.query_row(
+        "SELECT u.id, u.tenant_id, u.branch_id, u.role_id, u.username,
+                u.full_name, u.full_name_ar, u.phone, u.is_active,
+                u.last_login_at, u.created_at, u.updated_at,
+                r.id, r.tenant_id, r.name, r.name_ar, r.is_system
+         FROM users u
+         JOIN roles r ON u.role_id = r.id
+         WHERE u.id = ?1 AND u.deleted_at IS NULL",
+        params![user_id],
+        |row| {
+            Ok((
+                UserInfo {
+                    id: row.get(0)?,
+                    tenant_id: row.get(1)?,
+                    branch_id: row.get(2)?,
+                    role_id: row.get(3)?,
+                    username: row.get(4)?,
+                    full_name: row.get(5)?,
+                    full_name_ar: row.get(6)?,
+                    phone: row.get(7)?,
+                    is_active: row.get(8)?,
+                    last_login_at: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                },
+                RoleInfo {
+                    id: row.get(12)?,
+                    tenant_id: row.get(13)?,
+                    name: row.get(14)?,
+                    name_ar: row.get(15)?,
+                    is_system: row.get(16)?,
+                    created_at: None,
+                    updated_at: None,
+                },
+            ))
+        },
+    ).map_err(|_| "المستخدم غير موجود".to_string())?;
+
+    let (user, role) = row;
+    if !user.is_active {
+        return Err("الحساب معطل".into());
+    }
+
+    drop(conn);
+
+    let permissions = get_user_permissions(&db, &user.id)?;
+
+    auth_session_state.set(AuthSession {
+        user_id: user.id.clone(),
+        tenant_id: user.tenant_id.clone(),
+        branch_id: user.branch_id.clone().unwrap_or_default(),
+        role_name: role.name.clone(),
+        username: user.username.clone(),
+    }).ok();
+
+    Ok(LoginResponse { user, role, permissions, token })
+}
+
 #[tauri::command]
 pub fn check_permission(
     db: State<'_, Database>,

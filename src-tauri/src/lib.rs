@@ -64,6 +64,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::auth::login,
+            commands::auth::refresh_session,
             commands::auth::get_current_user,
             commands::auth::check_permission,
             commands::auth::reset_admin_password,
