@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
-import { getSystemAlerts, getBranchId, dismissSystemAlert, undismissAllSystemAlerts, checkPendingUpdate } from '../../api';
+import { getSystemAlerts, getBranchId, dismissSystemAlert, checkPendingUpdate, getTenantSettings } from '../../api';
 import { installUpdate } from '../../api/system';
+import type { TenantSettings } from '../../types';
 import type { NotificationRow } from '../../types';
 import type { JSX } from 'react';
 import {
@@ -102,8 +103,14 @@ export default function TopBar() {
   const [open, setOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [pharmacy, setPharmacy] = useState<TenantSettings | null>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const branchId = getBranchId();
+
+  useEffect(() => {
+    if (!user) return;
+    getTenantSettings().then(setPharmacy).catch(() => {});
+  }, [user]);
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -170,7 +177,12 @@ export default function TopBar() {
   }
 
   async function handleDismissAll() {
-    await undismissAllSystemAlerts();
+    // Bug fix: `undismissAllSystemAlerts` actually UN-dismisses (deletes the
+    // dismissed marker so old alerts reappear). The button labeled "مسح الكل"
+    // is supposed to dismiss every currently visible alert. Iterate the
+    // visible list and dismiss each one.
+    const types = Array.from(new Set(alerts.map(a => a.notification_type)));
+    await Promise.all(types.map(type => dismissSystemAlert(type).catch(() => {})));
     loadAlerts();
   }
 
@@ -331,10 +343,16 @@ export default function TopBar() {
       </div>
 
       <div className="ms-auto flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <img src="/taj-logo.svg" alt="TAJ Pharmacy" className="h-8 w-8 object-contain" />
-          <span className="text-base font-bold text-brand-600">TAJ Pharmacy</span>
-        </div>
+        {pharmacy && (pharmacy.name_ar || pharmacy.name) && (
+          <div className="flex flex-col items-end leading-tight">
+            <span className="text-base font-bold text-brand-700">
+              {pharmacy.name_ar || pharmacy.name}
+            </span>
+            {pharmacy.name_ar && pharmacy.name && pharmacy.name_ar !== pharmacy.name && (
+              <span className="text-[11px] text-ink-muted font-medium" dir="ltr">{pharmacy.name}</span>
+            )}
+          </div>
+        )}
         <PharmacySwitcher />
       </div>
     </header>

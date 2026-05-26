@@ -37,12 +37,18 @@
   --color-ink-muted: #3D6567;
   --color-ink-placeholder: #7AADB0;
 
+  /* TASK-931: alert colors widened apart visually.
+     Old palette had danger #DC2626 (red) and warning #D97706 (orange) too
+     close — looked like the same alert at a glance. Now: danger=red,
+     warning=yellow, with a clearer separation between them. */
   --color-status-danger: #DC2626;
   --color-status-danger-bg: #FEF2F2;
-  --color-status-warning: #D97706;
-  --color-status-warning-bg: #FFFBEB;
+  --color-status-warning: #CA8A04;
+  --color-status-warning-bg: #FEFCE8;
   --color-status-success: #059669;
   --color-status-success-bg: #F0FDF4;
+  --color-status-info: #2563EB;
+  --color-status-info-bg: #EFF6FF;
 
   --font-sans: 'Tajawal', sans-serif;
 
