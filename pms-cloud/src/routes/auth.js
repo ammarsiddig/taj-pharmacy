@@ -669,7 +669,10 @@ router.post('/v1/auth/check-email', checkEmailLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Valid email is required' });
     }
     const normalized = email.trim().toLowerCase();
-    const result = await req.pool.query(
+    // TASK-933: was `req.pool.query` — req.pool is undefined here, causing
+    // TypeError → 500 → broke onboarding email-uniqueness check on the PWA.
+    // Use the same query() helper as every other route in this file.
+    const result = await query(
       'SELECT t.id, t.pharmacy_name FROM tenants t JOIN owners o ON o.tenant_id = t.id WHERE LOWER(o.email) = $1 LIMIT 1',
       [normalized]
     );
