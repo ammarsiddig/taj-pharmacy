@@ -1180,6 +1180,11 @@ pub fn run(conn: &Connection) -> Result<(), String> {
     ensure_column(&conn, "accounts", "external_fee", "INTEGER NOT NULL DEFAULT 0")?;
     ensure_column(&conn, "accounts", "phone_label", "TEXT")?;
 
+    // TASK-934: receipt logo position + size (values handled in app code:
+    // logo_position ∈ {center,right,left}, logo_size ∈ {small,medium,large})
+    ensure_column(&conn, "tenants", "logo_position", "TEXT NOT NULL DEFAULT 'center'")?;
+    ensure_column(&conn, "tenants", "logo_size", "TEXT NOT NULL DEFAULT 'medium'")?;
+
     // Sync: outbox for deleted record IDs to clear stale cloud data
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS cloud_sync_deletions (
@@ -1424,6 +1429,40 @@ pub fn run(conn: &Connection) -> Result<(), String> {
             ).ok();
         }
     }
+
+    // TASK-935: fix opening-stock batches mis-attributed to a location outside
+    // their own branch. The inventory report sums stock via
+    // `batches b JOIN storage_locations sl WHERE sl.branch_id = ?`, so an opening
+    // batch whose location belongs to a different branch than `b.branch_id` was
+    // invisible in the report (totals, by-location, low/out-of-stock). Re-point
+    // such batches to a default location in their own branch. Idempotent: once
+    // sl.branch_id == b.branch_id the WHERE no longer matches.
+    conn.execute(
+        "UPDATE batches
+            SET location_id = (
+                SELECT sl2.id FROM storage_locations sl2
+                WHERE sl2.tenant_id = batches.tenant_id
+                  AND sl2.branch_id = batches.branch_id
+                  AND sl2.deleted_at IS NULL
+                ORDER BY CASE sl2.location_type WHEN 'shelf' THEN 0 ELSE 1 END, sl2.created_at
+                LIMIT 1
+            )
+          WHERE batches.branch_id IS NOT NULL
+            AND batches.id IN (
+                SELECT b.id FROM batches b
+                JOIN stock_movements sm
+                  ON sm.batch_id = b.id AND sm.movement_type = 'opening_stock'
+                JOIN storage_locations sl ON b.location_id = sl.id
+                WHERE sl.branch_id <> b.branch_id
+            )
+            AND EXISTS (
+                SELECT 1 FROM storage_locations sl3
+                WHERE sl3.tenant_id = batches.tenant_id
+                  AND sl3.branch_id = batches.branch_id
+                  AND sl3.deleted_at IS NULL
+            )",
+        [],
+    ).map_err(|e| format!("TASK-935 opening-stock branch fix: {}", e))?;
 
     log::info!("Database migrations completed successfully");
     Ok(())

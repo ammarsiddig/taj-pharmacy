@@ -3459,6 +3459,80 @@ Rate-limited (10/min per IP) to prevent enumeration.
 
 ---
 
+### TASK-934 — POS Receipt Customizer redesign (true 80mm preview + logo upload/size/position)
+
+| Field | Value |
+| --- | --- |
+| Status | DONE (v0.2.19 — see §5 WORKLOG 2026-06-28) |
+| Owner | Cascade / DeepSeek (curator: Opus) |
+| Phase | Pending-features A (post-launch polish) |
+| Severity | Medium (UX / professionalism — first thing a new pharmacy customizes) |
+| Estimated effort | ~1 day for one agent |
+| Files | `src/components/ui/ReceiptBody.tsx` (NEW), `src/components/ui/PrintReceipt.tsx`, `src/pages/pos/ReceiptCustomizerModal.tsx`, `src/pages/pos/workspaceState.ts`, `src/pages/POS.tsx`, `src/pages/settings/GeneralTab.tsx`, `src/types/settings.ts`, `src/api/settings.ts`, `src-tauri/src/commands/settings.rs`, `src-tauri/src/db/migrations.rs`, `src/i18n/ar.json`, `src/i18n/en.json`, version-bump trio |
+| Depends on | — |
+
+**Problem.** Two gaps in the current POS Receipt Customizer ([`ReceiptCustomizerModal.tsx`](src/pages/pos/ReceiptCustomizerModal.tsx)):
+
+1. **The preview lies.** The modal's right-hand preview is a stylized dark card. It shows a fake `[LOGO]` text placeholder and a hard-coded sample, and it is **missing** lines that actually print: pharmacy Arabic name, license number, phone, address (see real output in [`PrintReceipt.tsx:84-95`](src/components/ui/PrintReceipt.tsx#L84)). What you see is not what prints.
+2. **Logo is on/off only here.** Logo upload + size already exist, but in **Settings → General** ([`GeneralTab.tsx:109-156`](src/pages/settings/GeneralTab.tsx#L109)), and there is no position control anywhere. Logo is always centered ([`PrintReceipt.tsx:87`](src/components/ui/PrintReceipt.tsx#L87) uses `mx-auto`).
+
+**Product decisions (confirmed by Ammar 2026-06-28 via AskUserQuestion):**
+- **Consolidate all logo controls into the POS Receipt Customizer** — upload, size, and position. **Remove** the logo upload/size/toggle block from Settings → General so there is one source of truth. (Pharmacy name/address/license/phone fields stay in Settings → General; only the *logo* block moves.)
+- Position options: **top-center / top-right / top-left / no logo**. ("No logo" = `print_logo = false`; the other three set `logo_position`.)
+- Size options: **small / medium / large**.
+- Preview must be a faithful 80mm thermal mock, not a stylized card.
+
+#### Anti-drift requirement (most important)
+
+The preview must never diverge from real print output again. Achieve this by **extracting the receipt body into one shared component** rendered by both the printer and the preview.
+
+1. **Create `src/components/ui/ReceiptBody.tsx`.** Move the entire inner JSX of `PrintReceipt` (header block through footer — everything inside the outer `<div className="print-receipt …">`) into `ReceiptBody`. It takes props for all receipt data + the resolved tenant fields (`pharmacyName`, `pharmacyNameAr`, `licenseNumber`, `phone`, `address`, `header`, `footer`), `logoUrl`, `showLogo`, `logoPosition`, `logoSize`, and `preferences`. No `hidden print:block fixed` classes inside `ReceiptBody` — it renders plain content only.
+2. **`PrintReceipt.tsx`** keeps its data-loading `useEffect` (tenant + logo) and its outer print wrapper (`<div className="print-receipt hidden print:block fixed … " style={{ width: '80mm' }}>`), and renders `<ReceiptBody … />` inside. Behaviour must be byte-for-byte identical to today for real prints (verify the four divider rules, the items table, totals, split payments, change — all unchanged).
+3. **The customizer preview** renders the same `<ReceiptBody />` inside a screen "paper" frame: a white sheet at `width: 80mm` (use the real CSS mm unit so proportions match), with a monospace font stack to simulate a thermal printer, on a neutral grey backdrop. Feed it **sample data** (reuse the existing `pos.receiptSample*` i18n keys) plus the live draft header/footer/logo/position/size/preferences so edits update instantly. Live-load the real logo via `api.getPharmacyLogo()` and real tenant fields via `api.getTenantSettings()` so the preview shows the actual pharmacy identity, not placeholders.
+
+#### Data path — new `logo_position` and `logo_size` settings
+
+Both are additive, follow the existing `ensure_column` convention (project rule: additive migrations only — see [`migrations.rs:1178-1182`](src-tauri/src/db/migrations.rs#L1178)).
+
+1. **Migration** — append next to the other `ensure_column` calls in `migrations.rs`:
+   ```rust
+   ensure_column(&conn, "tenants", "logo_position", "TEXT NOT NULL DEFAULT 'center'")?;
+   ensure_column(&conn, "tenants", "logo_size", "TEXT NOT NULL DEFAULT 'medium'")?;
+   ```
+   Allowed values handled in app code (no CHECK needed): `logo_position ∈ {center,right,left}`, `logo_size ∈ {small,medium,large}`.
+2. **Rust `settings.rs`** — add `pub logo_position: String` and `pub logo_size: String` to `TenantSettings` (struct + `get_tenant_settings` SELECT + row mapping), and `pub logo_position: Option<String>`, `pub logo_size: Option<String>` to `TenantSettingsUpdate` with `COALESCE(?n, logo_position)` / `COALESCE(?n, logo_size)` in the `update_tenant_settings` UPDATE. Mirror the existing `print_logo` pattern.
+3. **TS types** ([`settings.ts`](src/types/settings.ts)) — add `logo_position?: 'center' | 'right' | 'left'` and `logo_size?: 'small' | 'medium' | 'large'` to both `TenantSettings` and `TenantSettingsUpdate`.
+4. **`POS.tsx` `handleSaveReceiptCustomizer`** ([POS.tsx:480-500](src/pages/POS.tsx#L480)) already round-trips the full tenant on save — extend the `onSave` payload and the `updateTenantSettings` call to also pass `print_logo`, `logo_position`, `logo_size`, and (if changed in-modal) the saved logo. Logo bytes still persist via the existing `api.savePharmacyLogo(b64)` IPC; no new logo command needed.
+5. **Size mapping** (apply in `ReceiptBody`, used by both print + preview so they match): `small → maxHeight 28px`, `medium → 40px` (current behaviour), `large → 56px`; keep `maxWidth: 60mm`. Position: `center → mx-auto`, `right → ml-auto` (logical, RTL-safe — use logical `ms/me` per the project Tailwind RTL convention, not `ml/mr`), `left → me-auto`.
+
+#### Modal redesign
+
+Rebuild [`ReceiptCustomizerModal.tsx`](src/pages/pos/ReceiptCustomizerModal.tsx) keeping its existing layout shell (two-column: controls left, preview right) but:
+- Left column: header/footer textareas (unchanged) + the existing boolean toggle grid (unchanged) + a **new Logo section**: upload/change/remove button (port the file-read + 500 KB limit + `api.savePharmacyLogo` logic verbatim from `GeneralTab.tsx:126-153`), a **position** segmented control (center / right / left / no-logo), and a **size** segmented control (small / medium / large). When "no-logo" is chosen, set `print_logo=false` and disable the size/position pickers.
+- Right column: the faithful 80mm `ReceiptBody` preview described above (replaces the dark stylized card).
+- Extend `onSave` to include `printLogo`, `logoPosition`, `logoSize`. The modal's `preferences`/`header`/`footer` props are unchanged.
+
+#### Settings → General cleanup
+
+Remove the logo block (`GeneralTab.tsx:103-157` — the print_logo checkbox **and** the conditional logo upload/preview/remove UI, plus the now-unused `logoPreview`/`logoInputRef` state and the `print_logo` field handling if nothing else uses it). Leave a one-line hint pointing users to POS → receipt customizer for logo settings (new i18n key `settings.general.logoMovedHint`). Do **not** remove `print_logo` from the save form silently if it breaks the existing `updateTenantSettings` payload — confirm the payload still type-checks.
+
+#### i18n (both `ar.json` + `en.json` — project rule: never add a key to only one)
+
+New keys under `pos.*`: `receiptLogoSection`, `receiptLogoPosition`, `receiptLogoSize`, `receiptLogoCenter`, `receiptLogoRight`, `receiptLogoLeft`, `receiptLogoNone`, `receiptLogoSmall`, `receiptLogoMedium`, `receiptLogoLarge`, `receiptUploadLogo`, `receiptChangeLogo`, `receiptRemoveLogo`, `receiptLogoTooLarge`, `receiptLogoHint`. New key `settings.general.logoMovedHint`. Reuse existing `pos.receiptSample*`, `settings.general.logoSaved` where possible.
+
+#### Acceptance test
+
+1. `cargo check` — 0 new errors/warnings. `npx tsc --noEmit` — 0 errors. `npm run build` — clean.
+2. Open POS → receipt customizer. The preview shows the **real** pharmacy name, Arabic name, license, phone, address, and the uploaded logo — matching an actual printed receipt. Toggling each preference (cashier/customer/notes/payments/compact) changes the preview exactly as it changes the print.
+3. Upload a logo in the modal → it appears in the preview immediately and persists after save. Change position to **right** → preview logo moves right; print a test sale → printed logo is right-aligned. Change size to **large** → both preview and print grow. Choose **no logo** → logo disappears from both; size/position pickers disabled.
+4. Settings → General no longer shows any logo upload/toggle UI; shows the hint pointing to the POS customizer instead. Saving Settings → General still works (no `print_logo` regression).
+5. Fresh install and existing DB both work: new columns default to `center` / `medium`; an existing pharmacy with a centered logo looks identical to before the change (no visual regression for anyone who never touches the new controls).
+6. RTL check: in Arabic, "right"/"left" position behave logically and the modal layout doesn't break.
+
+**Out of scope.** Drag-to-position / freeform logo placement, per-branch receipt templates, multiple saved templates, QR codes on receipts. Logo cloud-sync (logo stays a local file as today).
+
+---
+
 ## 4. BACKLOG
 
 > One-liners only. Curator will expand each into Phase N tasks when the time comes.
@@ -3501,6 +3575,51 @@ Rate-limited (10/min per IP) to prevent enumeration.
 ## 5. WORKLOG
 
 > Append-only. Newest entries at the top. Never edit prior entries.
+
+### 2026-06-28 — Claude Code — TASK-936 (v0.2.20) — Purchase invoices accept expired / past-dated medicine
+
+- **Status:** DONE
+- **Files changed:**
+  - `src-tauri/src/commands/purchases.rs`: new private helper `reject_expired_items(conn, tenant_id, items)` — rejects any item whose `expiry_date` is non-empty and strictly before today (local date), with an Arabic error naming the product (`لا يمكن استلام صنف منتهي الصلاحية: <name> (تاريخ الانتهاء <date>)`). Uses SQLite `DATE(?1) < DATE('now','localtime')` to mirror the expiry report's boundary exactly. Called in the active confirm path `confirm_purchase_with_payment` (after the empty-items check, before `BEGIN`) and in the deprecated `confirm_purchase` for authoritative completeness.
+  - `src/pages/PurchaseNew.tsx`: added a local-date `today` (YYYY-MM-DD) memo; `min={today}` on the expiry `<input type="date">`; and a submit guard in `handleSave` that flags any row where `expiry_date && expiry_date < today` (marks the row invalid + inline toast), blocking both draft-save and edit-update before the IPC call.
+  - `src/i18n/ar.json` + `src/i18n/en.json`: new key `purchases.rowExpired` ("الصف {{n}}: تاريخ انتهاء الصلاحية في الماضي — لا يمكن استلام صنف منتهي الصلاحية" / "Row {{n}}: expiry date is in the past — expired stock cannot be received").
+  - `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`: bumped to 0.2.20.
+- **Root cause:** Neither confirm path validated `expiry_date` before turning a `supplier_invoice_items` row into a `batches` row, and the frontend date input had no `min`, so a user could enter a past date and receive already-expired stock into inventory.
+- **Boundary decision:** expired = expiry strictly **before** today (local date); an item expiring **today** is still receivable; empty expiry remains allowed (expiry is optional). Frontend and backend apply the identical rule.
+- **Acceptance test result:** `cargo check` — Finished, 4 pre-existing warnings (permissions.rs), 0 new. `npx tsc --noEmit` — 0 errors. `npm run build` — ✓ built in 7.82s. Past expiry: blocked in UI before submit (row highlighted + toast) and rejected backend-side with the product-named Arabic error. Empty expiry: still saves/confirms. Future expiry: works as before. `min={today}` prevents picking a past date in the native picker.
+
+---
+
+### 2026-06-28 — Claude Code — TASK-935 (v0.2.20) — Opening stock not appearing in the stock/inventory report
+
+- **Status:** DONE
+- **Files changed:**
+  - `src-tauri/src/commands/warehouse_opening_stock.rs`: `insert_opening_batch` now resolves the storage location against the resolved branch `bid` via `resolve_location_id` (instead of a tenant-only existence check), so the opening batch's location always belongs to the same branch as `b.branch_id`. Made `resolve_location_id`'s requested-location check branch-aware (`AND branch_id = ?3`) so a location from another branch falls back to a default location in the correct branch rather than being accepted. Simplified the bulk path to pass the requested location straight through (resolution now happens once, inside `insert_opening_batch`).
+  - `src-tauri/src/db/migrations.rs`: TASK-935 additive data-fix migration — re-points existing `opening_stock` batches whose location belongs to a different branch than `b.branch_id` to a default (shelf-first) location in their own branch. Idempotent (once `sl.branch_id == b.branch_id` the WHERE no longer matches) and guarded by `EXISTS` so it only runs when the branch actually has a location.
+  - `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`: bumped to 0.2.20.
+- **Root cause:** The inventory report (`reports_inventory.rs`) attributes stock by the **location's** branch (`batches b JOIN storage_locations sl ON b.location_id = sl.id WHERE sl.branch_id = ?`), while the warehouse current-stock query (`warehouse.rs get_low_stock_products`) attributes by the **batch's** branch (`b.branch_id = ?`). `insert_opening_batch` validated the supplied `location_id` only by tenant — not that it belonged to the user's branch (the bulk path's `resolve_location_id` was also only tenant-checked for an explicitly-requested id). When the location chosen by the OpeningStock page (whose dropdown is keyed off `home_branch_id`) belonged to a different branch than the one the report queries (`getBranchId()` → `branch_id`; e.g. `home_branch_id` ≠ `branch_id`, or legacy `main-branch` sentinel vs UUID), the opening batch landed on an out-of-branch location and the `sl.branch_id = ?` filter dropped it from totals, by-location, and low/out-of-stock — even though warehouse current stock (which keys off `b.branch_id`) still showed it. Fixing the location→branch linkage makes `sl.branch_id == b.branch_id == bid`, so opening stock now appears everywhere purchased stock does, with no display-query special-casing. `opening_stock` movements remain `reference_type='opening_stock'` and are still excluded from "total purchases" figures (those query supplier invoices / `receive` movements; unchanged).
+- **Acceptance test result:** `cargo check` — Finished, 4 pre-existing warnings (permissions.rs), 0 new. `npx tsc --noEmit` — 0 errors. `npm run build` — ✓ built in 7.82s. Single + bulk opening stock now resolve to a location in the report's branch, so they show in stock totals, by-location, low/out-of-stock, and warehouse current stock; "total purchases" still excludes opening stock. Existing mis-attributed opening batches are corrected by the idempotent data-fix migration on next launch.
+
+---
+
+### 2026-06-28 — Claude Code — TASK-934 (v0.2.19) — POS Receipt Customizer redesign (true 80mm preview + logo upload/size/position)
+
+- **Status:** DONE
+- **Files changed:**
+  - `src/components/ui/ReceiptBody.tsx` (NEW): shared receipt body — the single source of truth for printed-receipt content. Holds the whole header→footer JSX plus `fmtDate`/`pmLabel`/subtotal logic. New helpers: `logoMaxHeight` (small 28 / medium 40 / large 56) and `logoPositionClass` (center→`mx-auto`, right→`ms-auto`, left→`me-auto` — logical, RTL-safe). Logo img is now `block` + logical margin so position works; center output is visually identical to before. Exports `ReceiptItem`, `LogoPosition`, `LogoSize`.
+  - `src/components/ui/PrintReceipt.tsx`: slimmed to data-loading `useEffect` (tenant + logo) + the unchanged `<div className="print-receipt hidden print:block fixed … " style={{width:'80mm'}}>` wrapper, rendering `<ReceiptBody …>`. Resolves `logo_position`/`logo_size` from tenant (defaults center/medium). Real print output unchanged.
+  - `src/pages/pos/ReceiptCustomizerModal.tsx`: rebuilt. Left column keeps header/footer textareas + boolean toggle grid; adds a Logo section (upload/change button porting the 500KB-limit + `savePharmacyLogo` logic, a position segmented control center/right/left/no-logo, a size control small/medium/large disabled when no-logo). Right column replaced the dark stylized card with a faithful 80mm white "paper" (real `mm` width, monospace font, grey backdrop) rendering the same `<ReceiptBody>` with live tenant identity + live logo + sample sale data. `onSave` now emits `logoPosition`/`logoSize`.
+  - `src/pages/POS.tsx`: new `receiptLogoPosition`/`receiptLogoSize` state loaded from tenant; passed to the modal; `handleSaveReceiptCustomizer` extended to persist `logo_position`/`logo_size` via `updateTenantSettings`.
+  - `src/pages/settings/GeneralTab.tsx`: removed the print_logo checkbox + logo upload/preview/remove block and the now-unused `logoPreview`/`logoInputRef` state, `useRef` import, and the `getPharmacyLogo` load. Left a one-line hint (`settings.general.logoMovedHint`) pointing to POS → Receipt Customizer. `print_logo` still round-trips through the save form (COALESCE) — no regression.
+  - `src/types/settings.ts`: `logo_position?: 'center'|'right'|'left'` + `logo_size?: 'small'|'medium'|'large'` added to `TenantSettings` and `TenantSettingsUpdate`.
+  - `src-tauri/src/commands/settings.rs`: `logo_position: String` + `logo_size: String` added to `TenantSettings` (struct + SELECT cols 17/18 + row mapping); `Option<String>` pair added to `TenantSettingsUpdate` with `COALESCE(?12, logo_position)` / `COALESCE(?13, logo_size)` in the UPDATE.
+  - `src-tauri/src/db/migrations.rs`: two additive `ensure_column` calls — `tenants.logo_position TEXT NOT NULL DEFAULT 'center'`, `tenants.logo_size TEXT NOT NULL DEFAULT 'medium'`. No existing migration or `license_guard.rs` touched.
+  - `src/i18n/ar.json` + `src/i18n/en.json`: 15 new `pos.receiptLogo*`/`receiptUploadLogo`/`receiptChangeLogo`/`receiptRemoveLogo`/`receiptLogoTooLarge`/`receiptLogoHint` keys + `settings.general.logoMovedHint` in both; `settings.general.logoSaved` added to en.json (was ar-only) so the modal's reuse resolves in both locales.
+  - `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json`: bumped to 0.2.19.
+- **Root cause:** (1) The customizer preview was a hand-built stylized card that hard-coded a `[LOGO]` placeholder and omitted lines that actually print (Arabic name, license, phone, address) — so WYSIWYG was a lie. Fixed structurally by extracting `ReceiptBody` and rendering it in both the printer and the preview, so they can never drift. (2) Logo had no position control and on/off lived in Settings → General, split from the size control — consolidated all three (upload/size/position) into the customizer with two new additive tenant columns.
+- **Acceptance test result:** `cargo check` — Finished, 4 pre-existing warnings (permissions.rs), 0 new. `npx tsc --noEmit` — 0 errors. `npm run build` — ✓ built in 12.57s, clean. Walkthrough: (2) preview renders real tenant identity + uploaded logo and reacts to every toggle because it is the same `ReceiptBody` the printer uses; (3) upload persists via `savePharmacyLogo` and shows immediately, position right→`ms-auto`/left→`me-auto` and size small/large flow to both preview and print via shared helpers, no-logo sets `print_logo=false` and disables size/position; (4) General shows only the hint, save still type-checks with `print_logo` preserved; (5) new columns default center/medium so existing centered-logo pharmacies are visually unchanged; (6) position uses logical `ms/me` utilities so right/left stay correct under RTL.
+
+---
 
 ### 2026-05-24 — Claude Code — TASK-924 (v0.2.12) — Restore: license data not re-applied after cloud restore
 

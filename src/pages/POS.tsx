@@ -69,6 +69,8 @@ export default function POS() {
   const [receiptHeader, setReceiptHeader] = useState('');
   const [receiptFooter, setReceiptFooter] = useState('');
   const [receiptPrintLogo, setReceiptPrintLogo] = useState(true);
+  const [receiptLogoPosition, setReceiptLogoPosition] = useState<'center' | 'right' | 'left'>('center');
+  const [receiptLogoSize, setReceiptLogoSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [savingReceiptCustomizer, setSavingReceiptCustomizer] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const branchId = api.getBranchId();
@@ -90,6 +92,8 @@ export default function POS() {
       setReceiptHeader(tenant.receipt_header || '');
       setReceiptFooter(tenant.receipt_footer || '');
       setReceiptPrintLogo(tenant.print_logo !== false);
+      setReceiptLogoPosition(tenant.logo_position || 'center');
+      setReceiptLogoSize(tenant.logo_size || 'medium');
     } catch (e: unknown) {
       setSession(null);
       if (surfaceErrors) {
@@ -481,6 +485,8 @@ export default function POS() {
     header: string;
     footer: string;
     printLogo: boolean;
+    logoPosition: 'center' | 'right' | 'left';
+    logoSize: 'small' | 'medium' | 'large';
     preferences: ReceiptPreferences;
   }) => {
     setSavingReceiptCustomizer(true);
@@ -497,10 +503,14 @@ export default function POS() {
         receipt_header: next.header,
         receipt_footer: next.footer,
         print_logo: next.printLogo,
+        logo_position: next.logoPosition,
+        logo_size: next.logoSize,
       });
       setReceiptHeader(next.header);
       setReceiptFooter(next.footer);
       setReceiptPrintLogo(next.printLogo);
+      setReceiptLogoPosition(next.logoPosition);
+      setReceiptLogoSize(next.logoSize);
       setReceiptPreferences(next.preferences);
       setShowReceiptCustomizer(false);
       setToast({ msg: t('pos.receiptCustomizerSaved'), type: 'success' });
@@ -843,6 +853,8 @@ export default function POS() {
         header={receiptHeader}
         footer={receiptFooter}
         printLogo={receiptPrintLogo}
+        logoPosition={receiptLogoPosition}
+        logoSize={receiptLogoSize}
         preferences={receiptPreferences}
         saving={savingReceiptCustomizer}
         onClose={() => setShowReceiptCustomizer(false)}
