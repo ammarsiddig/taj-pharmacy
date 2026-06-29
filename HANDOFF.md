@@ -3576,6 +3576,24 @@ New keys under `pos.*`: `receiptLogoSection`, `receiptLogoPosition`, `receiptLog
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
+### 2026-06-29 — Claude Code — TASK-937 (v0.2.21) — Account customers can't be sold to on credit (credit_limit defaulted to cash-only)
+
+- **Status:** DONE
+- **Files changed:**
+  - `src/components/ui/CreditModeField.tsx` (NEW): shared 3-mode credit selector (Cash only / Unlimited credit / Limit to [amount]) with the amount input shown only in "Limit to" mode. Exports `creditLimitToMode(piasters)` and `modeToCreditLimit(mode, amount)` helpers; `modeToCreditLimit` returns `null` for limit-mode amount ≤ 0 so callers reject the save instead of silently sending 0.
+  - `src/api/core.ts`: new `formatCreditLimit(piasters, unlimitedLabel)` — renders the unlimited label for -1, else `formatMoney`. Label is passed in to keep the api layer free of i18n.
+  - `src/pages/CustomerNew.tsx`: replaced the bare credit-limit number field with `CreditModeField`; new customers **default to Unlimited (-1)**; save resolves mode→credit_limit and rejects invalid limit-mode amounts with `customers.creditLimitInvalid`.
+  - `src/pages/pos/PaymentPanel.tsx`: quick-create now sends `credit_limit: -1` (was hardcoded 0); customer dropdown shows `formatCreditLimit`; the credit gauge treats -1 as unlimited (shows "غير محدود", no progress bar, no danger coloring, never computes against a negative).
+  - `src/components/CustomersTab.tsx`: credit-limit column uses `formatCreditLimit`.
+  - `src/pages/CustomerDetail.tsx`: credit bar handles unlimited (label instead of a money value, percentage + bar hidden, available = unlimited; no negative numbers).
+  - `src/i18n/ar.json` + `src/i18n/en.json`: new `customers.*` keys — `creditMode`, `creditModeCashOnly`, `creditModeUnlimited`, `creditModeLimit`, `creditUnlimited`, `creditLimitInvalid` (both locales).
+  - `src-tauri/src/db/migrations.rs`: idempotent data-fix flipping all `credit_limit = 0 AND deleted_at IS NULL` → -1 (extends the older TASK-100 fix, which only flipped customers with an outstanding balance).
+  - `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`: bumped to 0.2.21.
+- **Root cause:** `credit_limit` is a sentinel field (-1 unlimited / 0 cash-only / >0 limit; enforced in `pos_sale_create.rs:267-273`), but every customer-creation UI hardcoded `credit_limit: 0`, so every new customer was silently cash-only → credit sale rejected ("هذا العميل نقدي فقط") → balance never rose → later payments failed ("...أكبر من الرصيد المستحق (0)"). Backend numeric semantics and sale-time enforcement are unchanged; only the UIs and the legacy default were fixed.
+- **Migration note:** the data fix **intentionally reinterprets legacy `credit_limit = 0` as unlimited (-1)**, matching the new default. A pharmacy that genuinely wants a customer cash-only re-selects "Cash only" explicitly in the form. Idempotent — re-runs match no rows.
+- **No customer edit form exists in the UI** (`api.updateCustomer` is defined but unused), so there was no edit path to update; `CustomerCreditTab.tsx` already guards `credit_limit > 0` and renders "—" for non-positive limits — left as-is.
+- **Acceptance test result:** `cargo check` — Finished, 4 pre-existing warnings (permissions.rs), 0 new. `npx tsc --noEmit` — 0 errors. `npm run build` — ✓ built in 9.34s. New customers (Customers page + POS quick-create) default to Unlimited; mapping verified both directions (-1↔Unlimited, 0↔Cash only, >0↔Limit/amount); "Cash only" still blocks credit (backend `cust_limit == 0`), "Limit to X" still caps at X (`balance + outstanding > limit`); unlimited renders "غير محدود" with no negative numbers in the list, detail bar, or POS gauge; legacy customers become sellable-on-credit after the migration.
+
 ### 2026-06-28 — Claude Code — TASK-936 (v0.2.20) — Purchase invoices accept expired / past-dated medicine
 
 - **Status:** DONE

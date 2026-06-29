@@ -59,9 +59,11 @@ export default function CustomerDetail() {
     return <div className="text-center py-12 text-ink-muted">{t('common.noResults')}</div>;
   }
 
+  const unlimited = customer.credit_limit < 0;
   const creditUsed = customer.current_balance;
-  const creditAvailable = Math.max(0, customer.credit_limit - customer.current_balance);
-  const creditPct = customer.credit_limit > 0
+  // -1 keeps the available value "unlimited" so formatCreditLimit renders the label.
+  const creditAvailable = unlimited ? -1 : Math.max(0, customer.credit_limit - customer.current_balance);
+  const creditPct = (!unlimited && customer.credit_limit > 0)
     ? Math.min(100, Math.round((customer.current_balance / customer.credit_limit) * 100))
     : 0;
 
@@ -98,18 +100,20 @@ export default function CustomerDetail() {
       {/* Credit Bar */}
       <div className="app-card p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-ink-muted">{t('customers.creditLimit')}: {api.formatMoney(customer.credit_limit)}</span>
-          <span className="text-sm font-medium text-ink-main">{creditPct}%</span>
+          <span className="text-sm text-ink-muted">{t('customers.creditLimit')}: {api.formatCreditLimit(customer.credit_limit, t('customers.creditUnlimited'))}</span>
+          {!unlimited && <span className="text-sm font-medium text-ink-main">{creditPct}%</span>}
         </div>
-        <div className="w-full h-3 bg-ivory-muted rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${creditPct > 80 ? 'bg-status-danger' : creditPct > 50 ? 'bg-status-warning' : 'bg-primary-500'}`}
-            style={{ width: `${creditPct}%` }}
-          />
-        </div>
+        {!unlimited && (
+          <div className="w-full h-3 bg-ivory-muted rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${creditPct > 80 ? 'bg-status-danger' : creditPct > 50 ? 'bg-status-warning' : 'bg-primary-500'}`}
+              style={{ width: `${creditPct}%` }}
+            />
+          </div>
+        )}
         <div className="flex justify-between mt-2 text-xs text-ink-muted">
           <span>{t('customers.creditUsed')}: {api.formatMoney(creditUsed)}</span>
-          <span>{t('customers.creditAvailable')}: {api.formatMoney(creditAvailable)}</span>
+          <span>{t('customers.creditAvailable')}: {api.formatCreditLimit(creditAvailable, t('customers.creditUnlimited'))}</span>
         </div>
       </div>
 

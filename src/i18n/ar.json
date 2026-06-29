@@ -987,6 +987,12 @@
     "hasBalance": "لديه رصيد",
     "creditUsed": "المستخدم",
     "creditAvailable": "المتاح",
+    "creditMode": "الائتمان",
+    "creditModeCashOnly": "نقدي فقط",
+    "creditModeUnlimited": "ائتمان غير محدود",
+    "creditModeLimit": "حد محدد",
+    "creditUnlimited": "غير محدود",
+    "creditLimitInvalid": "أدخل حد ائتمان أكبر من صفر، أو اختر نقدي فقط / غير محدود",
     "recentSales": "آخر المبيعات",
     "recentPayments": "آخر الدفعات",
     "allStatuses": "كل الحالات"

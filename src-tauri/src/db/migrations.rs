@@ -1464,6 +1464,18 @@ pub fn run(conn: &Connection) -> Result<(), String> {
         [],
     ).map_err(|e| format!("TASK-935 opening-stock branch fix: {}", e))?;
 
+    // TASK-937: every customer-creation UI hardcoded credit_limit = 0, which the
+    // sale-time logic treats as cash-only — so all existing account customers were
+    // silently blocked from credit sales. The new product default is -1 (unlimited).
+    // Reinterpret all remaining legacy zeros as unlimited so existing customers can be
+    // sold to on credit, matching the new default. Idempotent: once flipped no rows
+    // match credit_limit = 0. (This intentionally treats legacy 0 as unlimited, not
+    // cash-only; a pharmacy wanting cash-only re-selects it explicitly in the form.)
+    conn.execute(
+        "UPDATE customers SET credit_limit = -1 WHERE credit_limit = 0 AND deleted_at IS NULL",
+        [],
+    ).map_err(|e| format!("TASK-937 customer credit default fix: {}", e))?;
+
     log::info!("Database migrations completed successfully");
     Ok(())
 }

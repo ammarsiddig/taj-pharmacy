@@ -955,6 +955,12 @@
     "hasBalance": "Has Balance",
     "creditUsed": "Used",
     "creditAvailable": "Available",
+    "creditMode": "Credit",
+    "creditModeCashOnly": "Cash only",
+    "creditModeUnlimited": "Unlimited credit",
+    "creditModeLimit": "Limit to",
+    "creditUnlimited": "Unlimited",
+    "creditLimitInvalid": "Enter a credit limit greater than 0, or choose Cash only / Unlimited",
     "recentSales": "Recent Sales",
     "recentPayments": "Recent Payments",
     "allStatuses": "All Statuses"
