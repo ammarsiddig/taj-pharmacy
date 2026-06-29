@@ -49,6 +49,12 @@ export default function PurchaseNew() {
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [newSupplier, setNewSupplier] = useState<SupplierFormData>({ name: '', phone: '', address: '', notes: '', opening_balance: 0 });
   const branchId = api.getBranchId();
+  // Local "today" (YYYY-MM-DD) used to block receiving already-expired stock.
+  // Mirrors the backend rule: expired = strictly before today; today is allowed.
+  const today = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
   const [productSearch, setProductSearch] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -208,6 +214,9 @@ export default function PurchaseNew() {
       } else if (item.sell_price <= 0) {
         bad.add(item.key);
         if (!firstError) firstError = t('purchases.draftRowNoSell', { n });
+      } else if (item.expiry_date && item.expiry_date < today) {
+        bad.add(item.key);
+        if (!firstError) firstError = t('purchases.rowExpired', { n });
       }
     });
     if (bad.size > 0) {
@@ -354,7 +363,7 @@ export default function PurchaseNew() {
                         </select>
                       </td>
                       <td className="px-3 py-2"><input type="text" value={item.batch_number} onChange={(event) => updateItem(item.key, 'batch_number', event.target.value)} className="app-input w-full px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" /></td>
-                      <td className="px-3 py-2"><input type="date" value={item.expiry_date} onChange={(event) => updateItem(item.key, 'expiry_date', event.target.value)} className="app-input w-full px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" /></td>
+                      <td className="px-3 py-2"><input type="date" min={today} value={item.expiry_date} onChange={(event) => updateItem(item.key, 'expiry_date', event.target.value)} className="app-input w-full px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" /></td>
                       <td className="px-3 py-2"><NumericInput value={item.quantity} onChange={(value) => updateItem(item.key, 'quantity', Math.max(1, Math.round(value)))} min={1} step={1} className="text-center" /></td>
                       <td className="px-3 py-2"><NumericInput value={item.cost_price / 100} onChange={(value) => updateItem(item.key, 'cost_price', Math.round(value * 100))} min={0} step={0.01} className="text-center" /></td>
                       <td className="px-3 py-2"><NumericInput value={item.sell_price / 100} onChange={(value) => updateItem(item.key, 'sell_price', Math.round(value * 100))} min={0} step={0.01} className="text-center" /></td>

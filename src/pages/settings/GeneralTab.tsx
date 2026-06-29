@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 import * as api from '../../api';
@@ -25,9 +25,6 @@ export default function GeneralTab() {
     currency_code: 'SDG', timezone: 'Africa/Khartoum',
     receipt_header: '', receipt_footer: '', print_logo: true,
   });
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     (async () => {
       try {
@@ -39,8 +36,6 @@ export default function GeneralTab() {
           receipt_header: s.receipt_header || '', receipt_footer: s.receipt_footer || '',
           print_logo: s.print_logo,
         });
-        const logo = await api.getPharmacyLogo();
-        if (logo) setLogoPreview(logo);
       } catch (e: unknown) { setToast({ msg: String(e), type: 'danger' }); }
       finally { setLoading(false); }
     })();
@@ -100,61 +95,9 @@ export default function GeneralTab() {
           <label className="block text-xs font-medium text-ink-muted mb-1">{t('settings.general.receiptFooter')}</label>
           <textarea className={inp + ' h-16 resize-none'} value={form.receipt_footer || ''} onChange={e => setForm(f => ({ ...f, receipt_footer: e.target.value }))} />
         </div>
-        <div className="col-span-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.print_logo ?? true} onChange={e => setForm(f => ({ ...f, print_logo: e.target.checked }))} className="w-4 h-4 accent-primary-600" />
-            <span className="text-sm text-ink-main">{t('settings.general.printLogo')}</span>
-          </label>
+        <div className="col-span-2 rounded-xl border border-dashed border-ivory-border bg-ivory-muted/60 px-3 py-2.5">
+          <p className="text-xs text-ink-muted">{t('settings.general.logoMovedHint')}</p>
         </div>
-        {(form.print_logo ?? true) && (
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-ink-muted mb-1">{t('settings.general.pharmacyLogo')}</label>
-            <div className="flex items-center gap-4">
-              {logoPreview && (
-                <img src={logoPreview} alt={t('common.logo')} className="h-14 w-14 rounded-lg border border-ivory-border object-contain bg-white" />
-              )}
-              <div className="flex gap-2">
-                <button type="button" onClick={() => logoInputRef.current?.click()} className="rounded-xl bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100">
-                  {logoPreview ? t('settings.general.changeLogo') : t('settings.general.uploadLogo')}
-                </button>
-                {logoPreview && (
-                  <button type="button" onClick={() => setLogoPreview(null)} className="rounded-xl bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100">
-                    {t('settings.general.removeLogo')}
-                  </button>
-                )}
-              </div>
-              <input
-                ref={logoInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  if (file.size > 500_000) {
-                    setToast({ msg: t('settings.general.logoTooLarge'), type: 'danger' });
-                    return;
-                  }
-                  const reader = new FileReader();
-                  reader.onload = async () => {
-                    const dataUrl = reader.result as string;
-                    const b64 = dataUrl.split(',')[1];
-                    try {
-                      await api.savePharmacyLogo(b64);
-                      setLogoPreview(dataUrl);
-                      setToast({ msg: t('settings.general.logoSaved'), type: 'success' });
-                    } catch (err: unknown) {
-                      setToast({ msg: String(err), type: 'danger' });
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                  e.target.value = '';
-                }}
-              />
-            </div>
-            <p className="mt-1 text-[10px] text-ink-muted">{t('settings.general.logoHint')}</p>
-          </div>
-        )}
       </div>
       {/* Language Toggle */}
       <div className="app-panel p-4 flex items-center justify-between">

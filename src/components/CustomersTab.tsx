@@ -117,7 +117,7 @@ export default function CustomersTab() {
                 >
                   <td className="px-4 py-2.5 font-medium text-ink-main">{c.name_ar || c.name}</td>
                   <td className="px-4 py-2.5 text-ink-muted tabular-nums">{c.phone || '—'}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-ink-main">{api.formatMoney(c.credit_limit)}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-ink-main">{api.formatCreditLimit(c.credit_limit, t('customers.creditUnlimited'))}</td>
                   <td className="px-4 py-2.5 tabular-nums">
                     {c.current_balance > 0 ? (
                       <span className="text-status-danger font-medium">{api.formatMoney(c.current_balance)}</span>

@@ -10,6 +10,8 @@ export interface TenantSettings {
   receipt_header?: string;
   receipt_footer?: string;
   print_logo: boolean;
+  logo_position?: 'center' | 'right' | 'left';
+  logo_size?: 'small' | 'medium' | 'large';
   subscription_plan: string;
   subscription_status: string;
   subscription_expiry?: string;
@@ -29,6 +31,8 @@ export interface TenantSettingsUpdate {
   receipt_header?: string;
   receipt_footer?: string;
   print_logo?: boolean;
+  logo_position?: 'center' | 'right' | 'left';
+  logo_size?: 'small' | 'medium' | 'large';
 }
 
 export interface BranchRow {

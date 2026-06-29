@@ -3,14 +3,7 @@ import { useTranslation } from 'react-i18next';
 import * as api from '../../api';
 import type { SalePayment, TenantSettings } from '../../types';
 import type { ReceiptPreferences } from '../../pages/pos/workspaceState';
-
-interface ReceiptItem {
-  id?: string;
-  product_name?: string;
-  quantity: number;
-  unit_price: number;
-  subtotal: number;
-}
+import ReceiptBody, { type ReceiptItem, type LogoPosition, type LogoSize } from './ReceiptBody';
 
 interface PrintReceiptProps {
   saleNumber: string;
@@ -44,153 +37,37 @@ export default function PrintReceipt({
     api.getPharmacyLogo().then(setLogoUrl).catch(() => { /* non-critical: receipt prints without logo */ });
   }, []);
 
-  const pharmacyName = tenant?.name || t('pos.receiptPharmacyName');
-  const pharmacyNameAr = tenant?.name_ar || '';
-  const licenseNumber = tenant?.license_number || '';
-  const phone = tenant?.phone || '';
-  const address = tenant?.address || '';
-  const header = tenant?.receipt_header || '';
-  const footer = tenant?.receipt_footer || t('pos.receiptFooter');
-  const showLogo = tenant?.print_logo !== false;
-  const receiptPreferences: ReceiptPreferences = {
-    showCustomer: true,
-    showCashier: true,
-    showNotes: true,
-    showPaymentBreakdown: true,
-    compactMode: false,
-    ...preferences,
-  };
-
-  const computedSubtotal = subtotal ?? items.reduce((s, i) => s + i.subtotal, 0);
-
-  function fmtDate(iso: string) {
-    const d = new Date(iso);
-    return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-  }
-
-  function pmLabel(method: string) {
-    if (paymentMethodName) return paymentMethodName;
-    if (method === 'cash') return t('pos.cash');
-    if (method === 'bank_transfer') return t('pos.bankTransfer');
-    if (method === 'credit') return t('pos.credit');
-    if (method === 'partial') return t('pos.splitPayment');
-    return method;
-  }
-
-  const showPaymentBreakdown = receiptPreferences.showPaymentBreakdown && splitPayments && splitPayments.length > 0;
-
   return (
     <div className="print-receipt hidden print:block fixed top-0 left-0 z-[999] bg-white p-2 text-black" style={{ width: '80mm' }}>
-      {/* Header */}
-      <div className="text-center mb-2">
-        {showLogo && logoUrl && (
-          <img src={logoUrl} alt={t('common.logo')} className="mx-auto mb-1" style={{ maxHeight: '40px', maxWidth: '60mm' }} />
-        )}
-        <div className="text-sm font-bold">{pharmacyName}</div>
-        {pharmacyNameAr && <div className="text-xs">{pharmacyNameAr}</div>}
-        {licenseNumber && <div className="text-[9px] opacity-70">{t('pos.receiptLicense')}: {licenseNumber}</div>}
-        {address && <div className="text-[9px] opacity-70">{address}</div>}
-        {phone && <div className="text-[9px] opacity-70">{phone}</div>}
-        {header && <div className="text-[9px] mt-1 whitespace-pre-line">{header}</div>}
-      </div>
-
-      <div className="border-t border-dashed border-black border-[1.5px] my-1" />
-
-      {/* Sale info */}
-      <div className="flex justify-between text-[10px]">
-        <span>{saleNumber}</span>
-        <span>{fmtDate(date)}</span>
-      </div>
-      {receiptPreferences.showCashier && cashierName && (
-        <div className="text-[10px] opacity-70">{t('pos.cashier')}: {cashierName}</div>
-      )}
-      {receiptPreferences.showCustomer && customerName && (
-        <div className="text-[10px] opacity-70">{t('pos.customer')}: {customerName}</div>
-      )}
-      {receiptPreferences.showNotes && notes && (
-        <div className="text-[10px] opacity-70">{t('pos.notes')}: {notes}</div>
-      )}
-
-      <div className="border-t border-dashed border-black border-[1.5px] my-1" />
-
-      {/* Items table */}
-      <table className={`w-full ${receiptPreferences.compactMode ? 'text-[9px]' : 'text-[10px]'}`}>
-        <thead>
-          <tr className="border-b border-black bg-gray-100">
-            <th className="text-right py-0.5 text-[11px]">{t('pos.product')}</th>
-            <th className="text-center py-0.5 w-8 text-[11px]">{t('pos.qty')}</th>
-            <th className="text-right py-0.5 w-14 text-[11px]">{t('pos.price')}</th>
-            <th className="text-right py-0.5 w-14 text-[11px]">{t('pos.total')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, idx) => (
-            <tr key={item.id || idx} className="border-b border-dotted border-gray-300">
-              <td className="py-0.5" style={{ maxWidth: '30mm', wordBreak: 'break-word' }}>{item.product_name || '—'}</td>
-              <td className="text-center py-0.5">{item.quantity}</td>
-              <td className="text-right py-0.5 tabular-nums">{api.formatMoney(item.unit_price)}</td>
-              <td className="text-right py-0.5 tabular-nums">{api.formatMoney(item.subtotal)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="border-t border-dashed border-black border-[1.5px] my-1" />
-
-      {/* Subtotal */}
-      <div className="flex justify-between text-[10px]">
-        <span>{t('pos.subtotal')}</span>
-        <span className="tabular-nums">{api.formatMoney(computedSubtotal)}</span>
-      </div>
-
-      {/* Discount */}
-      {discount != null && discount > 0 && (
-        <div className="flex justify-between text-[10px]">
-          <span>{t('pos.discount')}</span>
-          <span className="tabular-nums">-{api.formatMoney(discount)}</span>
-        </div>
-      )}
-
-      {/* Tax */}
-      {taxAmount != null && taxAmount > 0 && (
-        <div className="flex justify-between text-[10px]">
-          <span>{t('pos.tax')}</span>
-          <span className="tabular-nums">{api.formatMoney(taxAmount)}</span>
-        </div>
-      )}
-
-      {/* Grand total */}
-      <div className="flex justify-between text-sm font-bold mt-1 pt-1 border-t-2 border-black border-double">
-        <span>{t('pos.grandTotal')}</span>
-        <span className="tabular-nums">{api.formatMoney(total)}</span>
-      </div>
-
-      {/* Payment */}
-      <div className="flex justify-between text-[10px] mt-0.5">
-        <span>{pmLabel(paymentMethod)}</span>
-        {amountPaid !== undefined && <span>{t('pos.paid')}: {api.formatMoney(amountPaid)}</span>}
-      </div>
-      {showPaymentBreakdown && splitPayments!.map((payment) => (
-        <div key={payment.id} className="flex justify-between text-[10px]">
-          <span>
-            {payment.payment_method === 'cash'
-              ? t('pos.cash')
-              : payment.payment_method_name || t('pos.bankTransfer')}
-          </span>
-          <span className="tabular-nums">{api.formatMoney(payment.amount)}</span>
-        </div>
-      ))}
-      {changeAmount !== undefined && changeAmount > 0 && (
-        <div className="flex justify-between text-[10px]">
-          <span>{t('pos.change')}</span>
-          <span className="tabular-nums">{api.formatMoney(changeAmount)}</span>
-        </div>
-      )}
-
-      <div className="border-t border-dashed border-black border-[1.5px] my-3" />
-
-      {/* Footer */}
-      <div className="text-center text-[9px] opacity-70 whitespace-pre-line">{footer}</div>
+      <ReceiptBody
+        saleNumber={saleNumber}
+        date={date}
+        items={items}
+        subtotal={subtotal}
+        total={total}
+        discount={discount}
+        taxAmount={taxAmount}
+        paymentMethod={paymentMethod}
+        paymentMethodName={paymentMethodName}
+        amountPaid={amountPaid}
+        changeAmount={changeAmount}
+        customerName={customerName}
+        cashierName={cashierName}
+        notes={notes}
+        splitPayments={splitPayments}
+        pharmacyName={tenant?.name || t('pos.receiptPharmacyName')}
+        pharmacyNameAr={tenant?.name_ar || ''}
+        licenseNumber={tenant?.license_number || ''}
+        phone={tenant?.phone || ''}
+        address={tenant?.address || ''}
+        header={tenant?.receipt_header || ''}
+        footer={tenant?.receipt_footer || t('pos.receiptFooter')}
+        logoUrl={logoUrl}
+        showLogo={tenant?.print_logo !== false}
+        logoPosition={(tenant?.logo_position as LogoPosition) || 'center'}
+        logoSize={(tenant?.logo_size as LogoSize) || 'medium'}
+        preferences={preferences}
+      />
     </div>
   );
 }

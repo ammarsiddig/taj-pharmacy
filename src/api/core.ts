@@ -74,6 +74,13 @@ export function formatMoney(piasters: number): string {
   return (piasters / 100).toFixed(2);
 }
 
+// Credit limit uses sentinel semantics: -1 = unlimited, 0 = cash-only, >0 = a real
+// limit. A -1 must never render as a negative money value — show the unlimited label.
+// The label is passed in so this stays free of the i18n layer.
+export function formatCreditLimit(piasters: number, unlimitedLabel: string): string {
+  return piasters < 0 ? unlimitedLabel : formatMoney(piasters);
+}
+
 const RECEIPT_PRINT_CSS = `
   @page { size: 80mm auto; margin: 0; }
   *, *::before, *::after { box-sizing: border-box; }

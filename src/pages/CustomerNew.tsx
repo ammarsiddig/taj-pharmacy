@@ -5,7 +5,7 @@ import * as api from '../api';
 import type { CustomerData } from '../types';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import NumericInput from '../components/ui/NumericInput';
+import CreditModeField, { type CreditMode, modeToCreditLimit } from '../components/ui/CreditModeField';
 import Toast from '../components/ui/Toast';
 
 export default function CustomerNew() {
@@ -13,15 +13,17 @@ export default function CustomerNew() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null);
-  const [form, setForm] = useState<CustomerData>({
+  const [form, setForm] = useState<Omit<CustomerData, 'credit_limit'>>({
     name: '',
     name_ar: '',
     phone: '',
     email: '',
     address: '',
-    credit_limit: 0,
     notes: '',
   });
+  // New customers default to unlimited credit (-1), not cash-only (0).
+  const [creditMode, setCreditMode] = useState<CreditMode>('unlimited');
+  const [limitAmount, setLimitAmount] = useState(0);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -29,12 +31,14 @@ export default function CustomerNew() {
       setToast({ msg: t('common.required'), type: 'danger' });
       return;
     }
+    const credit_limit = modeToCreditLimit(creditMode, limitAmount);
+    if (credit_limit === null) {
+      setToast({ msg: t('customers.creditLimitInvalid'), type: 'danger' });
+      return;
+    }
     setSaving(true);
     try {
-      const result = await api.createCustomer({
-        ...form,
-        credit_limit: Math.round((form.credit_limit || 0) * 100),
-      });
+      const result = await api.createCustomer({ ...form, credit_limit });
       setToast({ msg: t('common.save'), type: 'success' });
       setTimeout(() => navigate(`/customers/${result.id}`), 500);
     } catch (err) {
@@ -81,13 +85,11 @@ export default function CustomerNew() {
           value={form.address || ''}
           onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
         />
-        <NumericInput
-          label={t('customers.creditLimit') + ' (' + t('common.currency') + ')'}
-          value={form.credit_limit || 0}
-          onChange={(v) => setForm((p) => ({ ...p, credit_limit: v }))}
-          step={0.01}
-          min={0}
-          className="tabular-nums"
+        <CreditModeField
+          mode={creditMode}
+          amount={limitAmount}
+          onModeChange={setCreditMode}
+          onAmountChange={setLimitAmount}
         />
         <Input
           label={t('customers.notes')}

@@ -118,7 +118,8 @@ export default function PaymentPanel({
     if (!newCust.name.trim()) return;
     setAddingCustomer(true);
     try {
-      await api.createCustomer({ name: newCust.name.trim(), credit_limit: 0, phone: newCust.phone || undefined });
+      // Default new customers to unlimited credit (-1), not cash-only (0).
+      await api.createCustomer({ name: newCust.name.trim(), credit_limit: -1, phone: newCust.phone || undefined });
       setNewCust({ name: '', phone: '' });
       setShowNewCustomer(false);
       onCustomerCreated();
@@ -243,7 +244,7 @@ export default function PaymentPanel({
                         >
                           <span className="font-medium text-ink-main truncate">{c.name_ar || c.name}</span>
                           <span className="text-xs text-ink-muted whitespace-nowrap">
-                            {formatMoney(c.current_balance)} / {formatMoney(c.credit_limit)}
+                            {formatMoney(c.current_balance)} / {api.formatCreditLimit(c.credit_limit, t('customers.creditUnlimited'))}
                           </span>
                         </div>
                       ))
@@ -273,22 +274,25 @@ export default function PaymentPanel({
               {selectedCustomerId && (() => {
                 const cust = customers.find(c => c.id === selectedCustomerId);
                 if (!cust) return null;
+                const unlimited = cust.credit_limit < 0;
                 const remaining = Math.max(0, cust.credit_limit - cust.current_balance);
                 const afterSale = remaining - finalTotal;
-                const used = cust.credit_limit > 0 ? Math.min(100, (cust.current_balance / cust.credit_limit) * 100) : 0;
-                const willExceed = finalTotal > remaining;
+                const used = (!unlimited && cust.credit_limit > 0) ? Math.min(100, (cust.current_balance / cust.credit_limit) * 100) : 0;
+                const willExceed = !unlimited && finalTotal > remaining;
                 return (
                   <div className="mt-2 p-2 rounded-xl border border-ivory-border bg-ivory-muted text-xs">
                     <div className="flex justify-between mb-1">
                       <span className="text-ink-muted">{t('pos.creditRemaining')}:</span>
-                      <span className={`tabular-nums font-bold ${willExceed ? 'text-status-danger' : 'text-status-success'}`}>
-                        {formatMoney(remaining)}
+                      <span className={`tabular-nums font-bold ${unlimited ? 'text-status-success' : willExceed ? 'text-status-danger' : 'text-status-success'}`}>
+                        {unlimited ? t('customers.creditUnlimited') : formatMoney(remaining)}
                       </span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-ivory-border overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${used > 80 ? 'bg-status-danger' : used > 50 ? 'bg-status-warning' : 'bg-status-success'}`}
-                        style={{ width: `${used}%` }} />
-                    </div>
+                    {!unlimited && (
+                      <div className="h-1.5 rounded-full bg-ivory-border overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${used > 80 ? 'bg-status-danger' : used > 50 ? 'bg-status-warning' : 'bg-status-success'}`}
+                          style={{ width: `${used}%` }} />
+                      </div>
+                    )}
                     {willExceed && (
                       <div className="mt-1 flex items-center gap-1 text-status-danger">
                         <AlertTriangle size={10} />

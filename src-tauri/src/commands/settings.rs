@@ -27,6 +27,8 @@ pub struct TenantSettings {
     pub receipt_header: Option<String>,
     pub receipt_footer: Option<String>,
     pub print_logo: bool,
+    pub logo_position: String,
+    pub logo_size: String,
     pub subscription_plan: String,
     pub subscription_status: String,
     pub subscription_expiry: Option<String>,
@@ -47,6 +49,8 @@ pub struct TenantSettingsUpdate {
     pub receipt_header: Option<String>,
     pub receipt_footer: Option<String>,
     pub print_logo: Option<bool>,
+    pub logo_position: Option<String>,
+    pub logo_size: Option<String>,
 }
 
 #[tauri::command]
@@ -59,7 +63,8 @@ pub fn get_tenant_settings(
         "SELECT id, name, name_ar, license_number, phone, address,
                 currency_code, timezone, receipt_header, receipt_footer,
                 print_logo, subscription_plan, subscription_status,
-                subscription_expiry, max_branches, max_users, feature_flags
+                subscription_expiry, max_branches, max_users, feature_flags,
+                logo_position, logo_size
          FROM tenants WHERE id = ?1 AND deleted_at IS NULL",
         params![tenant_id],
         |row| {
@@ -81,6 +86,8 @@ pub fn get_tenant_settings(
                 max_branches: row.get(14)?,
                 max_users: row.get(15)?,
                 feature_flags: row.get(16)?,
+                logo_position: row.get(17)?,
+                logo_size: row.get(18)?,
             })
         },
     )
@@ -105,6 +112,8 @@ pub fn update_tenant_settings(
             timezone = COALESCE(?8, timezone),
             receipt_header = ?9, receipt_footer = ?10,
             print_logo = COALESCE(?11, print_logo),
+            logo_position = COALESCE(?12, logo_position),
+            logo_size = COALESCE(?13, logo_size),
             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
          WHERE id = ?1 AND deleted_at IS NULL",
         params![
@@ -119,6 +128,8 @@ pub fn update_tenant_settings(
             data.receipt_header,
             data.receipt_footer,
             data.print_logo.map(|v| v as i32),
+            data.logo_position,
+            data.logo_size,
         ],
     )
     .map_err(|e| format!("فشل تحديث إعدادات المستأجر: {}", e))?;

@@ -107,15 +107,19 @@ fn insert_opening_batch(
         )
         .map_err(|_| format!("المنتج غير موجود: {}", entry.product_id))?;
 
-    // Verify storage location exists
-    let _: String = conn
-        .query_row(
-            "SELECT id FROM storage_locations
-             WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",
-            params![entry.location_id, tenant_id],
-            |r| r.get(0),
-        )
-        .map_err(|_| format!("الموقع غير موجود: {}", entry.location_id))?;
+    // Resolve the storage location against THIS branch so the opening batch is
+    // attributed to the same branch the inventory report queries. The report sums
+    // stock via `batches b JOIN storage_locations sl ... WHERE sl.branch_id = ?`,
+    // so a location belonging to another branch (or an empty/invalid one) would
+    // make the opening stock invisible. resolve_location_id validates the chosen
+    // location belongs to `branch_id` and otherwise falls back to a default
+    // location in that branch — keeping sl.branch_id == b.branch_id == branch_id.
+    let location_id = resolve_location_id(
+        conn,
+        tenant_id,
+        branch_id,
+        if entry.location_id.trim().is_empty() { None } else { Some(entry.location_id.as_str()) },
+    )?;
 
     let batch_id = Uuid::new_v4().to_string();
     let unit_cost = entry.unit_cost.unwrap_or(0).max(0);
@@ -127,7 +131,7 @@ fn insert_opening_batch(
              unit_cost, status, branch_id)
          VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?7, ?8, 'active', ?9)",
         params![
-            batch_id, tenant_id, entry.product_id, entry.location_id,
+            batch_id, tenant_id, entry.product_id, location_id,
             entry.batch_number.as_deref(),
             entry.expiry_date.as_deref(),
             entry.quantity, unit_cost, branch_id,
@@ -289,11 +293,14 @@ fn resolve_location_id(
     requested: Option<&str>,
 ) -> Result<String, String> {
     if let Some(loc) = requested.filter(|s| !s.trim().is_empty()) {
+        // Only accept the requested location if it belongs to THIS branch.
+        // A location from another branch falls through to the branch default below,
+        // so the batch can never be attributed outside `branch_id`.
         let ok: Option<String> = conn
             .query_row(
                 "SELECT id FROM storage_locations
-                 WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",
-                params![loc.trim(), tenant_id],
+                 WHERE id = ?1 AND tenant_id = ?2 AND branch_id = ?3 AND deleted_at IS NULL",
+                params![loc.trim(), tenant_id, branch_id],
                 |r| r.get(0),
             )
             .ok();
@@ -341,10 +348,11 @@ pub fn import_opening_stock_bulk(
                 return Err("الكمية يجب أن تكون أكبر من صفر".into());
             }
             let (product_id, was_created) = find_or_create_product(&conn, &tid, row)?;
-            let location_id = resolve_location_id(&conn, &tid, &bid, row.location_id.as_deref())?;
+            // insert_opening_batch resolves the location against `bid`, so just
+            // pass the requested location (or empty to use the branch default).
             let entry = OpeningStockEntry {
                 product_id: product_id.clone(),
-                location_id,
+                location_id: row.location_id.clone().unwrap_or_default(),
                 quantity: row.quantity,
                 unit_cost: row.unit_cost,
                 batch_number: row.batch_number.clone(),

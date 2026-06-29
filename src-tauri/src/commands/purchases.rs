@@ -14,6 +14,47 @@ use super::purchases_invoices::fetch_invoice_detail;
 
 pub(crate) const FLAG_PURCHASES: i64 = 4;
 
+/// Rejects receiving any item that is already expired. Boundary: expired = expiry
+/// date strictly BEFORE today (local date); an item expiring today is still
+/// receivable. Empty expiry is allowed (expiry is optional, matching current
+/// behaviour). Names the offending product in the (Arabic) error.
+///
+/// `items` is the tuple shape both confirm paths build from supplier_invoice_items:
+/// (item_id, product_id, batch_number, expiry_date, quantity, unit_cost, sale_price).
+fn reject_expired_items(
+    conn: &rusqlite::Connection,
+    tenant_id: &str,
+    items: &[(String, String, Option<String>, Option<String>, i64, i64, i64)],
+) -> Result<(), String> {
+    for (_, product_id, _batch, expiry_date, _qty, _cost, _sale) in items {
+        let exp = match expiry_date.as_deref().map(str::trim) {
+            Some(s) if !s.is_empty() => s,
+            _ => continue,
+        };
+        let expired: bool = conn
+            .query_row(
+                "SELECT DATE(?1) < DATE('now', 'localtime')",
+                params![exp],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+        if expired {
+            let name: String = conn
+                .query_row(
+                    "SELECT COALESCE(trade_name_ar, trade_name) FROM products WHERE id = ?1 AND tenant_id = ?2",
+                    params![product_id, tenant_id],
+                    |r| r.get(0),
+                )
+                .unwrap_or_else(|_| product_id.clone());
+            return Err(format!(
+                "لا يمكن استلام صنف منتهي الصلاحية: {} (تاريخ الانتهاء {})",
+                name, exp
+            ));
+        }
+    }
+    Ok(())
+}
+
 // ====== Structs ======
 
 #[derive(Debug, Serialize)]
@@ -159,6 +200,9 @@ pub fn confirm_purchase(
     if items.is_empty() {
         return Err("لا يمكن تأكيد فاتورة بدون أصناف".into());
     }
+
+    // Block receiving already-expired stock (authoritative — backend enforced).
+    reject_expired_items(&conn, &tenant_id, &items)?;
 
     // Get branch from invoice
     let branch_id: String = conn.query_row(
@@ -312,6 +356,9 @@ pub fn confirm_purchase_with_payment(
     if items.is_empty() {
         return Err("لا يمكن تأكيد فاتورة بدون أصناف".into());
     }
+
+    // Block receiving already-expired stock (authoritative — backend enforced).
+    reject_expired_items(&conn, &tenant_id, &items)?;
 
     // Fetch invoice total and supplier
     let (invoice_total, supplier_id): (i64, String) = conn.query_row(
