@@ -3643,6 +3643,17 @@ New keys under `pos.*`: `receiptLogoSection`, `receiptLogoPosition`, `receiptLog
   - Bug B: on a temp DB copy, a session opened today is **excluded** by the old filter and **included** by the fixed `DATE()` filter.
   - Mirror: added a test customer → sync → present in cloud `snapshot_customers`; soft-delete + `deletedIds` sync → removed (cloud count `0`). Test rows cleaned up.
 
+### 2026-07-04 — Claude Code — TASK-941 (v0.2.25) — POS payment methods: stop seeding unused bank brands + expose Payment Methods settings
+- **Status:** DONE (separate PR into main; NOT part of the v0.2.24 release — owner bundles it into a later release)
+- **Problem:** POS renders one bank button per active `bank_transfer` row in `payment_methods` (`src/pages/pos/PaymentPanel.tsx`, fed by `bankMethods` in `src/pages/POS.tsx:470-472`). The seed activated **both** بنكك and فوري (and آجل) as `is_active=1`, so a pharmacy that uses a single (or no) bank account still saw multiple brand buttons it never chose.
+- **Fixes:**
+  - **(a) Seed** (`src-tauri/src/db/seed.rs`): now seeds **only `pm-cash`**. Removed the pre-activated `pm-bankak`, `pm-fawry`, `pm-credit` rows. Cash and Credit are hardcoded POS buttons and need no seeded row; bank wallets are added by the owner. (Affects fresh installs only.)
+  - **(b) Settings screen:** `PaymentSettingsTab.tsx` already existed (add / edit / activate-deactivate via the `is_active` checkbox / delete, wired to `get/create/update/deletePaymentMethod`) but was **never mounted**. Added it as a Settings tab (`src/pages/Settings.tsx`: import, `TabKey` `'payment'`, tab button, render). New i18n key `settings.paymentTab` (ar "طرق الدفع" / en "Payment Methods"); all `settings.payment.*` strings already existed in both locales.
+  - **(c) POS** already shows only **active** bank methods + the hardcoded cash/credit/split buttons — no change needed; verified against `PaymentPanel.tsx` (`bankMethods = paymentMethods.filter(is_active && bank_transfer)`).
+- **Files changed:** `src-tauri/src/db/seed.rs`, `src/pages/Settings.tsx`, `src/i18n/ar.json`, `src/i18n/en.json`; version trio + `Cargo.lock` → 0.2.25.
+- **Acceptance:** `cargo check` clean (only pre-existing permissions.rs warnings, 0 new); `npx tsc --noEmit` 0; `npm run build` clean.
+- **Notes:** No migration auto-deactivates the already-seeded bank brands on **existing** installs (that would risk removing a wallet a pharmacy actually adopted). Existing tenants (incl. the owner's) deactivate بنكك/فوري they don't use via the new **Settings → Payment Methods** tab. Kept fully separate from the v0.2.24 release; not tagged/released.
+
 ### 2026-07-04 — Claude Code — TASK-940 (v0.2.24) — Fix broken desktop→cloud sync + full mirror + clean-slate wipe
 - **Status:** DONE
 - **Root cause of "فشل المزامنة" (captured live):** the `customers` snapshot query in `cloud_sync_snapshot.rs` had a duplicated `is_active, updated_at` fragment. SQLite parsed `updated_at is_active` as an *implicit alias*, so the row sent the `updated_at` **timestamp** as the boolean `is_active`. The cloud batch (one transaction for all tables) rejected it: `invalid input syntax for type boolean: "2026-07-04T11:17:25.332Z"` → 500 → every sync failed whenever the tenant had ≥1 customer. Reproduced against the live cloud before fixing.

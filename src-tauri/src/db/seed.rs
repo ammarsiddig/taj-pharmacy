@@ -105,12 +105,14 @@ pub fn run(conn: &Connection) -> Result<(), String> {
         ).map_err(|e| format!("Seed unit {}: {}", name, e))?;
     }
 
-    // Seed POS payment methods
+    // Seed POS payment methods.
+    // TASK-941: seed ONLY cash. Bank brands (بنكك، فوري، …) must NOT be pre-activated —
+    // they used to all show as POS buttons even when the pharmacy uses a single (or no)
+    // bank account. The owner adds the bank wallet(s) they actually use from
+    // Settings → Payment Methods. Cash and Credit are hardcoded POS buttons and do not
+    // need a seeded row.
     let payment_methods = [
         ("pm-cash", "Cash", "نقد", "cash", Some("acct-main-cash"), 1, 1, 0),
-        ("pm-bankak", "Bankak", "بنكك", "bank_transfer", Some("acct-main-bank"), 0, 1, 10),
-        ("pm-fawry", "Fawry", "فوري", "bank_transfer", Some("acct-main-bank"), 0, 1, 20),
-        ("pm-credit", "Credit", "آجل", "credit", None, 0, 1, 30),
     ];
     for (id, name, name_ar, method_type, account_id, is_default, is_active, sort_order) in &payment_methods {
         conn.execute(
