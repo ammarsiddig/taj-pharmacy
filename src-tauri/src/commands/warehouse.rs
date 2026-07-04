@@ -63,6 +63,7 @@ pub struct StockMovementRow {
     pub id: String,
     pub product_id: String,
     pub product_name: String,
+    pub product_name_ar: Option<String>,
     pub batch_id: String,
     pub batch_number: Option<String>,
     pub movement_type: String,
@@ -333,7 +334,7 @@ pub fn get_stock_movements(
                 b.batch_number, sm.movement_type,
                 sm.quantity_change, sm.quantity_before, sm.quantity_after,
                 sm.reference_type, sm.reference_id, sm.notes,
-                sm.created_by, u.full_name, sm.created_at
+                sm.created_by, u.full_name, sm.created_at, p.trade_name_ar
          FROM stock_movements sm
          JOIN products p ON sm.product_id = p.id
          JOIN batches b ON sm.batch_id = b.id
@@ -357,6 +358,7 @@ pub fn get_stock_movements(
                 id: row.get(0)?,
                 product_id: row.get(1)?,
                 product_name: row.get(2)?,
+                product_name_ar: row.get(15)?,
                 batch_id: row.get(3)?,
                 batch_number: row.get(4)?,
                 movement_type: row.get(5)?,
@@ -656,7 +658,7 @@ pub fn get_low_stock_products(
             (SELECT s.id
              FROM suppliers s
              JOIN supplier_invoices si ON si.supplier_id = s.id
-             JOIN supplier_invoice_items sii ON sii.supplier_invoice_id = si.id
+             JOIN supplier_invoice_items sii ON sii.invoice_id = si.id
              WHERE sii.product_id = p.id
                AND si.tenant_id = p.tenant_id
                AND si.deleted_at IS NULL
@@ -666,7 +668,7 @@ pub fn get_low_stock_products(
             (SELECT s.name
              FROM suppliers s
              JOIN supplier_invoices si ON si.supplier_id = s.id
-             JOIN supplier_invoice_items sii ON sii.supplier_invoice_id = si.id
+             JOIN supplier_invoice_items sii ON sii.invoice_id = si.id
              WHERE sii.product_id = p.id
                AND si.tenant_id = p.tenant_id
                AND si.deleted_at IS NULL

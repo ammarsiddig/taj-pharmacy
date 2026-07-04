@@ -26,6 +26,9 @@ export default function ProductPanel({ product, onSave, onClose }: ProductPanelP
   const [savingUnit, setSavingUnit] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  // TASK-939: SDG-piasters per 1 USD (0 = exchange-rate pricing off). When set, we
+  // show a small "≈ $X.XX" anchor hint next to the SDG price inputs. SDG stays primary.
+  const [usdRatePiasters, setUsdRatePiasters] = useState(0);
 
   const [form, setForm] = useState<ProductFormData>({
     trade_name: product?.trade_name ?? '',
@@ -72,6 +75,18 @@ export default function ProductPanel({ product, onSave, onClose }: ProductPanelP
   useEffect(() => {
     api.getProductCategories().then(setCategories).catch(() => setCategories([]));
   }, []);
+
+  useEffect(() => {
+    api.getTenantSettings().then((s) => setUsdRatePiasters(s.usd_rate_piasters)).catch(() => setUsdRatePiasters(0));
+  }, []);
+
+  // Form prices are in SDG; the rate is SDG-piasters per USD. usd = sdg * 100 / rate.
+  const usdHint = (sdgValue: number): string | null => {
+    if (usdRatePiasters <= 0) return null;
+    const usd = (Number(sdgValue) * 100) / usdRatePiasters;
+    if (!isFinite(usd) || usd <= 0) return null;
+    return `≈ $${usd.toFixed(2)}`;
+  };
 
   const handleCreateCategory = () => {
     if (!newCategoryName.trim()) return;
@@ -298,6 +313,7 @@ export default function ProductPanel({ product, onSave, onClose }: ProductPanelP
                   <Coins size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted" />
                   <input type="number" step="0.01" min={0} value={Number(form.sale_price) || 0} onChange={(e) => updateField('sale_price', Number(e.target.value || 0))} className={`${inp} tabular-nums`} />
                 </div>
+                {usdHint(form.sale_price) && <p className="mt-1 text-xs text-ink-placeholder tabular-nums" dir="ltr">{usdHint(form.sale_price)}</p>}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-muted">{t('products.minSalePrice')} ({t('common.currency')})</label>
@@ -305,6 +321,7 @@ export default function ProductPanel({ product, onSave, onClose }: ProductPanelP
                   <Coins size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted" />
                   <input type="number" step="0.01" min={0} value={Number(form.min_sale_price) || 0} onChange={(e) => updateField('min_sale_price', Number(e.target.value || 0))} className={`${inp} tabular-nums`} />
                 </div>
+                {usdHint(form.min_sale_price) && <p className="mt-1 text-xs text-ink-placeholder tabular-nums" dir="ltr">{usdHint(form.min_sale_price)}</p>}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink-muted">{t('products.minStockLevel')}</label>

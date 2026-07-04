@@ -1476,6 +1476,17 @@ pub fn run(conn: &Connection) -> Result<(), String> {
         [],
     ).map_err(|e| format!("TASK-937 customer credit default fix: {}", e))?;
 
+    // TASK-939: USD/SDG exchange-rate pricing lever.
+    // Units — money is integer SDG piasters (1 SDG = 100 piasters):
+    //   tenants.usd_rate_piasters   = SDG-piasters per 1 USD (0 = feature off).
+    //   products.price_usd_cents     = USD-cent anchor for sale_price (0 = unset).
+    //   products.min_price_usd_cents = USD-cent anchor for min_sale_price (0 = unset).
+    // Additive only; no back-fill here — the feature starts off (rate 0) and anchors
+    // are derived the first time an owner sets a rate (see set_usd_rate).
+    ensure_column(&conn, "tenants", "usd_rate_piasters", "INTEGER NOT NULL DEFAULT 0")?;
+    ensure_column(&conn, "products", "price_usd_cents", "INTEGER NOT NULL DEFAULT 0")?;
+    ensure_column(&conn, "products", "min_price_usd_cents", "INTEGER NOT NULL DEFAULT 0")?;
+
     log::info!("Database migrations completed successfully");
     Ok(())
 }

@@ -600,6 +600,18 @@
       "saveSuccess": "تم حفظ الإعدادات بنجاح",
       "saveError": "فشل حفظ الإعدادات"
     },
+    "pricing": {
+      "title": "التسعير / العملة",
+      "hint": "حدّد سعر صرف الدولار وسيتم تحديث أسعار بيع كل المنتجات تلقائياً.",
+      "rateLabel": "سعر صرف الدولار (ج.س لكل 1 دولار)",
+      "applyButton": "تطبيق",
+      "currentRate": "السعر الحالي: {{rate}} ج.س لكل 1 دولار",
+      "off": "تسعير العملة غير مُفعّل.",
+      "rateInvalid": "سعر الصرف يجب أن يكون أكبر من صفر",
+      "confirmTitle": "تحديث الأسعار",
+      "confirmMessage": "سيتم تحديث أسعار {{count}} منتج وفق سعر الصرف الجديد. هل تريد المتابعة؟",
+      "rateSaved": "تم تحديث سعر الصرف — أُعيد تسعير {{count}} منتج."
+    },
     "branches": {
       "title": "إدارة الفروع",
       "addBranch": "+ فرع جديد",
@@ -1299,7 +1311,19 @@
       "transfer_in": "تحويل واردة",
       "transfer_out": "تحويل صادرة",
       "dispose": "إتلاف",
-      "qty": "الكمية"
+      "qty": "الكمية",
+      "refType": {
+        "supplier_invoice": "فاتورة شراء",
+        "sale": "بيع",
+        "transfer": "تحويل",
+        "opening_stock": "جرد افتتاحي",
+        "return": "مرتجع",
+        "supplier_return": "مرتجع مورد",
+        "customer_return": "مرتجع عميل",
+        "adjustment": "تسوية",
+        "stock_take": "جرد",
+        "disposal": "إتلاف"
+      }
     },
     "stockTake": {
       "start": "بدء جرد جديد",

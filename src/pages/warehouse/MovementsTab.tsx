@@ -4,6 +4,7 @@ import { CalendarDays } from 'lucide-react';
 import { getStockMovements } from '../../api';
 import type { StockMovementRow } from '../../types';
 import { MOVEMENT_COLORS, fmtDate, EmptyBlock } from './WarehouseShared';
+import { productLabel } from '../../utils/productLabel';
 
 interface Props {
   branchId: string;
@@ -84,11 +85,11 @@ export default function MovementsTab({ branchId }: Props) {
                 {movements.map(m => (
                   <tr key={m.id} className="hover:bg-ivory-muted">
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{fmtDate(m.created_at)}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{m.product_name}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{productLabel(m.product_name_ar, m.product_name)}</td>
                     <td className="px-4 py-3 text-gray-500">{m.batch_number || '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${MOVEMENT_COLORS[m.movement_type] || 'bg-gray-100 text-gray-700'}`}>
-                        {m.movement_type.replace('_', ' ')}
+                        {t(`warehouse.movements.${m.movement_type}`, { defaultValue: m.movement_type.replace(/_/g, ' ') })}
                       </span>
                     </td>
                     <td className={`px-4 py-3 font-semibold ${
@@ -98,7 +99,7 @@ export default function MovementsTab({ branchId }: Props) {
                     </td>
                     <td className="px-4 py-3 text-gray-500">{m.quantity_before}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{m.quantity_after}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{m.reference_type ? `${m.reference_type}` : '—'}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{m.reference_type ? t(`warehouse.movements.refType.${m.reference_type}`, { defaultValue: m.reference_type.replace(/_/g, ' ') }) : '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{m.created_by_name}</td>
                   </tr>
                 ))}

@@ -11,6 +11,69 @@ use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
 const FLAG_PRODUCTS: i64 = 2;
 
+// ─── USD/SDG anchor conversions (TASK-939) ───────────────────────────────────
+// All money is integer SDG piasters (1 SDG = 100 piasters). The USD anchors are
+// integer USD cents. `usd_rate_piasters` = SDG-piasters per 1 USD (0 = off).
+// Both directions round to the nearest integer (half-up; all inputs are ≥ 0).
+//
+// Worked example — $2.60 (260¢) at rate 60000 (i.e. 600.00 SDG per $1):
+//   usd_cents_to_sdg(260, 60000) = round(260 * 60000 / 100) = 156000 piasters = 1560.00 SDG.
+//   sdg_to_usd_cents(156000, 60000) = round(156000 * 100 / 60000) = 260 cents = $2.60.
+
+/// SDG piasters → USD-cent anchor. Returns 0 when the rate is off (≤ 0).
+pub(crate) fn sdg_to_usd_cents(sdg_piasters: i64, usd_rate_piasters: i64) -> i64 {
+    if usd_rate_piasters <= 0 {
+        return 0;
+    }
+    (sdg_piasters * 100 + usd_rate_piasters / 2) / usd_rate_piasters
+}
+
+/// USD-cent anchor → SDG piasters. Returns 0 when the rate is off (≤ 0).
+pub(crate) fn usd_cents_to_sdg(usd_cents: i64, usd_rate_piasters: i64) -> i64 {
+    if usd_rate_piasters <= 0 {
+        return 0;
+    }
+    (usd_cents * usd_rate_piasters + 50) / 100
+}
+
+/// Current tenant USD→SDG rate (SDG-piasters per USD). 0 means the feature is off.
+pub(crate) fn tenant_usd_rate(conn: &rusqlite::Connection, tenant_id: &str) -> i64 {
+    conn.query_row(
+        "SELECT usd_rate_piasters FROM tenants WHERE id = ?1 AND deleted_at IS NULL",
+        params![tenant_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+}
+
+/// After an owner writes a product's SDG price, re-derive its USD anchors at the
+/// current rate. No-op when the feature is off (rate 0). Editing SDG re-anchors —
+/// there are no manual USD overrides to preserve.
+fn reanchor_product(
+    conn: &rusqlite::Connection,
+    tenant_id: &str,
+    product_id: &str,
+    sale_price: i64,
+    min_sale_price: i64,
+) -> Result<(), String> {
+    let rate = tenant_usd_rate(conn, tenant_id);
+    if rate <= 0 {
+        return Ok(());
+    }
+    conn.execute(
+        "UPDATE products SET price_usd_cents = ?3, min_price_usd_cents = ?4
+         WHERE tenant_id = ?1 AND id = ?2",
+        params![
+            tenant_id,
+            product_id,
+            sdg_to_usd_cents(sale_price, rate),
+            sdg_to_usd_cents(min_sale_price, rate),
+        ],
+    )
+    .map_err(|e| format!("فشل اشتقاق مرجع الدولار: {}", e))?;
+    Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Product {
     pub id: String,
@@ -358,6 +421,9 @@ pub fn create_product(
     )
     .map_err(|e| format!("فشل في إضافة المنتج: {}", e))?;
 
+    // TASK-939: derive USD anchors from the SDG price at the current rate.
+    reanchor_product(&conn, &tenant_id, &id, data.sale_price, data.min_sale_price)?;
+
     if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "product_created") {
         log::warn!("cloud sync enqueue failed after create_product: {}", e);
     }
@@ -456,6 +522,9 @@ pub fn update_product(
         ],
     )
     .map_err(|e| format!("فشل في تحديث المنتج: {}", e))?;
+
+    // TASK-939: editing the SDG price re-anchors the product at the current rate.
+    reanchor_product(&conn, &tenant_id, &product_id, data.sale_price, data.min_sale_price)?;
 
     if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "product_updated") {
         log::warn!("cloud sync enqueue failed after update_product: {}", e);
@@ -620,6 +689,21 @@ pub fn import_products(
                 .map_err(|e| format!("فشل إضافة المنتج: {}", e))?;
                 imported += 1;
             }
+        }
+
+        // TASK-939: re-derive USD anchors for every product from its (now current)
+        // SDG price at the active rate. Idempotent when the SDG price is unchanged;
+        // no-op when the feature is off (rate 0).
+        let rate = tenant_usd_rate(&conn, &tenant_id);
+        if rate > 0 {
+            conn.execute(
+                "UPDATE products SET
+                    price_usd_cents = (sale_price * 100 + ?2 / 2) / ?2,
+                    min_price_usd_cents = (min_sale_price * 100 + ?2 / 2) / ?2
+                 WHERE tenant_id = ?1 AND deleted_at IS NULL",
+                params![tenant_id, rate],
+            )
+            .map_err(|e| format!("فشل اشتقاق مرجع الدولار: {}", e))?;
         }
 
         if let Some(user_id) = normalize_optional_text(&data.user_id) {

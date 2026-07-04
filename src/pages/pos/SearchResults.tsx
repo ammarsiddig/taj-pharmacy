@@ -1,5 +1,6 @@
 import type { PosProduct, CartItem } from '../../types';
 import type { TFunction } from 'i18next';
+import { productLabel } from '../../utils/productLabel';
 
 interface SearchResultsProps {
   results: PosProduct[];
@@ -44,7 +45,7 @@ export default function SearchResults({
               onClick={() => !outOfStock && onAddToCart(p)}
                 className={`w-full text-right px-4 py-3 text-sm flex justify-between items-center ${outOfStock ? 'cursor-default opacity-70' : 'hover:bg-ivory-muted'} ${highlightedResultIdx === resultIdx ? 'bg-primary-50 outline-none ring-2 ring-inset ring-primary-300' : ''}`}
               >
-                <span className="text-ink-main font-medium">{p.product_name}</span>
+                <span className="text-ink-main font-medium">{productLabel(p.product_name_ar, p.product_name)}</span>
                 <span className="flex items-center gap-2 text-ink-muted text-xs">
                   <span>{formatMoney(p.sale_price)}</span>
                   {outOfStock ? (
@@ -87,7 +88,7 @@ export default function SearchResults({
                             onClick={() => { if (subStock > 0) onAddToCart(sub); }}
                             className={`w-full flex justify-between items-center rounded-lg px-2 py-1.5 text-xs ${subStock > 0 ? 'hover:bg-primary-100 cursor-pointer' : 'opacity-60 cursor-default'}`}
                           >
-                            <span className="font-medium text-ink-main">{sub.product_name}</span>
+                            <span className="font-medium text-ink-main">{productLabel(sub.product_name_ar, sub.product_name)}</span>
                             <span className={`font-medium ${subStock > 0 ? 'text-status-success' : 'text-status-danger'}`}>
                               {subStock > 0 ? `${t('pos.available')}: ${subStock}` : t('pos.outOfStock')}
                             </span>

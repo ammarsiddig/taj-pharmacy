@@ -414,6 +414,7 @@ export default function POS() {
       return [...prev, {
         product_id: product.product_id,
         product_name: product.product_name,
+        product_name_ar: product.product_name_ar,
         is_prescription: product.is_prescription,
         batch_id: batch.batch_id,
         batch_number: batch.batch_number,

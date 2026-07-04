@@ -212,6 +212,56 @@ const TABLE_SCHEMAS = {
 };
 
 /**
+ * Full-mirror reconcile: the desktop is authoritative, so any snapshot row that
+ * is no longer in the pushed set must be removed — otherwise the Owner PWA keeps
+ * showing rows the pharmacist already deleted. This makes the cloud an exact
+ * mirror (not an append-only upsert log).
+ *
+ * Scope: branch-partitioned tables reconcile within (tenant_id, branch_id);
+ * tenant-scoped tables within (tenant_id). Empty rows → the whole scope is
+ * cleared (this is how a clean-slate wipe propagates).
+ *
+ * Excluded from reconcile (upsert-only):
+ *  - `audit_log` (rolling 30-day window) and `account_transactions` (latest 500):
+ *    the desktop deliberately pushes a partial set, so reconciling would delete
+ *    history that still exists on the desktop.
+ *  - `users`, `branches`, `accounts`: setup / control-plane records that must be
+ *    kept even if a sync momentarily pushes an empty or branch-mismatched set.
+ *    Only transactional entities (products, customers, suppliers, sales, …) are
+ *    mirror-deleted; wiping a pharmacy's users/branches/accounts on a transient
+ *    empty push would be catastrophic.
+ */
+const RECONCILE_SKIP = new Set([
+  'audit_log', 'account_transactions', 'users', 'branches', 'accounts',
+]);
+// Snapshot tables that carry a branch_id column (reconcile per tenant+branch).
+// The rest reconcile per tenant only.
+const RECONCILE_BRANCH_SCOPED = new Set([
+  'products', 'batches', 'customers', 'suppliers', 'pos_sales', 'pos_sale_items',
+  'expenses', 'stock_movements', 'supplier_invoices', 'supplier_payments',
+  'customer_payments', 'sale_payments', 'supplier_returns',
+  'pos_sessions', 'returns',
+]);
+
+async function reconcileTable(client, tableName, snapshotTable, tenantId, branchId, rows) {
+  if (RECONCILE_SKIP.has(tableName)) return 0;
+  const ids = rows.map((r) => r && r.id).filter((v) => v != null);
+  const branchScoped = RECONCILE_BRANCH_SCOPED.has(tableName);
+  const scope = branchScoped ? 'tenant_id = $1 AND branch_id = $2' : 'tenant_id = $1';
+  let sql, args;
+  if (ids.length > 0) {
+    const idParam = branchScoped ? '$3' : '$2';
+    sql = `DELETE FROM ${snapshotTable} WHERE ${scope} AND id::text <> ALL(${idParam}::text[])`;
+    args = branchScoped ? [tenantId, branchId, ids] : [tenantId, ids];
+  } else {
+    sql = `DELETE FROM ${snapshotTable} WHERE ${scope}`;
+    args = branchScoped ? [tenantId, branchId] : [tenantId];
+  }
+  const res = await client.query(sql, args);
+  return res.rowCount;
+}
+
+/**
  * POST /v1/sync/batch
  * Multi-table sync in a single transaction
  * Body: { 
@@ -283,6 +333,10 @@ router.post('/v1/sync/batch', authenticateToken, syncLimiter, async (req, res) =
           totalDeleted += deletedIds.length;
         }
 
+        // Full-mirror reconcile: drop rows no longer present on the desktop
+        const reconciled = await reconcileTable(client, tableName, snapshotTable, tenantId, branchId, rows);
+        totalDeleted += reconciled;
+
         // Update sync state
         await client.query(`
           INSERT INTO sync_state (tenant_id, table_name, last_sync_at, row_count)
@@ -291,9 +345,9 @@ router.post('/v1/sync/batch', authenticateToken, syncLimiter, async (req, res) =
           DO UPDATE SET last_sync_at = NOW(), row_count = $3
         `, [tenantId, tableName, rows.length]);
 
-        results[tableName] = { 
-          upserted: rows.length, 
-          deleted: deletedIds.length 
+        results[tableName] = {
+          upserted: rows.length,
+          deleted: deletedIds.length + reconciled
         };
       }
 
@@ -406,6 +460,9 @@ router.post('/v1/sync/:table', authenticateToken, syncLimiter, async (req, res) 
         const deleteResult = await client.query(deleteSql, [tenantId, branchId, ...deletedIds]);
         deleted = deleteResult.rowCount;
       }
+
+      // Full-mirror reconcile: drop rows no longer present on the desktop
+      deleted += await reconcileTable(client, table, snapshotTable, tenantId, branchId, rows);
 
       // Update sync state
       await client.query(`

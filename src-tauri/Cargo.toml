@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.2.21"
+version = "0.2.24"
 description = "TAJ Pharmacy Management System"
 authors = ["you"]
 license = ""

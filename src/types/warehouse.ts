@@ -21,6 +21,7 @@ export interface StockMovementRow {
   id: string;
   product_id: string;
   product_name: string;
+  product_name_ar?: string;
   batch_id: string;
   batch_number?: string;
   movement_type: string;

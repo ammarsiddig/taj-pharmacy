@@ -18,6 +18,14 @@ export async function updateTenantSettings(data: TenantSettingsUpdate): Promise<
   return invoke('update_tenant_settings', { tenantId: getTenantId(), data });
 }
 
+/**
+ * TASK-939: set the USD→SDG exchange rate (SDG-piasters per 1 USD) and auto-reprice
+ * all anchored products. Returns the number of products repriced.
+ */
+export async function setUsdRate(userId: string, newRatePiasters: number): Promise<number> {
+  return invoke('set_usd_rate', { tenantId: getTenantId(), userId, newRatePiasters });
+}
+
 export async function savePharmacyLogo(base64Data: string): Promise<string> {
   return invoke('save_pharmacy_logo', { tenantId: getTenantId(), base64Data });
 }

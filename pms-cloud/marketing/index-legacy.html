@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAJ Pharmacy — نظام إدارة الصيدليات للسوق السوداني</title>
+  <meta name="description" content="TAJ Pharmacy — نظام إدارة الصيدليات للسوق السوداني. نقطة بيع سريعة، مخزون ذكي، مزامنة سحابية. حمّل مجاناً لويندوز.">
+  <meta name="theme-color" content="#1C5F6F">
+  <meta property="og:title" content="TAJ Pharmacy — نظام إدارة الصيدليات">
+  <meta property="og:description" content="نظام إدارة الصيدليات للسوق السوداني — مجاني أثناء فترة الإطلاق">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://taj.systems">
+  <meta property="og:site_name" content="TAJ Pharmacy">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/assets/tailwind-config.js"></script>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231C5F6F'/><text x='50' y='68' font-size='55' font-weight='800' fill='white' text-anchor='middle' font-family='sans-serif'>TAJ</text></svg>">
+  <style>
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .anim-1 { animation: fadeInUp 0.6s ease both; }
+    .anim-2 { animation: fadeInUp 0.6s 0.15s ease both; }
+    .anim-3 { animation: fadeInUp 0.6s 0.3s ease both; }
+    .anim-4 { animation: fadeInUp 0.6s 0.45s ease both; }
+
+    details summary { list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details[open] summary .chevron { transform: rotate(180deg); }
+    .chevron { transition: transform 0.2s ease; }
+
+    .mock-bar { border-radius: 4px; background: #0FA3A6; opacity: 0.75; }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px -12px rgba(13,32,35,0.15); }
+    .feature-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<!-- ─── Header ─── -->
+<header id="site-header" class="sticky top-0 z-50 bg-white/92 backdrop-blur-md transition-shadow duration-300" dir="rtl">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16">
+      <a href="/index.html" class="flex items-center gap-3 flex-shrink-0">
+        <img src="/assets/taj-logo.svg" alt="TAJ Pharmacy" width="40" height="40" style="border-radius:10px;">
+        <span class="text-lg font-bold text-[#1C5F6F] hidden sm:inline">TAJ Pharmacy</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-1">
+        <a href="/features.html" class="nav-link">الميزات</a>
+        <a href="/pricing.html" class="nav-link">الأسعار</a>
+        <a href="/download.html" class="nav-link">التحميل</a>
+        <a href="/docs.html" class="nav-link">الدعم</a>
+        <a href="/blog.html" class="nav-link">المدونة</a>
+      </nav>
+      <div class="hidden md:flex items-center gap-3 flex-shrink-0">
+        <a href="https://pharmacy.taj.systems" class="btn-primary text-sm !py-2 !px-5">دخول لوحة المالك</a>
+      </div>
+      <button id="hamburger-btn" class="md:hidden flex flex-col items-center justify-center w-10 h-10 rounded-lg hover:bg-[#E5F7F7] transition-colors" aria-label="القائمة" aria-expanded="false">
+        <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+      </button>
+    </div>
+    <div id="mobile-menu" class="mobile-menu md:hidden border-t border-[#D3E8E9]">
+      <div class="flex flex-col gap-1 pt-3 pb-1">
+        <a href="/features.html" class="nav-link block py-2 px-4 rounded-lg">الميزات</a>
+        <a href="/pricing.html" class="nav-link block py-2 px-4 rounded-lg">الأسعار</a>
+        <a href="/download.html" class="nav-link block py-2 px-4 rounded-lg">التحميل</a>
+        <a href="/docs.html" class="nav-link block py-2 px-4 rounded-lg">الدعم</a>
+        <a href="/blog.html" class="nav-link block py-2 px-4 rounded-lg">المدونة</a>
+        <div class="pt-2 pb-1 px-3">
+          <a href="https://pharmacy.taj.systems" class="btn-primary w-full text-center">دخول لوحة المالك</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+<script>
+  const btn = document.getElementById('hamburger-btn');
+  const menu = document.getElementById('mobile-menu');
+  btn?.addEventListener('click', () => { const o = menu.classList.toggle('open'); btn.setAttribute('aria-expanded', o); });
+  window.addEventListener('scroll', () => { document.getElementById('site-header')?.classList.toggle('shadow-md', window.scrollY > 10); });
+</script>
+
+<main class="flex-1">
+
+<!-- ─── Section 1: Hero ─── -->
+<section class="relative overflow-hidden" style="background: radial-gradient(ellipse at 60% 40%, #E5F7F7 0%, #F4FBFB 70%); min-height: 88vh; display: flex; align-items: center;">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 w-full">
+    <div class="grid md:grid-cols-2 gap-12 items-center">
+
+      <!-- Text -->
+      <div>
+        <span class="badge-coming-soon anim-1 inline-block mb-5">🎉 مجاني بالكامل أثناء فترة الإطلاق</span>
+        <h1 class="anim-2 text-4xl md:text-5xl font-black text-[#0D2023] leading-tight mb-5">
+          أدِر صيدليتك<br>بكفاءة احترافية
+        </h1>
+        <p class="anim-3 text-lg text-[#3D6567] leading-relaxed mb-8 max-w-lg">
+          نظام إدارة شامل للصيدليات في السودان — نقطة بيع سريعة، مخزون ذكي، تقارير دقيقة، ومزامنة سحابية تلقائية.
+        </p>
+        <div class="anim-4 flex flex-wrap gap-3 mb-8">
+          <a href="/download.html" class="btn-primary flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            حمّل التطبيق مجاناً
+          </a>
+          <a href="/features.html" class="btn-secondary flex items-center gap-2">
+            شاهد كيف يعمل
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </a>
+        </div>
+        <div class="flex flex-wrap gap-5 text-sm text-[#3D6567]">
+          <span class="flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>يعمل دون إنترنت</span>
+          <span class="flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>مزامنة سحابية تلقائية</span>
+          <span class="flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>دعم باللغة العربية</span>
+        </div>
+      </div>
+
+      <!-- App mockup -->
+      <div class="anim-3 hidden md:block">
+        <div class="rounded-2xl shadow-2xl border border-[#D3E8E9] overflow-hidden bg-white" style="max-width:460px; margin: 0 auto;">
+          <!-- Title bar -->
+          <div class="flex items-center gap-2 px-4 py-3" style="background:#1C5F6F;">
+            <span class="w-3 h-3 rounded-full bg-red-400 opacity-80"></span>
+            <span class="w-3 h-3 rounded-full bg-yellow-400 opacity-80"></span>
+            <span class="w-3 h-3 rounded-full bg-green-400 opacity-80"></span>
+            <span class="text-white/80 text-xs mx-auto font-medium">TAJ Pharmacy — لوحة التحكم</span>
+          </div>
+          <!-- Dashboard content -->
+          <div class="p-4 bg-[#F4FBFB]">
+            <!-- KPI cards -->
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="bg-white rounded-xl p-3 border border-[#D3E8E9]">
+                <div class="text-[10px] text-[#3D6567] mb-1">مبيعات اليوم</div>
+                <div class="text-lg font-bold text-[#0FA3A6]">45,200</div>
+                <div class="text-[9px] text-[#3D6567]">ج.س • 12 مبيعة</div>
+              </div>
+              <div class="bg-white rounded-xl p-3 border border-[#D3E8E9]">
+                <div class="text-[10px] text-[#3D6567] mb-1">صافي الربح</div>
+                <div class="text-lg font-bold text-[#059669]">12,800</div>
+                <div class="text-[9px] text-[#3D6567]">ج.س هذا الشهر</div>
+              </div>
+              <div class="bg-white rounded-xl p-3 border border-[#D3E8E9]">
+                <div class="text-[10px] text-[#3D6567] mb-1">ذمم العملاء</div>
+                <div class="text-lg font-bold text-[#D97706]">8,500</div>
+                <div class="text-[9px] text-[#3D6567]">ج.س مستحقة</div>
+              </div>
+              <div class="bg-white rounded-xl p-3 border border-[#D3E8E9]">
+                <div class="text-[10px] text-[#3D6567] mb-1">ذمم الموردين</div>
+                <div class="text-lg font-bold text-[#DC2626]">22,000</div>
+                <div class="text-[9px] text-[#3D6567]">ج.س مستحقة</div>
+              </div>
+            </div>
+            <!-- Chart -->
+            <div class="bg-white rounded-xl p-3 border border-[#D3E8E9] mb-3">
+              <div class="text-[10px] text-[#3D6567] mb-2">مبيعات آخر 7 أيام</div>
+              <div class="flex items-end gap-1.5 h-12">
+                <div class="mock-bar flex-1" style="height:40%;opacity:0.5"></div>
+                <div class="mock-bar flex-1" style="height:60%;opacity:0.6"></div>
+                <div class="mock-bar flex-1" style="height:45%;opacity:0.55"></div>
+                <div class="mock-bar flex-1" style="height:75%;opacity:0.7"></div>
+                <div class="mock-bar flex-1" style="height:55%;opacity:0.6"></div>
+                <div class="mock-bar flex-1" style="height:80%;opacity:0.8"></div>
+                <div class="mock-bar flex-1" style="height:100%;opacity:1"></div>
+              </div>
+            </div>
+            <!-- Status -->
+            <div class="flex items-center justify-between text-[10px] text-[#3D6567]">
+              <span>آخر مزامنة: منذ دقيقتين</span>
+              <span class="flex items-center gap-1 text-[#059669] font-medium">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#059669] animate-pulse"></span>نشط
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─── Section 2: Trust strip ─── -->
+<section class="bg-white border-y border-[#D3E8E9] py-8">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6">
+    <div class="grid grid-cols-3 gap-4 text-center">
+      <div>
+        <div class="text-3xl font-black text-[#0FA3A6]">+20</div>
+        <div class="text-xs text-[#3D6567] mt-1">صيدلية تستخدم TAJ يومياً</div>
+      </div>
+      <div class="border-x border-[#D3E8E9]">
+        <div class="text-3xl font-black text-[#0FA3A6]">+5,000</div>
+        <div class="text-xs text-[#3D6567] mt-1">عملية بيع تمت بنجاح</div>
+      </div>
+      <div>
+        <div class="text-3xl font-black text-[#0FA3A6]">99.9%</div>
+        <div class="text-xs text-[#3D6567] mt-1">وقت تشغيل للخادم السحابي</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Section 3: Feature cards ─── -->
+<section class="py-20 bg-[#F4FBFB]">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-14">
+      <p class="text-sm font-bold text-[#0FA3A6] uppercase tracking-widest mb-3">الميزات الرئيسية</p>
+      <h2 class="text-4xl font-black text-[#0D2023] mb-4">كل ما تحتاجه في مكان واحد</h2>
+      <p class="text-lg text-[#3D6567] max-w-2xl mx-auto">من الكاشير إلى التقارير — TAJ يغطي كل جانب من جوانب إدارة صيدليتك</p>
+    </div>
+    <div class="grid md:grid-cols-3 gap-6">
+
+      <!-- Card 1 -->
+      <div class="card feature-card p-8">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style="background:#E5F7F7;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 001.97 1.61h9.72a2 2 0 001.97-1.61L23 6H6"/></svg>
+        </div>
+        <h3 class="text-xl font-bold text-[#0D2023] mb-3">نقطة بيع سريعة</h3>
+        <p class="text-[#3D6567] text-sm leading-relaxed mb-4">أكمل عملية البيع في أقل من 10 ثوانٍ. بحث ذكي بالاسم أو الباركود، دفع منقسم، بيع بالأجل، وطباعة إيصال فورية.</p>
+        <ul class="space-y-2 text-sm text-[#3D6567]">
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>دعم الباركود والبحث العربي</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>دفع نقدي / بنكي / منقسم / أجل</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>طباعة إيصال حراري</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>إدارة جلسات الكاشير</li>
+        </ul>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="card feature-card p-8">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style="background:#E5F7F7;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <h3 class="text-xl font-bold text-[#0D2023] mb-3">مخزون ذكي</h3>
+        <p class="text-[#3D6567] text-sm leading-relaxed mb-4">تتبع كل باتش بتاريخ انتهاء صلاحيته، تنبيهات المخزون المنخفض، ومبدأ FEFO تلقائياً عند البيع.</p>
+        <ul class="space-y-2 text-sm text-[#3D6567]">
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>تتبع الباتشات وتواريخ الانتهاء</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>تنبيهات المخزون المنخفض</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>FEFO تلقائي عند البيع</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>تقارير حركة المخزون</li>
+        </ul>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="card feature-card p-8">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style="background:#E5F7F7;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3 class="text-xl font-bold text-[#0D2023] mb-3">سحابة + محلي</h3>
+        <p class="text-[#3D6567] text-sm leading-relaxed mb-4">البيانات على جهازك دائماً — حتى بدون إنترنت. المزامنة تتم تلقائياً في الخلفية. راقب صيدليتك عن بُعد من أي متصفح.</p>
+        <ul class="space-y-2 text-sm text-[#3D6567]">
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>يعمل 100% دون إنترنت</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>مزامنة تلقائية كل 5 دقائق</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>لوحة مالك عبر الويب</li>
+          <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#0FA3A6] flex-shrink-0"></span>نسخ احتياطي سحابي تلقائي</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─── Section 4: How it works ─── -->
+<section class="py-20 bg-white">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-14">
+      <h2 class="text-4xl font-black text-[#0D2023] mb-4">ابدأ في 3 خطوات بسيطة</h2>
+      <p class="text-lg text-[#3D6567]">من التحميل إلى أول عملية بيع في أقل من 10 دقائق</p>
+    </div>
+    <div class="grid md:grid-cols-3 gap-8 relative">
+      <!-- connector lines (desktop only) -->
+      <div class="hidden md:block absolute top-8 right-[calc(33%+1rem)] left-[calc(33%+1rem)] h-0.5 bg-[#D3E8E9]" style="top:2rem;"></div>
+
+      <!-- Step 1 -->
+      <div class="text-center">
+        <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-[#0FA3A6]" style="background:#E5F7F7;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div class="text-xs font-bold text-[#0FA3A6] uppercase tracking-widest mb-2">الخطوة 1</div>
+        <h3 class="text-lg font-bold text-[#0D2023] mb-2">حمّل التطبيق</h3>
+        <p class="text-sm text-[#3D6567]">تثبيت بضغطة واحدة على ويندوز. لا يحتاج إنترنت بعد التثبيت.</p>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="text-center">
+        <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-[#0FA3A6]" style="background:#E5F7F7;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <div class="text-xs font-bold text-[#0FA3A6] uppercase tracking-widest mb-2">الخطوة 2</div>
+        <h3 class="text-lg font-bold text-[#0D2023] mb-2">أنشئ صيدليتك</h3>
+        <p class="text-sm text-[#3D6567]">أدخل بيانات صيدليتك وفرعك الرئيسي في 3 دقائق.</p>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="text-center">
+        <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-[#0FA3A6]" style="background:#E5F7F7;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0FA3A6" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 001.97 1.61h9.72a2 2 0 001.97-1.61L23 6H6"/></svg>
+        </div>
+        <div class="text-xs font-bold text-[#0FA3A6] uppercase tracking-widest mb-2">الخطوة 3</div>
+        <h3 class="text-lg font-bold text-[#0D2023] mb-2">ابدأ البيع</h3>
+        <p class="text-sm text-[#3D6567]">أضف منتجاتك وابدأ البيع فوراً. كل شيء جاهز.</p>
+      </div>
+    </div>
+    <div class="text-center mt-12">
+      <a href="/download.html" class="btn-primary">حمّل TAJ Pharmacy الآن</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Section 5: Pricing teaser ─── -->
+<section class="py-20 bg-[#F4FBFB]">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="rounded-3xl p-12 text-center text-white" style="background: linear-gradient(135deg, #0FA3A6 0%, #1C5F6F 100%);">
+      <p class="text-sm font-bold uppercase tracking-widest opacity-80 mb-3">التسعير</p>
+      <h2 class="text-4xl font-black mb-5">أسعار مبسطة قريباً</h2>
+      <p class="text-lg opacity-80 max-w-xl mx-auto mb-8">نعمل على خطط أسعار تناسب الصيدليات الصغيرة والمؤسسات الكبيرة. النسخة الحالية مجانية بالكامل أثناء فترة الإطلاق.</p>
+      <div class="max-w-md mx-auto flex gap-2">
+        <input type="email" placeholder="أدخل بريدك الإلكتروني" class="flex-1 rounded-full px-5 py-3 text-sm text-[#0D2023] border-0 focus:outline-none focus:ring-2 focus:ring-white/40" style="background:rgba(255,255,255,0.2);color:white;" />
+        <a href="mailto:hello@taj.systems?subject=اشعار بالاطلاق" class="btn-primary whitespace-nowrap !bg-white !text-[#1C5F6F]">سجّل اهتمامك</a>
+      </div>
+      <p class="text-xs opacity-50 mt-4">لا رسائل مزعجة. نُخبرك فقط عند الإطلاق الرسمي.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Section 6: FAQ ─── -->
+<section class="py-20 bg-white">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-12">
+      <h2 class="text-4xl font-black text-[#0D2023]">الأسئلة الشائعة</h2>
+    </div>
+    <div class="space-y-0 divide-y divide-[#D3E8E9]">
+
+      <details class="py-5 group">
+        <summary class="flex items-center justify-between cursor-pointer font-semibold text-[#0D2023]">
+          هل يعمل التطبيق بدون إنترنت؟
+          <svg class="chevron w-5 h-5 text-[#0FA3A6] flex-shrink-0 ms-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-3 text-[#3D6567] text-sm leading-relaxed">نعم، TAJ Pharmacy يعمل بالكامل دون اتصال بالإنترنت. جميع البيانات محفوظة على جهازك محلياً. المزامنة السحابية تتم تلقائياً عند توفر الإنترنت.</p>
+      </details>
+
+      <details class="py-5 group">
+        <summary class="flex items-center justify-between cursor-pointer font-semibold text-[#0D2023]">
+          ما هي متطلبات النظام؟
+          <svg class="chevron w-5 h-5 text-[#0FA3A6] flex-shrink-0 ms-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-3 text-[#3D6567] text-sm leading-relaxed">ويندوز 10 أو أحدث (64-bit)، 4 جيجابايت رام كحد أدنى، 500 ميجابايت مساحة فارغة، ومعالج Intel أو AMD حديث.</p>
+      </details>
+
+      <details class="py-5 group">
+        <summary class="flex items-center justify-between cursor-pointer font-semibold text-[#0D2023]">
+          هل يمكن تجربة التطبيق قبل الشراء؟
+          <svg class="chevron w-5 h-5 text-[#0FA3A6] flex-shrink-0 ms-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-3 text-[#3D6567] text-sm leading-relaxed">نعم، النسخة الحالية (v0.2.0) متاحة مجاناً بالكامل أثناء فترة الإطلاق. جميع الميزات مفتوحة بدون قيود.</p>
+      </details>
+
+      <details class="py-5 group">
+        <summary class="flex items-center justify-between cursor-pointer font-semibold text-[#0D2023]">
+          كيف تتم النسخ الاحتياطية؟
+          <svg class="chevron w-5 h-5 text-[#0FA3A6] flex-shrink-0 ms-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-3 text-[#3D6567] text-sm leading-relaxed">يتم النسخ الاحتياطي تلقائياً إلى السحابة يومياً. يمكنك أيضاً إنشاء نسخة محلية يدوياً في أي وقت من إعدادات التطبيق.</p>
+      </details>
+
+      <details class="py-5 group">
+        <summary class="flex items-center justify-between cursor-pointer font-semibold text-[#0D2023]">
+          هل يدعم فروعاً متعددة؟
+          <svg class="chevron w-5 h-5 text-[#0FA3A6] flex-shrink-0 ms-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-3 text-[#3D6567] text-sm leading-relaxed">نعم، يدعم TAJ Pharmacy إدارة عدة فروع من نفس الحساب. كل فرع له مخزونه وجلساته المستقلة.</p>
+      </details>
+
+      <details class="py-5 group">
+        <summary class="flex items-center justify-between cursor-pointer font-semibold text-[#0D2023]">
+          كيف أتواصل مع الدعم التقني؟
+          <svg class="chevron w-5 h-5 text-[#0FA3A6] flex-shrink-0 ms-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <p class="mt-3 text-[#3D6567] text-sm leading-relaxed">عبر واتساب أو البريد الإلكتروني <a href="mailto:hello@taj.systems" class="text-[#0FA3A6] hover:underline">hello@taj.systems</a>. أوقات الرد: الأحد–الخميس 9 ص – 6 م.</p>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─── Section 7: Final CTA ─── -->
+<section class="py-20 text-center text-white" style="background:#1C5F6F;">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 class="text-4xl font-black mb-4">جاهز لتجربة TAJ Pharmacy؟</h2>
+    <p class="text-xl opacity-80 max-w-xl mx-auto mb-8">حمّل التطبيق الآن مجاناً وابدأ إدارة صيدليتك باحترافية.</p>
+    <div class="flex flex-wrap gap-4 justify-center">
+      <a href="/download.html" class="btn-primary !bg-white !text-[#1C5F6F] flex items-center gap-2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        حمّل التطبيق مجاناً
+      </a>
+      <a href="/contact.html" class="btn-secondary !border-white/40 !text-white hover:!bg-white/10">تواصل معنا</a>
+    </div>
+    <p class="text-xs opacity-40 mt-6">v0.2.0 • ويندوز 10 أو أحدث • 4.85 ميجابايت</p>
+  </div>
+</section>
+
+</main>
+
+<!-- ─── Footer ─── -->
+<footer class="bg-[#1C5F6F] pt-14 pb-0">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+      <div class="col-span-2 md:col-span-1 space-y-4">
+        <div class="flex items-center gap-3">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="10" fill="white" fill-opacity="0.15"/><text x="20" y="27" text-anchor="middle" fill="white" font-size="14" font-weight="800" font-family="Tajawal, sans-serif">TAJ</text></svg>
+          <span class="text-lg font-bold text-white">TAJ Pharmacy</span>
+        </div>
+        <p class="text-white/70 text-sm leading-relaxed">نظام إدارة الصيدليات<br>للسوق السوداني</p>
+        <div class="flex items-center gap-3">
+          <a href="https://wa.me/249XXXXXXXXX" aria-label="واتساب" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          </a>
+          <a href="mailto:hello@taj.systems" aria-label="البريد الإلكتروني" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="space-y-3">
+        <h3 class="text-white font-bold mb-4">المنتج</h3>
+        <a href="/features.html" class="block text-white/70 hover:text-white text-sm transition-colors">الميزات</a>
+        <a href="/pricing.html" class="block text-white/70 hover:text-white text-sm transition-colors">الأسعار</a>
+        <a href="/download.html" class="block text-white/70 hover:text-white text-sm transition-colors">تحميل</a>
+        <a href="/blog.html" class="block text-white/70 hover:text-white text-sm transition-colors">سجل التغييرات</a>
+      </div>
+      <div class="space-y-3">
+        <h3 class="text-white font-bold mb-4">الموارد</h3>
+        <a href="/docs.html" class="block text-white/70 hover:text-white text-sm transition-colors">التوثيق</a>
+        <a href="/docs.html#faq" class="block text-white/70 hover:text-white text-sm transition-colors">الأسئلة الشائعة</a>
+        <a href="/contact.html" class="block text-white/70 hover:text-white text-sm transition-colors">تواصل معنا</a>
+        <a href="/blog.html" class="block text-white/70 hover:text-white text-sm transition-colors">المدونة</a>
+      </div>
+      <div class="space-y-3">
+        <h3 class="text-white font-bold mb-4">الشركة</h3>
+        <a href="/about.html" class="block text-white/70 hover:text-white text-sm transition-colors">من نحن</a>
+        <a href="/contact.html" class="block text-white/70 hover:text-white text-sm transition-colors">تواصل معنا</a>
+      </div>
+    </div>
+  </div>
+  <div class="border-t border-white/10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 text-center text-white/60 text-sm">
+      &copy; 2026 TAJ Pharmacy. صنع في السودان 🇸🇩
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
