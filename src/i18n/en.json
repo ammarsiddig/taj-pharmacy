@@ -544,6 +544,7 @@
     "licenseTab": "License",
     "cloudSyncTab": "Cloud Sync",
     "unitsTab": "Unit Measures",
+    "paymentTab": "Payment Methods",
     "auditTab": "Audit Log",
     "units": {
       "title": "Unit Management",
