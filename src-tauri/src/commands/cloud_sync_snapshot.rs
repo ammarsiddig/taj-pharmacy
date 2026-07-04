@@ -286,8 +286,18 @@ fn query_table_rows(
         msg
     })?;
     let cols: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+    // Bind exactly as many params as the query references. Some snapshot queries
+    // use only ?1 (tenant_id) — e.g. users, branches, audit_log — while the rest
+    // use ?1 + ?2 (tenant_id + branch_id). Binding two params to a one-param query
+    // makes SQLite return "Wrong number of parameters passed to query", which now
+    // aborts the whole sync at the first offending table (TASK-942).
+    let bind: Vec<&dyn rusqlite::types::ToSql> = if stmt.parameter_count() >= 2 {
+        vec![&tenant_id, &branch_id]
+    } else {
+        vec![&tenant_id]
+    };
     let mapped = stmt
-        .query_map(params![tenant_id, branch_id], |row| {
+        .query_map(bind.as_slice(), |row| {
             let mut map = serde_json::Map::new();
             for (i, col) in cols.iter().enumerate() {
                 let val: Value = match row.get_ref(i) {
@@ -669,4 +679,41 @@ pub fn sync_all_tables_now(
         });
     }
     Ok(results)
+}
+
+#[cfg(test)]
+mod task942_param_binding_tests {
+    use super::query_table_rows;
+    use rusqlite::Connection;
+
+    /// TASK-942: query_table_rows must bind exactly as many params as the query
+    /// references. A one-param (?1-only) query — like users/branches/audit_log —
+    /// used to receive a two-value bind and fail with "Wrong number of parameters
+    /// passed to query. Got 2, needed 1", aborting the whole sync.
+    #[test]
+    fn binds_param_count_from_query() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE t (tenant_id TEXT, branch_id TEXT, v TEXT);
+             INSERT INTO t VALUES ('T1','B1','x');
+             INSERT INTO t VALUES ('T1','B2','y');",
+        )
+        .unwrap();
+
+        // 1-param query (only ?1) — previously errored on the 2-value bind.
+        let one = query_table_rows(&conn, "one", "SELECT v FROM t WHERE tenant_id = ?1", "T1", "B1")
+            .expect("one-param query must bind a single param");
+        assert_eq!(one.len(), 2, "?1-only query should return both rows for T1");
+
+        // 2-param query (?1 + ?2) still binds both correctly.
+        let two = query_table_rows(
+            &conn,
+            "two",
+            "SELECT v FROM t WHERE tenant_id = ?1 AND branch_id = ?2",
+            "T1",
+            "B1",
+        )
+        .expect("two-param query must bind tenant + branch");
+        assert_eq!(two.len(), 1, "?1+?2 query should filter to the B1 row");
+    }
 }
