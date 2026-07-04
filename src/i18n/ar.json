@@ -551,6 +551,7 @@
     "licenseTab": "الترخيص",
     "cloudSyncTab": "المزامنة السحابية",
     "unitsTab": "وحدات القياس",
+    "paymentTab": "طرق الدفع",
     "auditTab": "سجل المراجعة",
     "units": {
       "title": "إدارة وحدات القياس",
