@@ -2,6 +2,7 @@ import { AlertTriangle, Minus, Plus, Trash2, ShoppingCart } from 'lucide-react';
 import type { CartItem } from '../../types';
 import type { TFunction } from 'i18next';
 import Numpad from '../../components/ui/Numpad';
+import { productLabel } from '../../utils/productLabel';
 
 interface CartDisplayProps {
   cart: CartItem[];
@@ -63,7 +64,7 @@ export default function CartDisplay({
                 }`}
               >
                 <td className="px-3 py-2 text-ink-main font-medium">
-                  <div>{item.product_name}</div>
+                  <div>{productLabel(item.product_name_ar, item.product_name)}</div>
                   {item.max_quantity - item.quantity <= 2 && (
                     <span className="mt-0.5 inline-flex items-center gap-0.5 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning">
                       <AlertTriangle size={9} />{t('pos.lowStockAlert')}

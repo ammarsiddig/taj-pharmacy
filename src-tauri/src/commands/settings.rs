@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 use crate::db::Database;
 use crate::commands::audit;
+use crate::commands::cloud_sync;
+use crate::commands::guard;
 use crate::commands::license_guard;
 use crate::commands::session_state::{AuthSessionState, resolve_identity};
 
@@ -35,6 +37,8 @@ pub struct TenantSettings {
     pub max_branches: i64,
     pub max_users: i64,
     pub feature_flags: i64,
+    /// TASK-939: SDG-piasters per 1 USD (0 = exchange-rate pricing off).
+    pub usd_rate_piasters: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,7 +68,7 @@ pub fn get_tenant_settings(
                 currency_code, timezone, receipt_header, receipt_footer,
                 print_logo, subscription_plan, subscription_status,
                 subscription_expiry, max_branches, max_users, feature_flags,
-                logo_position, logo_size
+                logo_position, logo_size, usd_rate_piasters
          FROM tenants WHERE id = ?1 AND deleted_at IS NULL",
         params![tenant_id],
         |row| {
@@ -88,6 +92,7 @@ pub fn get_tenant_settings(
                 feature_flags: row.get(16)?,
                 logo_position: row.get(17)?,
                 logo_size: row.get(18)?,
+                usd_rate_piasters: row.get(19)?,
             })
         },
     )
@@ -138,6 +143,114 @@ pub fn update_tenant_settings(
     }
     drop(conn);
     get_tenant_settings(db, tenant_id)
+}
+
+/// TASK-939: set the USD→SDG exchange rate and auto-reprice products.
+///
+/// Units: `new_rate_piasters` = SDG-piasters per 1 USD (must be > 0).
+/// sale_price / min_sale_price are SDG piasters; price_usd_cents /
+/// min_price_usd_cents are USD-cent anchors.
+///
+/// - First activation (previous rate 0): derive each product's USD anchors from
+///   its current SDG price. Prices do NOT change on activation.
+/// - Rate change (previous rate > 0): for every anchored product (price_usd_cents
+///   > 0), recompute the SDG sale_price/min_sale_price from the anchors at the new
+///   rate. last_purchase_price (historical cost) is never touched.
+///
+/// Returns the number of products repriced/anchored.
+#[tauri::command]
+pub fn set_usd_rate(
+    db: State<'_, Database>,
+    tenant_id: String,
+    user_id: String,
+    new_rate_piasters: i64,
+    auth_session: State<'_, AuthSessionState>,
+) -> Result<i64, String> {
+    if new_rate_piasters <= 0 {
+        return Err("سعر صرف الدولار يجب أن يكون أكبر من صفر".into());
+    }
+
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
+    license_guard::require_active(&conn, &tenant_id)?;
+    guard::require_access(&conn, &uid, "products", guard::Level::Write)?;
+
+    let prev_rate: i64 = conn
+        .query_row(
+            "SELECT usd_rate_piasters FROM tenants WHERE id = ?1 AND deleted_at IS NULL",
+            params![tenant_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("فشل قراءة سعر الصرف الحالي: {}", e))?;
+
+    conn.execute("BEGIN IMMEDIATE", []).map_err(|e| e.to_string())?;
+
+    let result = (|| -> Result<i64, String> {
+        let repriced: i64 = if prev_rate == 0 {
+            // First activation: derive USD anchors from current SDG prices.
+            // Prices themselves must not change here.
+            //   price_usd_cents = round(sale_price * 100 / rate)
+            conn.execute(
+                "UPDATE products SET
+                    price_usd_cents = (sale_price * 100 + ?2 / 2) / ?2,
+                    min_price_usd_cents = (min_sale_price * 100 + ?2 / 2) / ?2
+                 WHERE tenant_id = ?1 AND deleted_at IS NULL",
+                params![tenant_id, new_rate_piasters],
+            )
+            .map_err(|e| format!("فشل اشتقاق مرجع الدولار: {}", e))? as i64
+        } else {
+            // Rate change: recompute SDG prices from anchors at the new rate.
+            //   sale_price = round(price_usd_cents * rate / 100)
+            // MAX(...,1) guards the rule "never write a zero/negative price from a
+            // positive anchor". A zero min anchor legitimately stays a zero min price.
+            conn.execute(
+                "UPDATE products SET
+                    sale_price = MAX(1, (price_usd_cents * ?2 + 50) / 100),
+                    min_sale_price = CASE
+                        WHEN min_price_usd_cents > 0
+                        THEN MAX(1, (min_price_usd_cents * ?2 + 50) / 100)
+                        ELSE 0 END,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                 WHERE tenant_id = ?1 AND deleted_at IS NULL AND price_usd_cents > 0",
+                params![tenant_id, new_rate_piasters],
+            )
+            .map_err(|e| format!("فشل إعادة تسعير المنتجات: {}", e))? as i64
+        };
+
+        conn.execute(
+            "UPDATE tenants SET usd_rate_piasters = ?2,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![tenant_id, new_rate_piasters],
+        )
+        .map_err(|e| format!("فشل تحديث سعر الصرف: {}", e))?;
+
+        let changes = format!(
+            "{{\"prev_rate_piasters\":{},\"new_rate_piasters\":{},\"products_repriced\":{}}}",
+            prev_rate, new_rate_piasters, repriced
+        );
+        audit::log_action(
+            &conn, &tenant_id, &uid, "update", "usd_rate", &tenant_id, Some(&changes),
+        )?;
+
+        Ok(repriced)
+    })();
+
+    match result {
+        Ok(repriced) => {
+            conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
+            if let Err(e) =
+                cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "usd_rate_changed")
+            {
+                log::warn!("cloud sync enqueue failed after set_usd_rate: {}", e);
+            }
+            Ok(repriced)
+        }
+        Err(err) => {
+            let _ = conn.execute("ROLLBACK", []);
+            Err(err)
+        }
+    }
 }
 
 // ─── Pharmacy Logo ──────────────────────────────────────────────────────────

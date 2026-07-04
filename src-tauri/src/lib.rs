@@ -203,6 +203,7 @@ pub fn run() {
             commands::notifications::undismiss_all_system_alerts,
             commands::settings::get_tenant_settings,
             commands::settings::update_tenant_settings,
+            commands::settings::set_usd_rate,
             commands::settings::save_pharmacy_logo,
             commands::settings::get_pharmacy_logo,
             commands::settings::get_branches_full,

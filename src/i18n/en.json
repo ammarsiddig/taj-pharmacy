@@ -587,6 +587,18 @@
       "saveSuccess": "Settings saved successfully",
       "saveError": "Failed to save settings"
     },
+    "pricing": {
+      "title": "Pricing / Currency",
+      "hint": "Set the USD exchange rate and all product sell prices update automatically.",
+      "rateLabel": "USD exchange rate (SDG per 1 USD)",
+      "applyButton": "Apply",
+      "currentRate": "Current rate: {{rate}} SDG per 1 USD",
+      "off": "Currency pricing is off.",
+      "rateInvalid": "Exchange rate must be greater than zero",
+      "confirmTitle": "Update Prices",
+      "confirmMessage": "The prices of {{count}} products will be updated at the new exchange rate. Continue?",
+      "rateSaved": "Exchange rate updated — {{count}} products repriced."
+    },
     "branches": {
       "title": "Branch Management",
       "addBranch": "+ New Branch",
@@ -1267,7 +1279,19 @@
       "transfer_in": "Transfer In",
       "transfer_out": "Transfer Out",
       "dispose": "Dispose",
-      "qty": "Qty"
+      "qty": "Qty",
+      "refType": {
+        "supplier_invoice": "Purchase invoice",
+        "sale": "Sale",
+        "transfer": "Transfer",
+        "opening_stock": "Opening stock",
+        "return": "Return",
+        "supplier_return": "Supplier return",
+        "customer_return": "Customer return",
+        "adjustment": "Adjustment",
+        "stock_take": "Stock take",
+        "disposal": "Disposal"
+      }
     },
     "stockTake": {
       "start": "Start New Stock Take",

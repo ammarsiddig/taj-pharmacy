@@ -5,6 +5,7 @@ import * as api from '../../api';
 import type { TenantSettingsUpdate } from '../../types';
 import Button from '../../components/ui/Button';
 import Toast from '../../components/ui/Toast';
+import Modal from '../../components/ui/Modal';
 
 export default function GeneralTab() {
   const { t } = useTranslation();
@@ -25,6 +26,13 @@ export default function GeneralTab() {
     currency_code: 'SDG', timezone: 'Africa/Khartoum',
     receipt_header: '', receipt_footer: '', print_logo: true,
   });
+  // TASK-939: USD→SDG exchange-rate pricing lever. The rate is stored as
+  // SDG-piasters per 1 USD; this input holds it as SDG (e.g. "600.00").
+  const [currentRatePiasters, setCurrentRatePiasters] = useState(0);
+  const [usdRateInput, setUsdRateInput] = useState('');
+  const [savingRate, setSavingRate] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => {
     (async () => {
       try {
@@ -36,10 +44,39 @@ export default function GeneralTab() {
           receipt_header: s.receipt_header || '', receipt_footer: s.receipt_footer || '',
           print_logo: s.print_logo,
         });
+        setCurrentRatePiasters(s.usd_rate_piasters);
+        setUsdRateInput(s.usd_rate_piasters ? (s.usd_rate_piasters / 100).toString() : '');
       } catch (e: unknown) { setToast({ msg: String(e), type: 'danger' }); }
       finally { setLoading(false); }
     })();
   }, []);
+
+  // Ask for confirmation (showing how many products will be repriced) before applying.
+  const handleRequestRateSave = async () => {
+    const sdg = Number(usdRateInput);
+    if (!sdg || sdg <= 0) {
+      setToast({ msg: t('settings.pricing.rateInvalid'), type: 'danger' });
+      return;
+    }
+    try {
+      const products = await api.getProducts();
+      setPendingCount(products.length);
+      setConfirmOpen(true);
+    } catch (e: unknown) { setToast({ msg: String(e), type: 'danger' }); }
+  };
+
+  const handleConfirmRateSave = async () => {
+    setConfirmOpen(false);
+    setSavingRate(true);
+    try {
+      const ratePiasters = Math.round(Number(usdRateInput) * 100);
+      const userId = api.getAuthState().user?.id || '';
+      const repriced = await api.setUsdRate(userId, ratePiasters);
+      setCurrentRatePiasters(ratePiasters);
+      setToast({ msg: t('settings.pricing.rateSaved', { count: repriced }), type: 'success' });
+    } catch (e: unknown) { setToast({ msg: String(e), type: 'danger' }); }
+    finally { setSavingRate(false); }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -99,6 +136,46 @@ export default function GeneralTab() {
           <p className="text-xs text-ink-muted">{t('settings.general.logoMovedHint')}</p>
         </div>
       </div>
+      {/* TASK-939: USD→SDG exchange-rate pricing */}
+      <div className="app-panel p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-ink-main">{t('settings.pricing.title')}</p>
+          <p className="text-xs text-ink-muted mt-0.5">{t('settings.pricing.hint')}</p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <label className="block text-xs font-medium text-ink-muted mb-1">{t('settings.pricing.rateLabel')}</label>
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              className={inp + ' tabular-nums'}
+              value={usdRateInput}
+              onChange={e => setUsdRateInput(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+          <Button variant="secondary" onClick={handleRequestRateSave} disabled={savingRate}>
+            {savingRate ? t('common.loading') : t('settings.pricing.applyButton')}
+          </Button>
+        </div>
+        <p className="text-xs text-ink-placeholder">
+          {currentRatePiasters > 0
+            ? t('settings.pricing.currentRate', { rate: (currentRatePiasters / 100).toFixed(2) })
+            : t('settings.pricing.off')}
+        </p>
+      </div>
+
+      <Modal
+        open={confirmOpen}
+        variant="warning"
+        title={t('settings.pricing.confirmTitle')}
+        message={t('settings.pricing.confirmMessage', { count: pendingCount })}
+        confirmLabel={t('settings.pricing.applyButton')}
+        onConfirm={handleConfirmRateSave}
+        onCancel={() => setConfirmOpen(false)}
+      />
+
       {/* Language Toggle */}
       <div className="app-panel p-4 flex items-center justify-between">
         <div>

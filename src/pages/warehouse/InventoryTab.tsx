@@ -7,6 +7,7 @@ import {
 } from '../../api';
 import type { StorageLocationFull, BatchRow, RecalledBatch } from '../../types';
 import { fmt, fmtDate } from './WarehouseShared';
+import { productLabel } from '../../utils/productLabel';
 
 interface Props {
   branchId: string;
@@ -179,7 +180,7 @@ export default function InventoryTab({ branchId }: Props) {
               filtered.map((b, i) => (
                 <tr key={b.id} className="border-b border-ivory-border hover:bg-ivory-muted/50">
                   <td className="px-4 py-3 tabular-nums text-ink-muted">{i + 1}</td>
-                  <td className="px-4 py-3 font-medium text-ink-main">{b.product_name_ar || b.product_name}</td>
+                  <td className="px-4 py-3 font-medium text-ink-main">{productLabel(b.product_name_ar, b.product_name)}</td>
                   <td className="px-4 py-3 text-ink-muted">{b.batch_number}</td>
                   <td className="px-4 py-3 text-ink-muted">{fmtDate(b.expiry_date)}</td>
                   <td className="px-4 py-3 text-end tabular-nums font-semibold text-ink-main">{b.quantity_current}</td>

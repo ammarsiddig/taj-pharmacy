@@ -8,10 +8,13 @@ import type { Product as ProductType, Supplier, SupplierFormData, PurchaseInvoic
 import Button from '../components/ui/Button';
 import Toast from '../components/ui/Toast';
 import NumericInput from '../components/ui/NumericInput';
+import ProductSearchBox from '../components/ProductSearchBox';
+import { productLabel } from '../utils/productLabel';
 
 interface LocalProduct {
   id: string;
   name: string;
+  name_ar: string | null;
   barcode: string | null;
 }
 
@@ -19,6 +22,7 @@ interface InvoiceItem {
   key: number;
   product_id: string;
   product_name: string;
+  product_name_ar: string;
   batch_number: string;
   expiry_date: string;
   quantity: number;
@@ -64,6 +68,7 @@ export default function PurchaseNew() {
     const q = productSearch.toLowerCase();
     return products.filter((p) =>
       p.name.toLowerCase().includes(q) ||
+      (p.name_ar && p.name_ar.toLowerCase().includes(q)) ||
       (p.barcode && p.barcode.toLowerCase().includes(q))
     ).slice(0, 15);
   }, [productSearch, products]);
@@ -86,6 +91,7 @@ export default function PurchaseNew() {
         key: ++itemKeyCounter,
         product_id: product.id,
         product_name: product.name,
+        product_name_ar: product.name_ar ?? '',
         batch_number: '',
         expiry_date: '',
         quantity: 1,
@@ -100,7 +106,7 @@ export default function PurchaseNew() {
   const loadData = useCallback(async () => {
     try {
       const [sup, prod] = await Promise.all([api.getSuppliers(), api.getProducts()]);
-      const mappedProd = prod.map((p: ProductType) => ({ id: p.id, name: p.trade_name, barcode: p.barcode ?? null }));
+      const mappedProd = prod.map((p: ProductType) => ({ id: p.id, name: p.trade_name, name_ar: p.trade_name_ar ?? null, barcode: p.barcode ?? null }));
       setSuppliers(sup);
       setProducts(mappedProd);
       if (isEdit && editId) {
@@ -113,6 +119,7 @@ export default function PurchaseNew() {
           key: ++itemKeyCounter,
           product_id: item.product_id,
           product_name: mappedProd.find((p: LocalProduct) => p.id === item.product_id)?.name ?? item.product_name,
+          product_name_ar: mappedProd.find((p: LocalProduct) => p.id === item.product_id)?.name_ar ?? '',
           batch_number: item.batch_number ?? '',
           expiry_date: item.expiry_date ?? '',
           quantity: item.quantity,
@@ -129,6 +136,7 @@ export default function PurchaseNew() {
           key: ++itemKeyCounter,
           product_id: prefilledProduct.productId,
           product_name: prefilledProduct.productName || '',
+          product_name_ar: '',
           batch_number: '',
           expiry_date: '',
           quantity: 1,
@@ -144,7 +152,27 @@ export default function PurchaseNew() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const addItem = () => {
-    setItems((previous) => [...previous, { key: ++itemKeyCounter, product_id: '', product_name: '', batch_number: '', expiry_date: '', quantity: 1, cost_price: 0, sell_price: 0 }]);
+    setItems((previous) => [...previous, { key: ++itemKeyCounter, product_id: '', product_name: '', product_name_ar: '', batch_number: '', expiry_date: '', quantity: 1, cost_price: 0, sell_price: 0 }]);
+  };
+
+  const clearRowInvalid = (key: number) => setInvalidRows((prev) => {
+    if (!prev.has(key)) return prev;
+    const next = new Set(prev);
+    next.delete(key);
+    return next;
+  });
+
+  const selectRowProduct = (key: number, p: { id: string; name: string; name_ar?: string }) => {
+    setItems((prev) => prev.map((it) => it.key === key
+      ? { ...it, product_id: p.id, product_name: p.name, product_name_ar: p.name_ar ?? '' }
+      : it));
+    clearRowInvalid(key);
+  };
+
+  const clearRowProduct = (key: number) => {
+    setItems((prev) => prev.map((it) => it.key === key
+      ? { ...it, product_id: '', product_name: '', product_name_ar: '' }
+      : it));
   };
 
   const removeItem = (key: number) => {
@@ -320,7 +348,7 @@ export default function PurchaseNew() {
                         onClick={() => selectProduct(p)}
                         className="w-full text-right px-4 py-2.5 text-sm hover:bg-primary-50 border-b border-ivory-border last:border-0"
                       >
-                        <span className="font-medium text-ink-main">{p.name}</span>
+                        <span className="font-medium text-ink-main">{productLabel(p.name_ar, p.name)}</span>
                         {p.barcode && <span className="text-xs text-ink-muted ms-2">{p.barcode}</span>}
                       </button>
                     ))
@@ -357,10 +385,14 @@ export default function PurchaseNew() {
                         : 'hover:bg-ivory-muted'
                     }`}>
                       <td className="px-3 py-2">
-                        <select value={item.product_id} onChange={(event) => updateItem(item.key, 'product_id', event.target.value)} className="app-input w-full px-3 py-2.5 text-sm text-ink-main focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
-                          <option value="">{t('purchases.selectProduct')}</option>
-                          {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-                        </select>
+                        {item.product_id ? (
+                          <div className="flex items-center justify-between gap-2 rounded-xl border border-ivory-border bg-ivory-muted px-3 py-2">
+                            <span className="truncate text-sm font-medium text-ink-main">{productLabel(item.product_name_ar, item.product_name)}</span>
+                            <button type="button" onClick={() => clearRowProduct(item.key)} className="shrink-0 text-xs text-ink-muted hover:text-status-danger" title={t('purchases.selectProduct')}>✕</button>
+                          </div>
+                        ) : (
+                          <ProductSearchBox branchId={branchId} onPick={(p) => selectRowProduct(item.key, p)} placeholder={t('purchases.selectProduct')} />
+                        )}
                       </td>
                       <td className="px-3 py-2"><input type="text" value={item.batch_number} onChange={(event) => updateItem(item.key, 'batch_number', event.target.value)} className="app-input w-full px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" /></td>
                       <td className="px-3 py-2"><input type="date" min={today} value={item.expiry_date} onChange={(event) => updateItem(item.key, 'expiry_date', event.target.value)} className="app-input w-full px-3 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" /></td>

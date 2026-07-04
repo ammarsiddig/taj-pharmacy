@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import {
   getStorageLocations, transferStock, searchProductsPos,
 } from '../../api';
 import type { StorageLocationFull } from '../../types';
 import Toast from '../../components/ui/Toast';
+import { productLabel } from '../../utils/productLabel';
 
 interface Props {
   branchId: string;
@@ -48,6 +49,7 @@ export default function TransferTab({ branchId }: Props) {
 
   const handleTransfer = async () => {
     if (!selectedProduct || !fromLoc || !toLoc || !quantity) return;
+    if (fromLoc === toLoc) return;
     const qty = parseInt(quantity, 10);
     if (isNaN(qty) || qty <= 0) return;
     setSaving(true);
@@ -63,6 +65,10 @@ export default function TransferTab({ branchId }: Props) {
       setSaving(false);
     }
   };
+
+  const sameLoc = !!fromLoc && fromLoc === toLoc;
+  const fromLocName = (() => { const l = locations.find(x => x.id === fromLoc); return l ? (l.name_ar || l.name) : ''; })();
+  const toLocName = (() => { const l = locations.find(x => x.id === toLoc); return l ? (l.name_ar || l.name) : ''; })();
 
   const inp = 'app-input w-full px-3 py-2.5 text-sm';
 
@@ -88,8 +94,8 @@ export default function TransferTab({ branchId }: Props) {
                     <ul>
                       {productResults.map(p => (
                         <li key={p.id}>
-                          <button className="w-full px-3 py-2 text-start text-sm hover:bg-ivory-muted" onClick={() => { setSelectedProduct({ id: p.id, name: p.trade_name_ar || p.trade_name }); setProductSearch(''); setProductResults([]); }}>
-                            {p.trade_name_ar || p.trade_name}
+                          <button className="w-full px-3 py-2 text-start text-sm hover:bg-ivory-muted" onClick={() => { setSelectedProduct({ id: p.id, name: productLabel(p.trade_name_ar, p.trade_name) }); setProductSearch(''); setProductResults([]); }}>
+                            {productLabel(p.trade_name_ar, p.trade_name)}
                           </button>
                         </li>
                       ))}
@@ -105,20 +111,35 @@ export default function TransferTab({ branchId }: Props) {
           )}
         </div>
 
-        {/* From / To locations */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-muted">{t('warehouse.transfer.from')}</label>
-            <select className={inp} value={fromLoc} onChange={e => setFromLoc(e.target.value)}>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name_ar || l.name}</option>)}
-            </select>
+        {/* From / To locations — direction made unmistakable */}
+        <div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-bold text-ink-main">{t('warehouse.transfer.from')}</label>
+              <select className={`${inp} border-status-danger/40`} value={fromLoc} onChange={e => setFromLoc(e.target.value)}>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name_ar || l.name}</option>)}
+              </select>
+            </div>
+            <div className="mb-2 flex h-10 w-8 shrink-0 items-center justify-center text-primary-600">
+              <ArrowLeft size={22} />
+            </div>
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-bold text-ink-main">{t('warehouse.transfer.to')}</label>
+              <select className={`${inp} border-status-success/40`} value={toLoc} onChange={e => setToLoc(e.target.value)}>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name_ar || l.name}</option>)}
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-muted">{t('warehouse.transfer.to')}</label>
-            <select className={inp} value={toLoc} onChange={e => setToLoc(e.target.value)}>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name_ar || l.name}</option>)}
-            </select>
-          </div>
+          {fromLoc && toLoc && !sameLoc && (
+            <div className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-primary-50 px-3 py-2 text-sm text-ink-main">
+              <span className="font-semibold">{fromLocName}</span>
+              <ArrowLeft size={16} className="text-primary-600" />
+              <span className="font-semibold">{toLocName}</span>
+            </div>
+          )}
+          {sameLoc && (
+            <p className="mt-2 text-xs font-medium text-status-danger">لا يمكن أن يكون موقع المصدر والوجهة متطابقين</p>
+          )}
         </div>
 
         {/* Quantity */}
@@ -128,7 +149,7 @@ export default function TransferTab({ branchId }: Props) {
         </div>
 
         <button
-          disabled={saving || !selectedProduct || !fromLoc || !toLoc || !quantity}
+          disabled={saving || !selectedProduct || !fromLoc || !toLoc || !quantity || sameLoc}
           onClick={handleTransfer}
           className="flex items-center justify-center gap-2 rounded-xl bg-[#0FA3A6] py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-[#0D8B8D] transition-colors"
         >

@@ -18,6 +18,8 @@ export interface TenantSettings {
   max_branches: number;
   max_users: number;
   feature_flags: number;
+  /** TASK-939: SDG-piasters per 1 USD (0 = exchange-rate pricing off). */
+  usd_rate_piasters: number;
 }
 
 export interface TenantSettingsUpdate {
