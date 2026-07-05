@@ -516,16 +516,19 @@ pub fn get_session_history(
             idx += 1;
         }
     }
+    // Compare on date boundaries: opened_at is a full ISO timestamp, date_from/
+    // date_to are bare dates. A raw `opened_at <= '2026-07-04'` string-compares
+    // and drops every session opened *today* (TASK-942).
     if let Some(ref df) = date_from {
         if !df.is_empty() {
-            sql.push_str(&format!(" AND ps.opened_at >= ?{}", idx));
+            sql.push_str(&format!(" AND DATE(ps.opened_at) >= DATE(?{})", idx));
             pv.push(Box::new(df.clone()));
             idx += 1;
         }
     }
     if let Some(ref dt) = date_to {
         if !dt.is_empty() {
-            sql.push_str(&format!(" AND ps.opened_at <= ?{}", idx));
+            sql.push_str(&format!(" AND DATE(ps.opened_at) <= DATE(?{})", idx));
             pv.push(Box::new(dt.clone()));
             let _ = idx;
         }

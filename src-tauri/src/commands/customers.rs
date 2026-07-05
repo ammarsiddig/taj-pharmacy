@@ -517,9 +517,11 @@ pub fn get_customer_statement(
     ];
     let mut idx = 3;
 
+    // `date` aliases created_at (a full ISO timestamp); compare on date boundaries
+    // so a bare date_to like '2026-07-04' still includes rows created today (TASK-942).
     if let Some(ref df) = date_from {
         if !df.is_empty() {
-            sql.push_str(&format!(" WHERE date >= ?{}", idx));
+            sql.push_str(&format!(" WHERE DATE(date) >= DATE(?{})", idx));
             pv.push(Box::new(df.clone()));
             idx += 1;
         }
@@ -527,7 +529,7 @@ pub fn get_customer_statement(
     if let Some(ref dt) = date_to {
         if !dt.is_empty() {
             let keyword = if date_from.as_ref().map_or(true, |s| s.is_empty()) { " WHERE" } else { " AND" };
-            sql.push_str(&format!("{} date <= ?{}", keyword, idx));
+            sql.push_str(&format!("{} DATE(date) <= DATE(?{})", keyword, idx));
             pv.push(Box::new(dt.clone()));
             let _ = idx;
         }

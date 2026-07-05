@@ -3576,6 +3576,23 @@ New keys under `pos.*`: `receiptLogoSection`, `receiptLogoPosition`, `receiptLog
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
+### 2026-07-04 — Claude Code — TASK-942 (v0.2.25) — Fix sync param-count abort + same-day date-filter
+- **Status:** DONE. `cargo check` clean, `tsc` clean, `vite build` clean.
+- **Branch:** `fix/task-942-sync-params-datefilter` off `main` (v0.2.24). Critical hotfix → takes the next patch **v0.2.25**. Note: TASK-941 (payment methods, open PR #11) also carries 0.2.25 but is non-urgent — it should rebase onto this and bump to **0.2.26**. Merge this fix first.
+- **Bug A — sync aborts on parameter-count mismatch (`cloud_sync_snapshot.rs`):**
+  - Regression exposed by TASK-940: `query_table_rows` unconditionally bound `params![tenant_id, branch_id]` (2 params), but the `users`, `branches`, and `audit_log` snapshot queries reference only `?1`. SQLite → `Wrong number of parameters passed to query. Got 2, needed 1`. Before TASK-940 this error was swallowed (returned `[]`, silently dropping those tables); after TASK-940 it propagates → **the whole sync aborted at the first table (`users`)** with `فشل المزامنة`. So the shipped v0.2.24 could not sync at all.
+  - **Fix:** bind by `stmt.parameter_count()` — `>= 2` → `[tenant_id, branch_id]`, else `[tenant_id]` — via a `Vec<&dyn ToSql>` slice. Audited all 23 `push_all_tables` queries: 1-param = `users`, `branches`, `audit_log`; the other 20 use `?1`+`?2` (`?1`=tenant, `?2`=branch consistently). Fix is self-correcting for every query.
+  - Added regression test `task942_param_binding_tests::binds_param_count_from_query`. (Note: the lib **test target** has a *pre-existing* compile error — `CloudSyncSchedulerConfig` is private in `cloud_sync_tests.rs` — so `cargo test` can't run yet; not touched here.)
+- **Bug B — same-day records hidden by date filter:** full ISO timestamp columns were string-compared against bare `date_to` (e.g. `opened_at <= '2026-07-04'` excludes anything opened today). Fixed to date-boundary comparisons (`DATE(col) >= DATE(?)` / `DATE(col) <= DATE(?)`):
+  - `pos.rs get_session_history` (`ps.opened_at`).
+  - `customers.rs` customer statement (`date` alias over `created_at`).
+  - `suppliers.rs` supplier statement (`date` alias over `confirmed_at`/`payment_date`).
+  - **Audited the rest, left as-is (already correct):** `pos_invoice.rs`, `reports_tax.rs`, `warehouse.rs` movements, `reports_pl.rs`, `reports_sales.rs` already wrap in `DATE()`. `expenses.rs`/`purchases_invoices.rs` filter `expense_date`/`invoice_date`, which are bare `type="date"` values (bare-vs-bare compare is correct, and both columns are indexed — wrapping would defeat the index). `accounts.rs` transactions already builds its upper bound as `{date}T23:59:59Z` (works).
+- **Verified (live cloud, tenant Rahma):**
+  - Bug A: reproduced the exact error (2 binds → `Incorrect number of bindings`; 1 bind → OK, 2 users). Live full 23-table batch → `success=True`, `totalUpserted=42` incl. `users:2`, `branches:1` (the previously-aborting `?1` tables).
+  - Bug B: on a temp DB copy, a session opened today is **excluded** by the old filter and **included** by the fixed `DATE()` filter.
+  - Mirror: added a test customer → sync → present in cloud `snapshot_customers`; soft-delete + `deletedIds` sync → removed (cloud count `0`). Test rows cleaned up.
+
 ### 2026-07-04 — Claude Code — TASK-940 (v0.2.24) — Fix broken desktop→cloud sync + full mirror + clean-slate wipe
 - **Status:** DONE
 - **Root cause of "فشل المزامنة" (captured live):** the `customers` snapshot query in `cloud_sync_snapshot.rs` had a duplicated `is_active, updated_at` fragment. SQLite parsed `updated_at is_active` as an *implicit alias*, so the row sent the `updated_at` **timestamp** as the boolean `is_active`. The cloud batch (one transaction for all tables) rejected it: `invalid input syntax for type boolean: "2026-07-04T11:17:25.332Z"` → 500 → every sync failed whenever the tenant had ≥1 customer. Reproduced against the live cloud before fixing.

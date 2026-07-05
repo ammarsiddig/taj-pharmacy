@@ -612,16 +612,18 @@ pub fn get_supplier_statement(
     ];
     let mut idx = 3;
 
+    // `date` aliases confirmed_at/payment_date (full ISO timestamps); compare on
+    // date boundaries so a bare date_to still includes rows dated today (TASK-942).
     if let Some(ref df) = date_from {
         if !df.is_empty() {
-            sql.push_str(&format!(" AND date >= ?{}", idx));
+            sql.push_str(&format!(" AND DATE(date) >= DATE(?{})", idx));
             pv.push(Box::new(df.clone()));
             idx += 1;
         }
     }
     if let Some(ref dt) = date_to {
         if !dt.is_empty() {
-            sql.push_str(&format!(" AND date <= ?{}", idx));
+            sql.push_str(&format!(" AND DATE(date) <= DATE(?{})", idx));
             pv.push(Box::new(dt.clone()));
             let _ = idx;
         }
