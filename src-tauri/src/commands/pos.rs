@@ -500,7 +500,7 @@ pub fn get_session_history(
     let mut sql = String::from(
         "SELECT ps.id, u.full_name, ps.opened_at, ps.closed_at, ps.sales_count,
                 ps.total_sales,
-                COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.session_id = ps.id AND r.deleted_at IS NULL), 0) as total_returns,
+                COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.session_id = ps.id), 0) as total_returns,
                 ps.opening_cash, ps.actual_cash, ps.cash_difference, ps.status
          FROM pos_sessions ps
          JOIN users u ON ps.cashier_id = u.id

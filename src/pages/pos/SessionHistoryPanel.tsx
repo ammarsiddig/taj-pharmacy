@@ -39,6 +39,12 @@ const formatDuration = (from: string, to?: string) => {
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
+const daysAgoStr = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+};
+
 const PAYMENT_METHODS = [
   { value: '', label: 'كل وسائل الدفع' },
   { value: 'cash', label: 'نقدي' },
@@ -52,10 +58,11 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
   // ─── State ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
 
   // Filters
-  const [dateFrom, setDateFrom] = useState(todayStr());
+  const [dateFrom, setDateFrom] = useState(daysAgoStr(6));
   const [dateTo, setDateTo] = useState(todayStr());
   const [cashierFilter, setCashierFilter] = useState(cashierId);
   const [paymentFilter, setPaymentFilter] = useState('');
@@ -78,6 +85,7 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
   // ─── Data loading ─────────────────────────────────────────────────────────
   const loadHistory = useCallback(async () => {
     setLoading(true);
+    setHistoryError(null);
     try {
       const rows = await api.getSessionHistory(
         branchId,
@@ -86,8 +94,12 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
         dateTo + 'T23:59:59',
       );
       setHistory(rows);
-    } catch {
-      // silent
+    } catch (err) {
+      // Surface the failure instead of swallowing it — a broken query here used
+      // to leave the panel silently empty (E2E issue #1).
+      console.error('getSessionHistory failed:', err);
+      setHistory([]);
+      setHistoryError(String(err));
     } finally {
       setLoading(false);
     }
@@ -273,7 +285,12 @@ export default function SessionHistoryPanel({ branchId, cashierId, onClose, onRe
         <div className="flex-1 flex overflow-hidden">
           {/* LEFT: sessions list */}
           <aside className="w-[380px] border-l border-ivory-border bg-white overflow-y-auto">
-            {loading && filteredHistory.length === 0 ? (
+            {historyError ? (
+              <div className="m-3 rounded-xl border border-status-danger/20 bg-status-danger-bg px-3 py-3 text-sm text-status-danger">
+                <div className="font-medium">تعذّر تحميل سجل الجلسات</div>
+                <div className="mt-1 text-xs break-words">{historyError}</div>
+              </div>
+            ) : loading && filteredHistory.length === 0 ? (
               <div className="text-center py-10 text-ink-muted text-sm">{t('common.loading')}</div>
             ) : filteredHistory.length === 0 ? (
               <EmptyState />
