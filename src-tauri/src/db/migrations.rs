@@ -1487,6 +1487,120 @@ pub fn run(conn: &Connection) -> Result<(), String> {
     ensure_column(&conn, "products", "price_usd_cents", "INTEGER NOT NULL DEFAULT 0")?;
     ensure_column(&conn, "products", "min_price_usd_cents", "INTEGER NOT NULL DEFAULT 0")?;
 
+    // TASK-943: void_sale reverses a sale by writing a stock_movements row with
+    // movement_type = 'void_sale' and an account_transactions row with
+    // transaction_type = 'sale_void'. Neither value was permitted by the original
+    // CHECK constraints, so every void threw "CHECK constraint failed". SQLite
+    // cannot ALTER a CHECK in place, so we use the same rename-recreate-copy
+    // pattern as TASK-926. Both rebuilds are idempotent (guarded on the CHECK text)
+    // and safe because no FK references either table.
+    let sm_needs_rebuild: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='stock_movements'
+             AND sql NOT LIKE '%void_sale%'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .ok()
+        .map(|_| true)
+        .unwrap_or(false);
+    if sm_needs_rebuild {
+        conn.execute_batch(
+            "BEGIN;
+            ALTER TABLE stock_movements RENAME TO stock_movements_old_943;
+            CREATE TABLE stock_movements (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                branch_id TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                batch_id TEXT NOT NULL,
+                movement_type TEXT NOT NULL
+                    CHECK(movement_type IN (
+                        'receive','sell','customer_return',
+                        'supplier_return','transfer_in','transfer_out',
+                        'adjust','dispose','opening_stock','void_sale'
+                    )),
+                quantity_change INTEGER NOT NULL,
+                quantity_before INTEGER NOT NULL,
+                quantity_after INTEGER NOT NULL,
+                reference_type TEXT,
+                reference_id TEXT,
+                notes TEXT,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                FOREIGN KEY (product_id) REFERENCES products(id),
+                FOREIGN KEY (batch_id) REFERENCES batches(id),
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            );
+            INSERT INTO stock_movements
+                (id, tenant_id, branch_id, product_id, batch_id, movement_type,
+                 quantity_change, quantity_before, quantity_after,
+                 reference_type, reference_id, notes, created_by, created_at, updated_at)
+            SELECT id, tenant_id, branch_id, product_id, batch_id, movement_type,
+                   quantity_change, quantity_before, quantity_after,
+                   reference_type, reference_id, notes, created_by, created_at,
+                   COALESCE(updated_at, '')
+            FROM stock_movements_old_943;
+            DROP TABLE stock_movements_old_943;
+            CREATE INDEX IF NOT EXISTS idx_movements_product ON stock_movements(product_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_movements_batch ON stock_movements(batch_id);
+            COMMIT;"
+        ).map_err(|e| format!("TASK-943 rebuild stock_movements: {}", e))?;
+    }
+
+    let at_needs_rebuild: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='account_transactions'
+             AND sql NOT LIKE '%sale_void%'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .ok()
+        .map(|_| true)
+        .unwrap_or(false);
+    if at_needs_rebuild {
+        conn.execute_batch(
+            "BEGIN;
+            ALTER TABLE account_transactions RENAME TO account_transactions_old_943;
+            CREATE TABLE account_transactions (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                account_id TEXT NOT NULL,
+                transaction_type TEXT NOT NULL
+                    CHECK(transaction_type IN (
+                        'sale_income','purchase_payment','expense',
+                        'customer_payment','supplier_payment',
+                        'customer_refund','opening_balance','adjustment','sale_void'
+                    )),
+                direction TEXT NOT NULL CHECK(direction IN ('in','out')),
+                amount INTEGER NOT NULL,
+                balance_before INTEGER NOT NULL,
+                balance_after INTEGER NOT NULL,
+                reference_type TEXT,
+                reference_id TEXT,
+                description TEXT,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                FOREIGN KEY (account_id) REFERENCES accounts(id)
+            );
+            INSERT INTO account_transactions
+                (id, tenant_id, account_id, transaction_type, direction,
+                 amount, balance_before, balance_after,
+                 reference_type, reference_id, description, created_by, created_at)
+            SELECT id, tenant_id, account_id, transaction_type, direction,
+                   amount, balance_before, balance_after,
+                   reference_type, reference_id, description, created_by, created_at
+            FROM account_transactions_old_943;
+            DROP TABLE account_transactions_old_943;
+            CREATE INDEX IF NOT EXISTS idx_acct_transactions_account ON account_transactions(account_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_account_transactions_tenant ON account_transactions(tenant_id);
+            COMMIT;"
+        ).map_err(|e| format!("TASK-943 rebuild account_transactions: {}", e))?;
+    }
+
     log::info!("Database migrations completed successfully");
     Ok(())
 }
