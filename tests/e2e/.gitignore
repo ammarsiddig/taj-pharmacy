@@ -1,0 +1,6 @@
+# E2E harness — do not commit local binaries, deps, or run artifacts
+node_modules/
+.drivers/
+test-results/
+playwright-report/
+*.log
