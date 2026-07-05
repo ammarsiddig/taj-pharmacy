@@ -1,14 +1,20 @@
 {
   "name": "pms-pharmacy-v4",
   "private": true,
-  "version": "0.2.25",
+  "version": "0.2.27",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "e2e:setup": "npm --prefix tests/e2e install && npm --prefix tests/e2e run setup:driver",
+    "e2e:spike": "npm --prefix tests/e2e run spike",
+    "e2e:safe": "npm --prefix tests/e2e run safe",
+    "e2e:write": "npm --prefix tests/e2e run write",
+    "e2e:full": "npm --prefix tests/e2e run full",
+    "e2e:pwa": "npm --prefix tests/e2e run pwa"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
