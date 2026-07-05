@@ -4,6 +4,15 @@ import { query } from '../db.js';
 
 const router = Router();
 
+function coerceBranchFilter(branch) {
+  return typeof branch === 'string' && branch.trim() ? branch.trim() : '%';
+}
+
+function parseActivityLimit(rawLimit) {
+  const limit = parseInt(rawLimit, 10);
+  return Number.isFinite(limit) ? Math.min(limit, 200) : 50;
+}
+
 /**
  * GET /v1/dashboard
  * Returns the latest owner dashboard snapshot for the authenticated tenant.
@@ -145,49 +154,53 @@ router.get('/v1/dashboard/trend', requireAuthOrJwt, async (req, res) => {
  */
 router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const branch = req.query.branch || '%';
+    const limit = parseActivityLimit(req.query.limit);
+    const branch = coerceBranchFilter(req.query.branch);
     const type = req.query.type || 'all';
 
     const events = [];
 
-    // Sales (is_active = integer)
     if (type === 'all' || type === 'sale') {
       const r = await query(`
-        SELECT 'sale' AS event_type, sale_number AS ref,
-          cashier_name AS actor, total AS amount,
-          payment_method, payment_status AS status,
-          created_at AS occurred_at
+        SELECT 'sale_created' AS event_type,
+          'sale' AS entity_type,
+          id AS entity_id,
+          COALESCE(NULLIF('مبيعة ' || sale_number, 'مبيعة '), 'مبيعة') AS summary,
+          created_at AS occurred_at,
+          synced_at AS received_at
         FROM snapshot_pos_sales
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
           AND COALESCE(is_active, 1) != 0
+          AND COALESCE(is_return, false) = false
         ORDER BY created_at DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
     }
 
-    // Purchases — is_active = boolean
     if (type === 'all' || type === 'purchase') {
       const r = await query(`
-        SELECT 'purchase' AS event_type, invoice_number AS ref,
-          supplier_name AS actor, total AS amount,
-          payment_status AS status,
-          created_at AS occurred_at
+        SELECT 'purchase_confirmed' AS event_type,
+          'supplier_invoice' AS entity_type,
+          id AS entity_id,
+          COALESCE(NULLIF('شراء ' || invoice_number, 'شراء '), 'شراء مورد') AS summary,
+          COALESCE(updated_at, created_at) AS occurred_at,
+          synced_at AS received_at
         FROM snapshot_supplier_invoices
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
           AND COALESCE(is_active, true) = true
-        ORDER BY created_at DESC LIMIT $3
+        ORDER BY COALESCE(updated_at, created_at) DESC LIMIT $3
       `, [req.tenantId, branch, limit]);
       events.push(...r.rows);
     }
 
-    // Expenses — is_active = integer
     if (type === 'all' || type === 'expense') {
       const r = await query(`
-        SELECT 'expense' AS event_type, category AS ref,
-          created_by AS actor, amount,
-          payment_method AS status,
-          created_at AS occurred_at
+        SELECT 'expense_created' AS event_type,
+          'expense' AS entity_type,
+          id AS entity_id,
+          COALESCE(NULLIF('مصروف ' || category, 'مصروف '), 'مصروف') AS summary,
+          created_at AS occurred_at,
+          synced_at AS received_at
         FROM snapshot_expenses
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
           AND COALESCE(is_active, 1) != 0
@@ -196,13 +209,14 @@ router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
       events.push(...r.rows);
     }
 
-    // Returns — is_active = boolean
     if (type === 'all' || type === 'return') {
       const r = await query(`
-        SELECT 'return' AS event_type, id AS ref,
-          '' AS actor, COALESCE(total_amount, 0) AS amount,
-          COALESCE(status, '') AS status,
-          created_at AS occurred_at
+        SELECT 'return_created' AS event_type,
+          'return' AS entity_type,
+          id AS entity_id,
+          COALESCE(NULLIF('مرتجع ' || return_number, 'مرتجع '), 'مرتجع') AS summary,
+          created_at AS occurred_at,
+          synced_at AS received_at
         FROM snapshot_returns
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
           AND COALESCE(is_active, true) = true
@@ -211,13 +225,14 @@ router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
       events.push(...r.rows);
     }
 
-    // Products — is_active = boolean
     if (type === 'all' || type === 'product') {
       const r = await query(`
-        SELECT 'product' AS event_type, name_ar AS ref,
-          '' AS actor, sale_price AS amount,
-          COALESCE(category, '') AS status,
-          updated_at AS occurred_at
+        SELECT 'product_updated' AS event_type,
+          'product' AS entity_type,
+          id AS entity_id,
+          COALESCE(NULLIF('تحديث صنف ' || COALESCE(NULLIF(name_ar, ''), name), 'تحديث صنف '), 'تحديث صنف') AS summary,
+          updated_at AS occurred_at,
+          synced_at AS received_at
         FROM snapshot_products
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
           AND COALESCE(is_active, true) = true
@@ -226,13 +241,14 @@ router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
       events.push(...r.rows);
     }
 
-    // Customer payments — is_active = integer
     if (type === 'all' || type === 'payment') {
       const r = await query(`
-        SELECT 'payment' AS event_type, id AS ref,
-          created_by AS actor, amount,
-          COALESCE(payment_method, '') AS status,
-          created_at AS occurred_at
+        SELECT 'payment_received' AS event_type,
+          'customer_payment' AS entity_type,
+          id AS entity_id,
+          'سداد من عميل' AS summary,
+          created_at AS occurred_at,
+          synced_at AS received_at
         FROM snapshot_customer_payments
         WHERE tenant_id = $1 AND (branch_id LIKE $2)
           AND COALESCE(is_active, 1) != 0
@@ -241,7 +257,6 @@ router.get('/v1/activity', requireAuthOrJwt, async (req, res) => {
       events.push(...r.rows);
     }
 
-    // Sort all events by occurred_at descending and slice to limit
     events.sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
     const sliced = events.slice(0, limit);
 
