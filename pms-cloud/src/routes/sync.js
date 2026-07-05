@@ -321,15 +321,22 @@ router.post('/v1/sync/batch', authenticateToken, syncLimiter, async (req, res) =
           totalUpserted += rows.length;
         }
 
-        // Delete
+        // Delete (soft): mark the rows inactive.
+        // `is_active` is `boolean` on some snapshot tables and `integer` on others.
+        // A literal `false` only typechecks against boolean columns and throws
+        // "column is_active is of type integer but expression is of type boolean"
+        // on the integer ones — which 500s the whole batch whenever a sync carries
+        // a deletion for e.g. pos_sales/expenses/stock_movements (the intermittent
+        // sync failure). Bind it as an untyped parameter (value 0) so Postgres
+        // coerces it to whichever type the column actually is.
         if (deletedIds.length > 0) {
-          const deletePlaceholders = deletedIds.map((_, i) => `$${i + 3}`).join(',');
+          const deletePlaceholders = deletedIds.map((_, i) => `$${i + 4}`).join(',');
           const deleteSql = `
             UPDATE ${snapshotTable}
-            SET is_active = false, synced_at = NOW()
+            SET is_active = $3, synced_at = NOW()
             WHERE tenant_id = $1 AND branch_id = $2 AND id IN (${deletePlaceholders})
           `;
-          await client.query(deleteSql, [tenantId, branchId, ...deletedIds]);
+          await client.query(deleteSql, [tenantId, branchId, 0, ...deletedIds]);
           totalDeleted += deletedIds.length;
         }
 
