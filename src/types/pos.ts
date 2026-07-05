@@ -357,7 +357,7 @@ export interface InvoiceSaleCreateData {
   notes?: string;
   items: {
     product_id: string;
-    batch_id: string;
+    batch_id?: string;
     quantity: number;
     unit_price: number;
     unit_cost: number;

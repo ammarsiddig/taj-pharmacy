@@ -246,7 +246,7 @@ pub fn search_products_pos(
              FROM batches b
              LEFT JOIN storage_locations sl ON b.location_id = sl.id
              WHERE b.product_id = ?1 AND b.status = 'active' AND b.quantity_current > 0 AND b.deleted_at IS NULL
-             ORDER BY b.expiry_date ASC"
+             ORDER BY b.expiry_date ASC NULLS LAST, b.created_at ASC"
         ).map_err(|e| e.to_string())?;
 
         let batches: Vec<PosBatch> = bstmt.query_map(params![pid], |row| {
@@ -330,7 +330,7 @@ pub fn get_pos_substitutes(
              FROM batches b
              LEFT JOIN storage_locations sl ON b.location_id = sl.id
              WHERE b.product_id = ?1 AND b.status = 'active' AND b.quantity_current > 0 AND b.deleted_at IS NULL
-             ORDER BY b.expiry_date ASC"
+             ORDER BY b.expiry_date ASC NULLS LAST, b.created_at ASC"
         ).map_err(|e| e.to_string())?;
 
         let batches: Vec<PosBatch> = bstmt.query_map(params![pid], |row| {

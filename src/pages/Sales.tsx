@@ -15,10 +15,11 @@ import {
   getAuthState,
   writeAuditLog,
 } from '../api';
-import type { InvoiceSaleRow, CustomerRow, PosProduct, PosBatch, AccountRow, Sale } from '../types';
+import type { InvoiceSaleRow, CustomerRow, PosProduct, AccountRow, Sale } from '../types';
 import Button from '../components/ui/Button';
 import PrintInvoice from '../components/ui/PrintInvoice';
 import NumericInput from '../components/ui/NumericInput';
+import { buildProductCartKey, getProductAvailableQuantity, getProductFefoPreviewBatch, isProductCartKey } from '../utils/posSearch';
 
 function fmt(piasters: number) {
   return (piasters / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -112,19 +113,23 @@ function NewInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
     }, 250);
   }
 
-  function addToCart(product: PosProduct, batch: PosBatch) {
-    const existing = cart.find((line) => line.batch_id === batch.batch_id);
+  function addToCart(product: PosProduct) {
+    const batch = getProductFefoPreviewBatch(product);
+    if (!batch) return;
+    const totalAvailable = getProductAvailableQuantity(product);
+    const cartKey = buildProductCartKey(product.product_id);
+    const existing = cart.find((line) => line.batch_id === cartKey);
     if (existing) {
-      setCart((previous) => previous.map((line) => line.batch_id === batch.batch_id ? { ...line, quantity: Math.min(line.quantity + 1, line.max_qty) } : line));
+      setCart((previous) => previous.map((line) => line.batch_id === cartKey ? { ...line, quantity: Math.min(line.quantity + 1, line.max_qty) } : line));
     } else {
       setCart((previous) => [...previous, {
         product_id: product.product_id,
         product_name: product.product_name,
-        batch_id: batch.batch_id,
+        batch_id: cartKey,
         batch_number: batch.batch_number,
         expiry_date: batch.expiry_date,
         quantity: 1,
-        max_qty: batch.quantity_current,
+        max_qty: totalAvailable,
         unit_price: product.sale_price,
         unit_cost: batch.unit_cost,
       }]);
@@ -179,7 +184,7 @@ function NewInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         notes: notes || undefined,
         items: cart.map((line) => ({
           product_id: line.product_id,
-          batch_id: line.batch_id,
+          batch_id: isProductCartKey(line.batch_id) ? undefined : line.batch_id,
           quantity: line.quantity,
           unit_price: line.unit_price,
           unit_cost: line.unit_cost,
@@ -232,24 +237,29 @@ function NewInvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
                   <input ref={searchRef} value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder={t('sales.searchProduct')} className="app-input w-full px-4 py-3 text-sm text-ink-main placeholder:text-ink-placeholder focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" />
                   {searchResults.length > 0 ? (
                     <div className="absolute inset-x-0 top-full mt-2 max-h-72 overflow-y-auto rounded-2xl border border-ivory-border bg-white shadow-[var(--shadow-float)] z-20">
-                      {searchResults.map((product) => (
-                        <div key={product.product_id} className="border-b border-ivory-border last:border-0">
-                          {product.batches.map((batch) => (
-                            <button key={batch.batch_id} onClick={() => addToCart(product, batch)} className="w-full px-4 py-3 text-start hover:bg-ivory-muted">
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="text-start">
-                                  <div className="font-medium text-ink-main">{product.product_name}</div>
-                                  <div className="text-xs text-ink-muted mt-1">{batch.batch_number ? `#${batch.batch_number}` : '—'}{batch.expiry_date ? ` • ${fmtDate(batch.expiry_date)}` : ''}</div>
-                                </div>
-                                <div className="text-end">
-                                  <div className="font-semibold text-primary-700 tabular-nums">{fmt(product.sale_price)}</div>
-                                  <div className="text-xs text-ink-muted">{t('pos.available')}: {batch.quantity_current}</div>
-                                </div>
+                      {searchResults.map((product) => {
+                        const previewBatch = getProductFefoPreviewBatch(product);
+                        const totalAvailable = getProductAvailableQuantity(product);
+                        return (
+                          <button key={product.product_id} onClick={() => addToCart(product)} className="w-full border-b border-ivory-border px-4 py-3 text-start last:border-0 hover:bg-ivory-muted">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="text-start">
+                                <div className="font-medium text-ink-main">{product.product_name}</div>
+                                {previewBatch ? (
+                                  <div className="text-xs text-ink-muted mt-1">
+                                    {previewBatch.batch_number ? `#${previewBatch.batch_number}` : 'FEFO'}
+                                    {previewBatch.expiry_date ? ` • ${fmtDate(previewBatch.expiry_date)}` : ''}
+                                  </div>
+                                ) : null}
                               </div>
-                            </button>
-                          ))}
-                        </div>
-                      ))}
+                              <div className="text-end">
+                                <div className="font-semibold text-primary-700 tabular-nums">{fmt(product.sale_price)}</div>
+                                <div className="text-xs text-ink-muted">{t('pos.available')}: {totalAvailable}</div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : searchQuery.trim() && !searching ? (
                     <div className="absolute inset-x-0 top-full mt-2 rounded-2xl border border-ivory-border bg-white shadow-[var(--shadow-float)] z-20 px-4 py-3 text-center text-sm text-ink-muted">

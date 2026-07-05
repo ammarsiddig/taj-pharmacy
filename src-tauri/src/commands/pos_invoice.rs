@@ -97,9 +97,10 @@ pub fn create_invoice_sale(
 
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
+    let resolved = pos::resolve_fefo_items(&conn, &tenant_id, &items, &today)?;
     let mut item_costs: Vec<(String, i64, i64, i64)> = Vec::new(); // (name, unit_price, unit_cost, qty)
 
-    for item in &items {
+    for item in &resolved {
         let (qty, expiry_date, batch_status, unit_cost): (i64, Option<String>, String, i64) = conn.query_row(
             "SELECT quantity_current, expiry_date, status, unit_cost FROM batches WHERE id = ?1 AND tenant_id = ?2",
             params![item.batch_id, tenant_id],
@@ -149,7 +150,7 @@ pub fn create_invoice_sale(
         let sale_number = pos::next_sequence(&conn, &tenant_id, "sale_number")?;
         let sale_id = Uuid::new_v4().to_string();
 
-        let subtotal: i64 = items.iter().map(|i| i.quantity * i.unit_price).sum();
+        let subtotal: i64 = resolved.iter().map(|i| i.quantity * i.unit_price).sum();
         let total = subtotal - discount + tax_amount;
 
         if subtotal > 0 && discount > 0 {
@@ -183,7 +184,7 @@ pub fn create_invoice_sale(
                     payment_method, payment_status, notes],
         ).map_err(|e| format!("فشل إنشاء الفاتورة: {}", e))?;
 
-    for item in &items {
+    for item in &resolved {
             let item_id = Uuid::new_v4().to_string();
             let item_subtotal = item.quantity * item.unit_price;
 

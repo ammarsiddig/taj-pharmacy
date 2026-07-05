@@ -1,6 +1,7 @@
 import type { PosProduct, CartItem } from '../../types';
 import type { TFunction } from 'i18next';
 import { productLabel } from '../../utils/productLabel';
+import { getProductAvailableQuantity } from '../../utils/posSearch';
 
 interface SearchResultsProps {
   results: PosProduct[];
@@ -30,12 +31,10 @@ export default function SearchResults({
   return (
     <div className="absolute inset-x-4 top-full z-20 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-ivory-border bg-white shadow-[var(--shadow-float)]">
       {results.map((p, resultIdx) => {
-        const shelfBatches = p.batches.filter(b =>
-          !b.location_name ||
-          (!b.location_name.includes('ثلاجة') && !b.location_name.includes('مستودع'))
-        );
-        const backendStock = shelfBatches.reduce((s, b) => s + b.quantity_current, 0);
-        const cartQty = cart.find(c => c.product_id === p.product_id)?.quantity ?? 0;
+        const backendStock = getProductAvailableQuantity(p);
+        const cartQty = cart
+          .filter(c => c.product_id === p.product_id)
+          .reduce((sum, item) => sum + item.quantity, 0);
         const effectiveStock = Math.max(0, backendStock - cartQty);
         const outOfStock = effectiveStock === 0;
         const lowStock = !outOfStock && effectiveStock <= 5;
@@ -76,11 +75,7 @@ export default function SearchResults({
                 ) : (
                   <ul className="space-y-1">
                     {subsResults.map(sub => {
-                      const subShelfBatches = sub.batches.filter(b =>
-                        !b.location_name ||
-                        (!b.location_name.includes('ثلاجة') && !b.location_name.includes('مستودع'))
-                      );
-                      const subStock = subShelfBatches.reduce((s, b) => s + b.quantity_current, 0);
+                      const subStock = getProductAvailableQuantity(sub);
                       return (
                         <li key={sub.product_id}>
                           <button
