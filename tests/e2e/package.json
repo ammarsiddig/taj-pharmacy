@@ -1,0 +1,23 @@
+{
+  "name": "taj-pharmacy-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "End-to-end test harness for TAJ Pharmacy — drives the installed desktop exe (tauri-driver + WebdriverIO) and the Owner PWA (Playwright). Non-destructive, self-cleaning.",
+  "scripts": {
+    "spike": "node scripts/run-desktop.mjs spike",
+    "safe": "node scripts/run-desktop.mjs safe",
+    "write": "node scripts/run-desktop.mjs write",
+    "full": "node scripts/run-desktop.mjs full",
+    "pwa": "node scripts/run-pwa.mjs",
+    "setup:driver": "node scripts/setup-driver.mjs"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.49.1",
+    "@wdio/cli": "^9.5.1",
+    "@wdio/local-runner": "^9.5.1",
+    "@wdio/mocha-framework": "^9.5.1",
+    "@wdio/spec-reporter": "^9.5.1",
+    "webdriverio": "^9.5.1"
+  }
+}

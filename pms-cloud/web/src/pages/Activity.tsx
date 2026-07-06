@@ -6,6 +6,7 @@ import Skeleton from '../components/ui/Skeleton';
 const EVENT_ICON: Record<string, string> = {
   sale_created: 'receipt',
   sale_deleted: 'trash',
+  purchase_confirmed: 'document-text',
   return_created: 'refresh',
   product_created: 'package',
   product_updated: 'pencil',
@@ -16,6 +17,10 @@ const EVENT_ICON: Record<string, string> = {
   expense_created: 'credit-card',
   payment_received: 'banknotes',
 };
+
+function itemTimelineDate(item: ActivityItem): string {
+  return item.received_at || item.occurred_at;
+}
 
 const FILTER_TYPES = [
   { key: '', label: 'الكل' },
@@ -43,7 +48,7 @@ function formatDate(iso: string): string {
 function groupByDate(items: ActivityItem[]) {
   const map = new Map<string, ActivityItem[]>();
   for (const item of items) {
-    const key = new Date(item.received_at).toDateString();
+    const key = new Date(itemTimelineDate(item)).toDateString();
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(item);
   }
@@ -131,7 +136,7 @@ export default function Activity({ branch }: Props) {
                   <p className="mt-0.5 text-xs" style={{ color: 'var(--color-ink-muted)' }}>{item.entity_type}</p>
                 </div>
                 <span className="mt-0.5 shrink-0 rounded-lg px-2 py-0.5 text-xs tabular-nums" style={{ background: 'var(--color-surface-secondary)', color: 'var(--color-ink-muted)' }}>
-                  {formatTime(item.received_at)}
+                  {formatTime(itemTimelineDate(item))}
                 </span>
               </div>
             ))}

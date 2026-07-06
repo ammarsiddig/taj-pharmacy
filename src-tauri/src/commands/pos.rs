@@ -246,7 +246,7 @@ pub fn search_products_pos(
              FROM batches b
              LEFT JOIN storage_locations sl ON b.location_id = sl.id
              WHERE b.product_id = ?1 AND b.status = 'active' AND b.quantity_current > 0 AND b.deleted_at IS NULL
-             ORDER BY b.expiry_date ASC"
+             ORDER BY b.expiry_date ASC NULLS LAST, b.created_at ASC"
         ).map_err(|e| e.to_string())?;
 
         let batches: Vec<PosBatch> = bstmt.query_map(params![pid], |row| {
@@ -330,7 +330,7 @@ pub fn get_pos_substitutes(
              FROM batches b
              LEFT JOIN storage_locations sl ON b.location_id = sl.id
              WHERE b.product_id = ?1 AND b.status = 'active' AND b.quantity_current > 0 AND b.deleted_at IS NULL
-             ORDER BY b.expiry_date ASC"
+             ORDER BY b.expiry_date ASC NULLS LAST, b.created_at ASC"
         ).map_err(|e| e.to_string())?;
 
         let batches: Vec<PosBatch> = bstmt.query_map(params![pid], |row| {
@@ -500,7 +500,7 @@ pub fn get_session_history(
     let mut sql = String::from(
         "SELECT ps.id, u.full_name, ps.opened_at, ps.closed_at, ps.sales_count,
                 ps.total_sales,
-                COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.session_id = ps.id AND r.deleted_at IS NULL), 0) as total_returns,
+                COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.session_id = ps.id), 0) as total_returns,
                 ps.opening_cash, ps.actual_cash, ps.cash_difference, ps.status
          FROM pos_sessions ps
          JOIN users u ON ps.cashier_id = u.id

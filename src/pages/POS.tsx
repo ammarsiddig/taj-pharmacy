@@ -20,6 +20,7 @@ import PaymentPanel from './pos/PaymentPanel';
 import ReceiptCustomizerModal from './pos/ReceiptCustomizerModal';
 import RxModal from './pos/RxModal';
 import { clearWorkspaceState, createWorkspace, loadPosWorkspaceStateAsync, loadReceiptPreferences, loadWorkspaceState, saveReceiptPreferences, saveWorkspaceState, type PosCartWorkspace, type ReceiptPreferences } from './pos/workspaceState';
+import { buildProductCartKey, getProductAvailableQuantity, getProductFefoPreviewBatch, isProductCartKey } from '../utils/posSearch';
 
 export default function POS() {
   const { t } = useTranslation();
@@ -303,7 +304,7 @@ export default function POS() {
           e.preventDefault();
           const idx = highlightedResultIdx >= 0 ? highlightedResultIdx : 0;
           const p = searchResults[idx];
-          if (p) addToCart(p, 0);
+          if (p) addToCart(p);
           return;
         }
         if (e.key === 'Escape') {
@@ -383,8 +384,8 @@ export default function POS() {
       // Barcode auto-add: if query looks like a barcode (digits only) and exactly 1 result matched by exact barcode
       if (/^\d{6,}$/.test(q) && results.length === 1 && results[0].barcode === q) {
         const p = results[0];
-        if (p.batches.length > 0 && p.batches[0].quantity_current > 0) {
-          addToCart(p, 0);
+        if (getProductAvailableQuantity(p) > 0) {
+          addToCart(p);
         }
       }
     } catch {
@@ -397,30 +398,31 @@ export default function POS() {
     return () => clearTimeout(timer);
   }, [searchQuery, doSearch]);
 
-  const addToCart = (product: PosProduct, batchIdx: number) => {
-    const batch = product.batches[batchIdx];
+  const addToCart = (product: PosProduct) => {
+    const batch = getProductFefoPreviewBatch(product);
     if (!batch) return;
+    const totalAvailable = getProductAvailableQuantity(product);
+    const cartKey = buildProductCartKey(product.product_id);
     setCart(prev => {
-      const exists = prev.find(c => c.batch_id === batch.batch_id);
+      const exists = prev.find(c => c.batch_id === cartKey);
       if (exists) {
-        // Effective available = backend stock - already in cart
-        const effectiveMax = batch.quantity_current;
+        const effectiveMax = totalAvailable;
         if (exists.quantity >= effectiveMax) return prev;
-        return prev.map(c => c.batch_id === batch.batch_id
+        return prev.map(c => c.batch_id === cartKey
           ? { ...c, quantity: c.quantity + 1 }
           : c);
       }
-      if (batch.quantity_current < 1) return prev;
+      if (totalAvailable < 1) return prev;
       return [...prev, {
         product_id: product.product_id,
         product_name: product.product_name,
         product_name_ar: product.product_name_ar,
         is_prescription: product.is_prescription,
-        batch_id: batch.batch_id,
+        batch_id: cartKey,
         batch_number: batch.batch_number,
         expiry_date: batch.expiry_date,
         quantity: 1,
-        max_quantity: batch.quantity_current,
+        max_quantity: totalAvailable,
         unit_price: product.sale_price,
         unit_cost: batch.unit_cost,
         subtotal: product.sale_price,
@@ -557,7 +559,13 @@ export default function POS() {
         pharmacistOverrideBy: pharmacistOverrideBy || undefined,
         notes: saleNote.trim() || undefined,
         splitPayments,
-        items: cart.map(c => ({ product_id: c.product_id, batch_id: c.batch_id, quantity: c.quantity, unit_price: c.unit_price, unit_cost: c.unit_cost })),
+        items: cart.map(c => ({
+          product_id: c.product_id,
+          batch_id: isProductCartKey(c.batch_id) ? undefined : c.batch_id,
+          quantity: c.quantity,
+          unit_price: c.unit_price,
+          unit_cost: c.unit_cost,
+        })),
       });
       setReprintSale(sale);
       setTimeout(() => { api.printThermal(); setReprintSale(null); }, 200);
@@ -691,7 +699,7 @@ export default function POS() {
               subsResults={subsResults}
               subsLoading={subsLoading}
               highlightedResultIdx={highlightedResultIdx}
-              onAddToCart={(item) => addToCart(item, 0)}
+              onAddToCart={addToCart}
               onShowSubs={handleShowSubs}
               t={t}
               formatMoney={api.formatMoney}

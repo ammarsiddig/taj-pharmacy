@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { getLicenseInfo, checkLicenseOnline } from '../api';
 import type { LicenseInfo } from '../types';
 import { FEATURE_FLAGS } from './usePermission';
+import { useAuth } from './useAuth';
 
 const ALL_FLAGS = Object.values(FEATURE_FLAGS).reduce((a, b) => a | b, 0);
 
@@ -38,6 +39,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [licenseError, setLicenseError] = useState(false);
+  const { isAuthenticated, tenant_id, user } = useAuth();
 
   const refresh = useCallback(async () => {
     try {
@@ -57,6 +59,14 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
     const timer = setInterval(refresh, 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  // Re-fetch the license as soon as the auth identity changes (in-session login,
+  // user switch, or the startup session refresh) so licensed features unlock
+  // immediately instead of waiting up to 5 minutes for the next poll.
+  useEffect(() => {
+    if (isAuthenticated) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, tenant_id, user?.id]);
 
   useEffect(() => {
     const runOnlineCheck = async () => {
