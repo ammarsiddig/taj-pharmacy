@@ -24,15 +24,18 @@ const CONFIGS = {
   safe: 'config/wdio.safe.js',
   write: 'config/wdio.write.js',
   full: 'config/wdio.full.js',
+  exhaustive: 'config/wdio.exhaustive.js',
 };
+// Money-path suites that restore a pre-run snapshot at teardown.
+const RESTORE_SUITES = new Set(['full', 'exhaustive']);
 
 if (!CONFIGS[suite]) {
-  console.error(`Unknown suite "${suite}". Use: spike | safe | write | full`);
+  console.error(`Unknown suite "${suite}". Use: spike | safe | write | full | exhaustive`);
   process.exit(2);
 }
 
 // --- Gate: the money-path suites must be invoked deliberately ---------------
-if ((suite === 'write' || suite === 'full') && process.env.TAJ_E2E_WRITE_OK !== 'yes') {
+if ((suite === 'write' || RESTORE_SUITES.has(suite)) && process.env.TAJ_E2E_WRITE_OK !== 'yes') {
   console.error(
     '\nThe WRITE suite performs money-path flows (sale/purchase) against REAL data.\n' +
     'Each flow self-reverses (void/cancel) and only touches E2E_TEST_-tagged rows,\n' +
@@ -101,7 +104,7 @@ async function main() {
     console.log('\n[runner] teardown: sweeping E2E_TEST_ rows from the database…');
     try { await sweep({ del: true }); }
     catch (e) { console.error(`[runner] cleanup sweep failed: ${e.message}\n  Run manually: node desktop/helpers/cleanup.js --delete`); }
-  } else if (suite === 'full') {
+  } else if (RESTORE_SUITES.has(suite)) {
     // DEFINITIVE teardown: restore the pre-run snapshot. The app closed the
     // moment WebDriver ended, and nothing but the E2E ops touched the DB in
     // between, so restoring returns REAL data to its exact pre-run state —

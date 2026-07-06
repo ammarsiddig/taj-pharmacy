@@ -246,6 +246,38 @@ $env:TAJ_E2E_WRITE_OK="yes"; $env:TAJ_E2E_CLOSE_APP="1"
 npm run e2e:full        # from repo root: npm run e2e:full
 ```
 
+### `exhaustive` — full-surface + negative paths (money-path, gated — `TAJ_E2E_WRITE_OK=yes`)
+The widest suite: every screen and feature plus the edge and **negative** cases the
+day-in-the-life run skips, with **expiry** as the priority focus. Same engine as
+`full` (drives the app's own Tauri commands, DB is the reconciliation truth), same
+teardown (snapshot **restore** — verified pristine after).
+
+What it asserts, happy-path **and** failure-path:
+- **Expiry (priority):** expired-only stock cannot be sold (POS + invoice); FEFO sells
+  the earliest *valid* batch and never an expired one; past-expiry purchase rejected;
+  expiry-**exactly-today** boundary is inclusive (purchase + sale allowed); dispose an
+  expired batch (stock removed, `dispose` movement, value written off); expiry-report
+  buckets (7/30/60/90 + at-risk value); low-stock alerts.
+- **POS edge:** oversell, qty 0, negative qty, discount > total, below-cost/below-min,
+  split parts not summing, credit-limit boundary (exactly-at vs one-piaster-over),
+  return more than sold, park/hold cart round-trip.
+- **Money edge:** same-account transfer, over-transfer (overdraft), customer overpayment.
+- **Inventory edge:** same-location & over-qty transfer, stocktake discrepancy
+  adjustment, opening-stock gated by `setup_mode`.
+- **Validation:** duplicate barcode, empty required field, soft-delete preserves history.
+- **USD rate + tax**, **all settings/warehouse screens** load without a runtime error,
+  and a final **reconciliation** of cash/bank/stock against the operations.
+
+The report ends with an explicit **coverage checklist** (covered / partial / not-covered)
+so nothing is skipped silently — role-based permissions, auth lockout, plan-tier license
+gating, CSV import, and report CSV exports are called out as needing manual/supervised runs.
+
+```powershell
+$env:TAJ_DESKTOP_USER="admin"; $env:TAJ_DESKTOP_PASS="admin123"
+$env:TAJ_E2E_WRITE_OK="yes"; $env:TAJ_E2E_CLOSE_APP="1"
+npm run e2e:exhaustive        # from repo root: npm run e2e:exhaustive
+```
+
 ### `pwa` (read-only)
 - Logs into `pharmacy.taj.systems` as the real owner.
 - After a desktop sync, asserts recently-synced data appears (Products page

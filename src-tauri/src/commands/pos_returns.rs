@@ -43,6 +43,9 @@ pub fn create_return(
     ).map_err(|_| "الفاتورة غير موجودة".to_string())?;
 
     for item in &items {
+        if item.quantity <= 0 {
+            return Err(format!("الكمية المرتجعة غير صالحة ({}) — يجب أن تكون أكبر من صفر", item.quantity));
+        }
         let (orig_qty, already_returned): (i64, i64) = conn.query_row(
             "SELECT si.quantity,
                     COALESCE((SELECT SUM(ri.quantity) FROM return_items ri

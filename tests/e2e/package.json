@@ -9,6 +9,7 @@
     "safe": "node scripts/run-desktop.mjs safe",
     "write": "node scripts/run-desktop.mjs write",
     "full": "node scripts/run-desktop.mjs full",
+    "exhaustive": "node scripts/run-desktop.mjs exhaustive",
     "pwa": "node scripts/run-pwa.mjs",
     "setup:driver": "node scripts/setup-driver.mjs"
   },

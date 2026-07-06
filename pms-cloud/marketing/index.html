@@ -193,8 +193,8 @@
   <section id="download" class="section bg-white">
     <div class="max-w-lg mx-auto">
       <div class="card !p-8 sm:!p-10 text-center">
-        <!-- UPDATE VERSION HERE on each release -->
-        <span class="inline-block px-4 py-1 mb-4 text-sm font-bold text-white bg-[#0FA3A6] rounded-full">النسخة الحالية v0.2.21</span>
+        <!-- Version is filled in automatically from the latest GitHub release (see script below) -->
+        <span id="dl-version" class="inline-block px-4 py-1 mb-4 text-sm font-bold text-white bg-[#0FA3A6] rounded-full">النسخة الحالية</span>
         <div class="flex justify-center mb-4">
           <img src="/assets/taj-logo.svg" alt="TAJ Pharmacy" width="72" height="72" style="border-radius:16px;">
         </div>
@@ -202,10 +202,10 @@
         <div class="flex flex-wrap justify-center gap-2 mb-6">
           <span class="px-3 py-1.5 text-xs font-medium bg-[#F4FBFB] text-[#3D6567] rounded-full border border-[#D3E8E9]">ويندوز 10 أو أحدث</span>
           <span class="px-3 py-1.5 text-xs font-medium bg-[#F4FBFB] text-[#3D6567] rounded-full border border-[#D3E8E9]">64-bit</span>
-          <span class="px-3 py-1.5 text-xs font-medium bg-[#F4FBFB] text-[#3D6567] rounded-full border border-[#D3E8E9]">~5 ميجابايت</span>
+          <span id="dl-size" class="px-3 py-1.5 text-xs font-medium bg-[#F4FBFB] text-[#3D6567] rounded-full border border-[#D3E8E9]">~5 ميجابايت</span>
         </div>
-        <!-- Always points to the newest published installer on GitHub Releases -->
-        <a href="https://github.com/ammarsiddig/taj-pharmacy/releases/latest" target="_blank" rel="noopener" class="btn-primary w-full !py-3.5 text-base">
+        <!-- Falls back to the releases page; script upgrades it to a direct .exe link + fills version/size -->
+        <a id="dl-btn" href="https://github.com/ammarsiddig/taj-pharmacy/releases/latest" target="_blank" rel="noopener" class="btn-primary w-full !py-3.5 text-base">
           تحميل أحدث نسخة
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </a>
@@ -279,6 +279,23 @@
   window.addEventListener('scroll', function () {
     header && header.classList.toggle('nav-scrolled', window.scrollY > 10);
   });
+
+  // Auto-fill the download card from the latest GitHub release so it never goes stale.
+  // If the request fails (offline / rate-limited), the hardcoded fallbacks stay as-is.
+  fetch('https://api.github.com/repos/ammarsiddig/taj-pharmacy/releases/latest')
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function (rel) {
+      var ver = document.getElementById('dl-version');
+      if (ver && rel.tag_name) ver.textContent = 'النسخة الحالية ' + rel.tag_name;
+      var exe = (rel.assets || []).find(function (a) { return /setup\.exe$/i.test(a.name); });
+      if (exe) {
+        var btn = document.getElementById('dl-btn');
+        if (btn) btn.setAttribute('href', exe.browser_download_url);
+        var size = document.getElementById('dl-size');
+        if (size && exe.size) size.textContent = '~' + Math.round(exe.size / 1048576) + ' ميجابايت';
+      }
+    })
+    .catch(function () { /* keep fallbacks */ });
 </script>
 </body>
 </html>
