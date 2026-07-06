@@ -95,10 +95,23 @@ pub fn create_invoice_sale(
     license_guard::require_feature(&conn, &tenant_id, FLAG_POS)?;
     guard::require_access(&conn, &cashier_id, "pos.sell", guard::Level::Write)?;
 
+    // Reject zero/negative line quantities before FEFO resolution (which would
+    // otherwise silently collapse a qty<=0 line and create an empty invoice).
+    for item in &items {
+        if item.quantity <= 0 {
+            let pname: String = conn.query_row(
+                "SELECT trade_name FROM products WHERE id = ?1 AND tenant_id = ?2",
+                params![item.product_id, tenant_id],
+                |row| row.get(0),
+            ).unwrap_or_else(|_| item.product_id.clone());
+            return Err(format!("الكمية غير صالحة للصنف {} — يجب أن تكون أكبر من صفر", pname));
+        }
+    }
+
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
     let resolved = pos::resolve_fefo_items(&conn, &tenant_id, &items, &today)?;
-    let mut item_costs: Vec<(String, i64, i64, i64)> = Vec::new(); // (name, unit_price, unit_cost, qty)
+    let mut item_costs: Vec<(String, i64, i64, i64, i64)> = Vec::new(); // (name, unit_price, unit_cost, min_sale_price, qty)
 
     for item in &resolved {
         let (qty, expiry_date, batch_status, unit_cost): (i64, Option<String>, String, i64) = conn.query_row(
@@ -136,12 +149,12 @@ pub fn create_invoice_sale(
             return Err(format!("كمية غير كافية: {}", pname));
         }
 
-        let pname: String = conn.query_row(
-            "SELECT trade_name FROM products WHERE id = ?1",
+        let (pname, min_sale_price): (String, i64) = conn.query_row(
+            "SELECT trade_name, min_sale_price FROM products WHERE id = ?1",
             params![item.product_id],
-            |row| row.get(0),
-        ).unwrap_or_else(|_| item.product_id.clone());
-        item_costs.push((pname, item.unit_price, unit_cost, item.quantity));
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap_or_else(|_| (item.product_id.clone(), 0));
+        item_costs.push((pname, item.unit_price, unit_cost, min_sale_price, item.quantity));
     }
 
     conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
@@ -153,15 +166,19 @@ pub fn create_invoice_sale(
         let subtotal: i64 = resolved.iter().map(|i| i.quantity * i.unit_price).sum();
         let total = subtotal - discount + tax_amount;
 
-        if subtotal > 0 && discount > 0 {
-            let discount_rate = 1.0 - discount as f64 / subtotal as f64;
-            for (pname, unit_price, unit_cost, _qty) in &item_costs {
-                if *unit_cost > 0 {
-                    let discounted_price = (*unit_price as f64 * discount_rate) as i64;
-                    if discounted_price < *unit_cost {
-                        return Err(format!("صنف {} سيُباع بـ {} ج.س وهو أقل من سعر التكلفة ({} ج.س). قلل من الخصم.", pname, discounted_price, unit_cost));
-                    }
+        // Margin floor — runs with OR without a discount (identical rule to the
+        // POS create_sale path): effective per-unit price must be >= min_sale_price,
+        // falling back to unit_cost when min_sale_price is 0/unset.
+        let discount_rate = if subtotal > 0 { 1.0 - discount as f64 / subtotal as f64 } else { 1.0 };
+        for (pname, unit_price, unit_cost, min_sale_price, _qty) in &item_costs {
+            let floor = if *min_sale_price > 0 { *min_sale_price } else { *unit_cost };
+            if floor <= 0 { continue; }
+            let effective_price = (*unit_price as f64 * discount_rate) as i64;
+            if effective_price < floor {
+                if *unit_cost > 0 && effective_price < *unit_cost {
+                    return Err(format!("صنف {} سيُباع بـ {} ج.س وهو أقل من سعر التكلفة ({} ج.س). قلل من الخصم.", pname, effective_price, unit_cost));
                 }
+                return Err(format!("صنف {} سيُباع بـ {} ج.س وهو أقل من الحد الأدنى للبيع ({} ج.س).", pname, effective_price, min_sale_price));
             }
         }
 

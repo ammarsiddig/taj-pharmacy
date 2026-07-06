@@ -67,6 +67,20 @@ pub fn create_sale(
         return Err("تفاصيل الدفع المقسّم غير صالحة".into());
     }
 
+    // Reject zero/negative line quantities up front. FEFO resolution silently
+    // collapses a qty<=0 line to nothing, so this must run on the raw input
+    // (before resolve_fefo_items) or the empty/negative sale slips through.
+    for item in &items {
+        if item.quantity <= 0 {
+            let pname: String = conn.query_row(
+                "SELECT trade_name FROM products WHERE id = ?1 AND tenant_id = ?2",
+                params![item.product_id, tenant_id],
+                |row| row.get(0),
+            ).unwrap_or_else(|_| item.product_id.clone());
+            return Err(format!("الكمية غير صالحة للصنف {} — يجب أن تكون أكبر من صفر", pname));
+        }
+    }
+
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let resolved = resolve_fefo_items(&conn, &tenant_id, &items, &today)?;
 
@@ -91,7 +105,7 @@ pub fn create_sale(
         }
     }
 
-    let mut item_costs: Vec<(String, i64, i64, i64)> = Vec::new(); // (product_name, unit_price, unit_cost, quantity)
+    let mut item_costs: Vec<(String, i64, i64, i64, i64)> = Vec::new(); // (product_name, unit_price, unit_cost, min_sale_price, quantity)
 
     for item in &resolved {
         let (qty, expiry_date, batch_status, unit_cost): (i64, Option<String>, String, i64) = conn.query_row(
@@ -129,12 +143,12 @@ pub fn create_sale(
             return Err(format!("كمية غير كافية: {}", pname));
         }
 
-        let pname: String = conn.query_row(
-            "SELECT trade_name FROM products WHERE id = ?1",
+        let (pname, min_sale_price): (String, i64) = conn.query_row(
+            "SELECT trade_name, min_sale_price FROM products WHERE id = ?1",
             params![item.product_id],
-            |row| row.get(0),
-        ).unwrap_or_else(|_| item.product_id.clone());
-        item_costs.push((pname, item.unit_price, unit_cost, item.quantity));
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap_or_else(|_| (item.product_id.clone(), 0));
+        item_costs.push((pname, item.unit_price, unit_cost, min_sale_price, item.quantity));
     }
 
     conn.execute("BEGIN", []).map_err(|e| e.to_string())?;
@@ -149,15 +163,20 @@ pub fn create_sale(
         let tax_amount = tax_percent.map(|tp| after_discount * tp / 10000).unwrap_or(0);
         let total = after_discount + tax_amount;
 
-        if subtotal > 0 && disc_amount > 0 {
-            let discount_rate = 1.0 - disc_amount as f64 / subtotal as f64;
-            for (pname, unit_price, unit_cost, _qty) in &item_costs {
-                if *unit_cost > 0 {
-                    let discounted_price = (*unit_price as f64 * discount_rate) as i64;
-                    if discounted_price < *unit_cost {
-                        return Err(format!("صنف {} سيُباع بـ {} ج.س وهو أقل من سعر التكلفة ({} ج.س). قلل من الخصم.", pname, discounted_price, unit_cost));
-                    }
+        // Margin floor — runs with OR without a discount. Each line's effective
+        // per-unit price (after its share of any cart discount) must be >= the
+        // product's min_sale_price, falling back to unit_cost when min_sale_price
+        // is 0/unset. A low unit_price entered with no discount is caught here too.
+        let discount_rate = if subtotal > 0 { 1.0 - disc_amount as f64 / subtotal as f64 } else { 1.0 };
+        for (pname, unit_price, unit_cost, min_sale_price, _qty) in &item_costs {
+            let floor = if *min_sale_price > 0 { *min_sale_price } else { *unit_cost };
+            if floor <= 0 { continue; }
+            let effective_price = (*unit_price as f64 * discount_rate) as i64;
+            if effective_price < floor {
+                if *unit_cost > 0 && effective_price < *unit_cost {
+                    return Err(format!("صنف {} سيُباع بـ {} ج.س وهو أقل من سعر التكلفة ({} ج.س). قلل من الخصم.", pname, effective_price, unit_cost));
                 }
+                return Err(format!("صنف {} سيُباع بـ {} ج.س وهو أقل من الحد الأدنى للبيع ({} ج.س).", pname, effective_price, min_sale_price));
             }
         }
 

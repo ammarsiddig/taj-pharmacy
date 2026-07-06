@@ -1,152 +1,155 @@
-# TAJ Pharmacy — Day-in-the-Life E2E Review
+# TAJ Pharmacy — Exhaustive E2E Review — screens, edges & negative paths (v0.2.27)
 
-_Generated 2026-07-05T18:58:28.559Z — driven against the installed `C:\Program Files\TAJ Pharmacy\app.exe` + Owner PWA._
+_Generated 2026-07-06T10:57:18.735Z — driven against the installed `C:\Program Files\TAJ Pharmacy\app.exe` + Owner PWA._
 
 ## Summary
 
 | Metric | Value |
 | --- | --- |
-| Steps passed | 54 / 56 |
-| Steps failed | 2 |
-| Reconciliation checks OK | 18 |
+| Steps passed | 64 / 64 |
+| Steps failed | 0 |
+| Reconciliation checks OK | 10 |
 | Reconciliation mismatches | 0 |
-| Bugs / discrepancies found | 4 |
+| Bugs / discrepancies found | 0 |
 
 ## Steps (in order)
 
 | # | Phase | Step | Result | Detail |
 | --- | --- | --- | --- | --- |
-| 1 | Suppliers | create supplier E2E_TEST_20260705185727_SUP1 | ✅ PASS | id=20c59646-eecf-439e-b079-a78e0e2ced74 |
-| 2 | Suppliers | create supplier E2E_TEST_20260705185727_SUP2 | ✅ PASS | id=bec124f3-b364-4bbc-8baf-8849be716761 |
-| 3 | Suppliers | suppliers appear in list | ✅ PASS | 2 found |
-| 4 | Customers | UI: credit-mode selector renders 3 modes | ✅ PASS |  |
-| 5 | Customers | create customer cash (limit=0) | ✅ PASS | credit_limit=0 |
-| 6 | Customers | create customer unlimited (limit=-1) | ✅ PASS | credit_limit=-1 |
-| 7 | Customers | create customer limit (limit=5000000) | ✅ PASS | credit_limit=5000000 |
-| 8 | Products | create product Paracetamol | ✅ PASS | id=d851b60d-804b-4e79-9b27-bd635c8ebf59 sale=100.00 SDG |
-| 9 | Products | create product Amoxicillin | ✅ PASS | id=7ed0b4d2-0129-4cb5-b94c-dea3aef833fe sale=250.00 SDG |
-| 10 | Products | create product Ibuprofen | ✅ PASS | id=64021c52-a01e-4eeb-8ffc-27bf6e9a9fba sale=150.00 SDG |
-| 11 | Products | products appear as one row each in Products search (UI) | ✅ PASS | 3 rows |
-| 12 | USD exchange rate (TASK-939) | USD rate feature check (skip if no anchored products) | ✅ PASS | no USD-anchored products — feature not exercised (prices unaffected as expected) |
-| 13 | Purchases | create + confirm purchase invoice (supplier #1, 3 lines, future expiry) | ✅ PASS | invoice=a05d88b6-d41f-4237-abc7-4994c2f4c336 total=18,600.00 SDG |
-| 14 | Purchases | stock increased by exact quantities + batches + receive movements | ✅ PASS | movements: receive |
-| 15 | Purchases | purchase line with PAST expiry is rejected (TASK-936) | ✅ PASS | rejected at confirm: لا يمكن استلام صنف منتهي الصلاحية: باراسيتامول (تاريخ الانته |
-| 16 | Purchases | partial supplier payment → balance = total − paid | ✅ PASS | paid=9,300.00 SDG balance=9,300.00 SDG |
-| 17 | Inventory / locations | transfer 20 of product A between locations → out/in movements | ✅ PASS | movements: receive,transfer_in,transfer_out |
-| 18 | Inventory / locations | UI: movements screen loads with Arabic type labels (TASK-938) | ✅ PASS |  |
-| 19 | Inventory / locations | reorder-alerts loads with no SQL error (TASK-938) | ✅ PASS | 2 low-stock rows |
-| 20 | Inventory / locations | stock adjustment (stocktake) records movement + new qty | ✅ PASS | item product 64021c52-a01e-4eeb-8ffc-27bf6e9a9fba: expected_pre=40 new_onhand=35 |
-| 21 | POS | open POS session | ✅ PASS | session=3f86a11a-8bbe-4b26-b8a8-30f069460fe6 |
-| 22 | POS | (a) cash sale of product A x2 | ✅ PASS | sale SAL-00004 total 200.00 SDG |
-| 23 | POS | (b) bank-transfer sale of product B x1 | ✅ PASS | sale SAL-00005 total 250.00 SDG |
-| 24 | POS | (c) credit sale to unlimited customer → balance increases | ✅ PASS | sale SAL-00006; balance 300.00 SDG |
-| 25 | POS | (d) credit sale to CASH-ONLY customer is blocked | ✅ PASS | blocked: هذا العميل نقدي فقط (لا يسمح بالائتمان) |
-| 26 | POS | (e) credit sale exceeding LIMIT (50,000) is blocked | ✅ PASS | blocked: تجاوز حد الائتمان المسموح به: الرصيد 0 + المبلغ 6000000 > الحد 5000000 |
-| 27 | POS | (f) split-payment sale (cash + bank) | ✅ PASS | sale SAL-00007 split 200.00 SDG+200.00 SDG |
-| 28 | POS | multi-location product: ONE row in POS search + FEFO depletion | ✅ PASS | search rows=1, early batch after=0 |
-| 29 | POS | Session History loads + lists this session (issue #3) | ❌ FAIL | get_session_history SQL error: no such column: r.deleted_at in SELECT ps.id, u.full_name, ps.opened_at, ps.closed_at, ps.sales_count,                 ps.total_sales,                 COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.session_id = ps.id AND r.deleted_at IS NULL), 0) as total_returns,                 ps.opening_cash, ps.actual_cash, ps.cash_difference, ps.status          FROM pos_sessions ps          JOIN users u ON ps.cashier_id = u.id          WHERE ps.tenant_id = ?1 AND ps.branch_id = ?2 AND DATE(ps.opened_at) >= DATE(?3) AND DATE(ps.opened_at) <= DATE(?4) ORDER BY ps.opened_at DESC at offset 195 |
-| 30 | Returns / voids | partial return of the cash sale → stock returns + refund | ✅ PASS | return recorded; stock 91→92 |
-| 31 | Returns / voids | void the credit sale → full reversal (stock + customer credit) | ❌ FAIL | void_sale failed: CHECK constraint failed: movement_type IN (                     'receive','sell','customer_return',  |
-| 32 | Invoice sales | create credit invoice to limited customer → appears in invoices + statement | ✅ PASS | invoice SAL-00009 total 300.00 SDG |
-| 33 | Customer payments | record customer payment → balance down, account up; statement correct | ✅ PASS | balance 300.00 SDG→150.00 SDG; running=150.00 SDG |
-| 34 | Money transfers | transfer cash→bank then bank→cash (self-reversing) | ✅ PASS | ±1,000.00 SDG cash↔bank |
-| 35 | Expenses | create expense from cash → account decreases | ✅ PASS | expense 500.00 SDG; cash 8,920.00 SDG→8,420.00 SDG |
-| 36 | Reports (reconciliation) | report loads with no error: sales | ✅ PASS | ok |
-| 37 | Reports (reconciliation) | report loads with no error: profit/loss | ✅ PASS | ok |
-| 38 | Reports (reconciliation) | report loads with no error: inventory | ✅ PASS | ok |
-| 39 | Reports (reconciliation) | report loads with no error: expiry | ✅ PASS | ok |
-| 40 | Reports (reconciliation) | report loads with no error: tax | ✅ PASS | ok |
-| 41 | Reports (reconciliation) | report loads with no error: customer credit | ✅ PASS | ok |
-| 42 | Reports (reconciliation) | report loads with no error: supplier aging | ✅ PASS | ok |
-| 43 | Reports (reconciliation) | report loads with no error: balance sheet | ✅ PASS | ok |
-| 44 | Reports (reconciliation) | RECONCILE: cash account == expected ledger | ✅ PASS | expected 8,420.00 SDG actual 8,420.00 SDG |
-| 45 | Reports (reconciliation) | RECONCILE: bank account == expected ledger | ✅ PASS | expected 450.00 SDG actual 450.00 SDG |
-| 46 | Sync | trigger full sync → no "فشل المزامنة" banner | ✅ PASS | synced 1 tables |
-| 47 | Teardown (reverse order) | void sale SAL-00008 | ✅ PASS | not voided (CHECK constraint failed: movement_type IN (       ) — may already be returned/voided |
-| 48 | Teardown (reverse order) | void sale SAL-00007 | ✅ PASS | not voided (CHECK constraint failed: movement_type IN (       ) — may already be returned/voided |
-| 49 | Teardown (reverse order) | void sale SAL-00006 | ✅ PASS | not voided (CHECK constraint failed: movement_type IN (       ) — may already be returned/voided |
-| 50 | Teardown (reverse order) | void sale SAL-00005 | ✅ PASS | not voided (CHECK constraint failed: movement_type IN (       ) — may already be returned/voided |
-| 51 | Teardown (reverse order) | void sale SAL-00004 | ✅ PASS | not voided (CHECK constraint failed: movement_type IN (       ) — may already be returned/voided |
-| 52 | Teardown (reverse order) | void invoice sale | ✅ PASS | not voided (CHECK constraint failed: movement_type IN (       ) |
-| 53 | Teardown (reverse order) | cancel purchase a05d88b6-d41f-4237-abc7-4994c2f4c336 | ✅ PASS | not reversed (لا يمكن إلغاء فاتورة تم دفع جزء منها أو كلها. يُرج) |
-| 54 | Teardown (reverse order) | cancel purchase dba41980-ed5d-4bcc-a1d5-8d59ccad7621 | ✅ PASS | not reversed (لا يمكن إلغاء فاتورة تم البيع منها) |
-| 55 | Teardown (reverse order) | delete expense | ✅ PASS | deleted |
-| 56 | Teardown (reverse order) | close POS session (teardown) | ✅ PASS | closed |
+| 1 | Re-verify prior findings (v0.2.27) | get_session_history no longer errors (was: no such column r.deleted_at) | ✅ PASS | OK — 2 rows (bug from v0.2.25 FIXED) |
+| 2 | Setup fixtures | create supplier | ✅ PASS | 01440d01-6f2b-4be6-9c57-2917da904336 |
+| 3 | Setup fixtures | create customer cash (limit=0) | ✅ PASS | id=c146b321-596c-48d5-b180-8bdf997e5240 |
+| 4 | Setup fixtures | create customer unlim (limit=-1) | ✅ PASS | id=26c1a023-ff47-4f67-9393-fe52595d8fed |
+| 5 | Setup fixtures | create customer limit (limit=50000) | ✅ PASS | id=32bfb4d9-03ff-455c-b1ea-86dfbbddc426 |
+| 6 | Setup fixtures | create product Paracetamol | ✅ PASS | ff06516a-15f7-4af9-83e5-affa391a5ce5 |
+| 7 | Setup fixtures | create product Amoxicillin | ✅ PASS | b596afd0-4e89-4e6f-b605-1e046ed5e0f5 |
+| 8 | Setup fixtures | create product ExpiredOnly | ✅ PASS | ebcdbe81-becc-444b-9990-70d272c0e75c |
+| 9 | Setup fixtures | create product TodayExpiry | ✅ PASS | f6c810e4-a862-4556-8af5-d8db7a54485f |
+| 10 | Setup fixtures | purchase stock: A x100 @ shelf, B x50 @ shelf (future expiry) | ✅ PASS |  |
+| 11 | Setup fixtures | open POS session | ✅ PASS | d44cf40d-a42f-43cb-947c-e4c3b09a42cb |
+| 12 | EXPIRY (priority) | fixture: product X gets ONLY an expired batch (qty 20) | ✅ PASS | expired batch qty=20, product stock=20 |
+| 13 | EXPIRY (priority) | POS sale of expired-only product is blocked/warned | ✅ PASS | blocked: كمية غير كافية في المخزون: E2E_TEST_20260706105625_P_X |
+| 14 | EXPIRY (priority) | Invoice sale of expired-only product is blocked/warned | ✅ PASS | blocked: كمية غير كافية في المخزون: E2E_TEST_20260706105625_P_X |
+| 15 | EXPIRY (priority) | fixture: product B gets an expired batch + an earlier-valid batch | ✅ PASS | B batches: BB(400d,50) + B_EARLY(20d,8) + B_EXP(expired,10) |
+| 16 | EXPIRY (priority) | FEFO sells earliest VALID batch first; expired NEVER sold | ✅ PASS | early 8→3, expired stays 10 |
+| 17 | EXPIRY (priority) | purchase line with PAST expiry is rejected (re-verify) | ✅ PASS | rejected at confirm: لا يمكن استلام صنف منتهي الصلاحية: باراسيتامول (تا |
+| 18 | EXPIRY (priority) | purchase with expiry EXACTLY today is accepted (boundary >=) | ✅ PASS | accepted |
+| 19 | EXPIRY (priority) | sale of a batch expiring TODAY is allowed (boundary >=) | ✅ PASS | allowed (today counts as not-yet-expired) |
+| 20 | EXPIRY (priority) | dispose expired batch → stock 0, dispose movement, value written off | ✅ PASS | X 20→0, batch qty=0, movements=dispose |
+| 21 | EXPIRY (priority) | expiry report loads with buckets + our expired/near batches appear | ✅ PASS | report keys: expired,expiring_30,expiring_60,expiring_7,expiring_90,total_at_risk_value |
+| 22 | EXPIRY (priority) | low-stock products list includes a product under min level | ✅ PASS | 3 low-stock rows; product T present=true |
+| 23 | POS / sales edge cases | oversell (qty > available) is blocked | ✅ PASS | blocked: كمية غير كافية في المخزون: E2E_TEST_20260706105625_P_A |
+| 24 | POS / sales edge cases | quantity 0 is blocked | ✅ PASS | blocked: الكمية غير صالحة للصنف E2E_TEST_20260706105625_P_A — يجب أن  |
+| 25 | POS / sales edge cases | negative quantity is blocked | ✅ PASS | blocked: الكمية غير صالحة للصنف E2E_TEST_20260706105625_P_A — يجب أن  |
+| 26 | POS / sales edge cases | discount greater than total is blocked/clamped | ✅ PASS | blocked: صنف E2E_TEST_20260706105625_P_A سيُباع بـ -9989900 ج.س وهو أ |
+| 27 | POS / sales edge cases | sale BELOW COST via low unit price (no discount) is blocked | ✅ PASS | blocked: صنف E2E_TEST_20260706105625_P_A سيُباع بـ 5000 ج.س وهو أقل م |
+| 28 | POS / sales edge cases | split payment parts not summing to total is blocked | ✅ PASS | blocked: المبلغ المدفوع لا يطابق تفاصيل الدفع المقسّم |
+| 29 | POS / sales edge cases | credit sale EXACTLY at limit (500) is allowed | ✅ PASS | allowed at boundary |
+| 30 | POS / sales edge cases | credit sale over the limit is blocked (balance already at limit) | ✅ PASS | blocked: تجاوز حد الائتمان المسموح به: الرصيد 50000 + المبلغ 8000 > ا |
+| 31 | POS / sales edge cases | return MORE than sold is blocked; partial then full return OK | ✅ PASS | over-return blocked=true, partial-return ok=true |
+| 32 | POS / sales edge cases | park/hold a cart → save workspace state, then reload it | ✅ PASS | parked cart saved + reloaded + cleared |
+| 33 | Money / accounts edge cases | transfer to the SAME account is blocked | ✅ PASS | blocked: لا يمكن التحويل لنفس الحساب |
+| 34 | Money / accounts edge cases | transfer MORE than available from bank is handled (blocked or overdraft rule) | ✅ PASS | blocked: الرصيد غير كافٍ (المطلوب: 10000000 رسوم: 0) |
+| 35 | Money / accounts edge cases | customer payment GREATER than balance is blocked/handled | ✅ PASS | blocked: مبلغ الدفعة (10050000) أكبر من الرصيد المستحق (50000) |
+| 36 | Inventory / warehouse edge cases | transfer to the SAME location is blocked | ✅ PASS | blocked: موقع المصدر والوجهة متطابقان |
+| 37 | Inventory / warehouse edge cases | transfer MORE than available at a location is blocked | ✅ PASS | blocked: المخزون المتاح (93) أقل من الكمية المطلوبة (999999) |
+| 38 | Inventory / warehouse edge cases | stocktake with a discrepancy applies an adjustment + movement | ✅ PASS | ff06516a-15f7-4af9-83e5-affa391a5ce5 93→90 |
+| 39 | Inventory / warehouse edge cases | opening-stock is gated by setup_mode | ✅ PASS | setup_mode OFF → opening stock correctly blocked: وضع الإعداد منتهي — لا يمكن إدخال كمية ا |
+| 40 | Soft-delete + validation | duplicate barcode is rejected | ✅ PASS | rejected: الباركود مستخدم مسبقاً |
+| 41 | Soft-delete + validation | empty required field (product trade_name) is rejected | ✅ PASS | rejected: اسم الدواء مطلوب |
+| 42 | Soft-delete + validation | soft-delete a product that has transactions preserves history | ✅ PASS | deactivated+reactivated; stock/history preserved (stock=63) |
+| 43 | USD rate + Tax | USD rate: anchored product reprices by ratio; rate 0 = off | ✅ PASS | skipped (real anchored products present) |
+| 44 | USD rate + Tax | tax flows into a sale total and the tax report | ✅ PASS | tax=0.30 SDG total=200.30 SDG |
+| 45 | Settings / screen coverage | screen loads without runtime error: Settings home | ✅ PASS | /settings |
+| 46 | Settings / screen coverage | screen loads without runtime error: Users | ✅ PASS | /settings/users |
+| 47 | Settings / screen coverage | screen loads without runtime error: Branches | ✅ PASS | /settings/branches |
+| 48 | Settings / screen coverage | screen loads without runtime error: Payment methods | ✅ PASS | /settings/payment-methods |
+| 49 | Settings / screen coverage | screen loads without runtime error: Categories | ✅ PASS | /settings/categories |
+| 50 | Settings / screen coverage | screen loads without runtime error: Units | ✅ PASS | /settings/units |
+| 51 | Settings / screen coverage | screen loads without runtime error: Notifications | ✅ PASS | /notifications |
+| 52 | Settings / screen coverage | screen loads without runtime error: Backup | ✅ PASS | /settings/backup |
+| 53 | Settings / screen coverage | screen loads without runtime error: Receipt customizer | ✅ PASS | /settings/receipt |
+| 54 | Settings / screen coverage | screen loads without runtime error: Sync config | ✅ PASS | /settings/sync |
+| 55 | Reconciliation (final invariants) | RECONCILE: cash == expected ledger | ✅ PASS | expected 17,020.30 SDG actual 17,020.30 SDG |
+| 56 | Reconciliation (final invariants) | RECONCILE: bank == expected ledger | ✅ PASS | expected 0.00 SDG actual 0.00 SDG |
+| 57 | Reconciliation (final invariants) | RECONCILE: stock = purchased − sold − disposed ± adjust (spot checks) | ✅ PASS | B on-hand=63 |
+| 58 | Sync | trigger full sync | ✅ PASS | synced 1 tables |
+| 59 | Teardown (best-effort; runner restores snapshot) | void sale SAL-00008 | ✅ PASS | voided |
+| 60 | Teardown (best-effort; runner restores snapshot) | void sale SAL-00007 | ✅ PASS | voided |
+| 61 | Teardown (best-effort; runner restores snapshot) | void sale SAL-00006 | ✅ PASS | voided |
+| 62 | Teardown (best-effort; runner restores snapshot) | void sale SAL-00005 | ✅ PASS | voided |
+| 63 | Teardown (best-effort; runner restores snapshot) | void sale SAL-00004 | ✅ PASS | voided |
+| 64 | Teardown (best-effort; runner restores snapshot) | close POS session | ✅ PASS | closed |
 
 ## Reconciliation
 
 | Check | Expected | Actual | Result |
 | --- | --- | --- | --- |
-| stock after purchase: Paracetamol | 100 | 100 | ✅ |
-| stock after purchase: Amoxicillin | 60 | 60 | ✅ |
-| stock after purchase: Ibuprofen | 40 | 40 | ✅ |
-| supplier #1 balance (total − paid) | 9,300.00 SDG | 9,300.00 SDG | ✅ |
-| from-location decreased by 20 | 80 | 80 | ✅ |
-| to-location increased by 20 | 20 | 20 | ✅ |
-| unlimited customer balance += credit sale | 300.00 SDG | 300.00 SDG | ✅ |
-| POS search rows for multi-loc product | 1 | 1 | ✅ |
-| FEFO: earliest-expiry batch depleted to 0 | 0 | 0 | ✅ |
-| stock returns +1 after partial return | 92 | 92 | ✅ |
-| customer balance decreases by payment | 150.00 SDG | 150.00 SDG | ✅ |
-| cash decreased by transfer | 7,920.00 SDG | 7,920.00 SDG | ✅ |
-| bank increased by transfer | 1,450.00 SDG | 1,450.00 SDG | ✅ |
-| transfer self-reverses (cash restored) | 8,920.00 SDG | 8,920.00 SDG | ✅ |
-| transfer self-reverses (bank restored) | 450.00 SDG | 450.00 SDG | ✅ |
-| cash decreases by expense | 8,420.00 SDG | 8,420.00 SDG | ✅ |
-| final cash balance | 8,420.00 SDG | 8,420.00 SDG | ✅ |
-| final bank balance | 450.00 SDG | 450.00 SDG | ✅ |
+| stock A after purchase | 100 | 100 | ✅ |
+| stock B after purchase | 50 | 50 | ✅ |
+| FEFO: earliest VALID batch (20d) depleted 8→3 | 3 | 3 | ✅ |
+| FEFO: expired batch untouched (stays 10) | 10 | 10 | ✅ |
+| disposed batch stock removed (X 20→0) | 0 | 0 | ✅ |
+| limit customer balance == 500 after at-limit sale | 500.00 SDG | 500.00 SDG | ✅ |
+| stocktake discrepancy (−3) applied to on-hand | 90 | 90 | ✅ |
+| final cash balance | 17,020.30 SDG | 17,020.30 SDG | ✅ |
+| final bank balance | 0.00 SDG | 0.00 SDG | ✅ |
+| product B on-hand | 63 | 63 | ✅ |
 
 ## Bugs & discrepancies
 
-### 1. Session History broken by SQL error, silently swallowed → panel always empty
-- **Expected:** session listed in history
-- **Actual:** get_session_history throws: no such column: r.deleted_at in SELECT ps.id, u.full_name, ps.opened_at, ps.closed_at, ps.sales_count,
-                ps.total_sales,
-                COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.session_id = ps.id AND r.deleted_at IS NULL), 0) as total_returns,
-                ps.opening_cash, ps.actual_cash, ps.cash_difference, ps.status
-         FROM pos_sessions ps
-         JOIN users u ON ps.cashier_id = u.id
-         WHERE ps.tenant_id = ?1 AND ps.branch_id = ?2 AND DATE(ps.opened_at) >= DATE(?3) AND DATE(ps.opened_at) <= DATE(?4) ORDER BY ps.opened_at DESC at offset 195
-- **Screen:** POS → Session History
-- **Repro:** open POS → History; underlying get_session_history errors, UI catch{} hides it — panel shows 0 sessions
+_None found._
+## Coverage checklist
 
-### 2. void_sale BROKEN in installed build (CHECK constraint on movement_type)
-- **Expected:** sale voided, stock + customer credit reversed
-- **Actual:** void_sale throws: CHECK constraint failed: movement_type IN (
-                    'receive','sell','customer_return',
-                    
-- **Screen:** POS Session History → Void
-- **Repro:** void any sale; the void-reversal stock movement uses a movement_type not permitted by the batches/stock_movements CHECK constraint
-
-### 3. Residual: customer payment has no reverse command
-- **Expected:** reversible
-- **Actual:** customer payment 150.00 SDG left; cash +150.00 SDG
-- **Screen:** record_customer_payment
-- **Repro:** no delete_customer_payment command exists
-
-### 4. Residual: supplier payment has no reverse command
-- **Expected:** reversible
-- **Actual:** supplier payment (partial) left as a paid-invoice record
-- **Screen:** record_supplier_payment
-- **Repro:** no delete_supplier_payment command exists
+| Area | Status | Note |
+| --- | --- | --- |
+| USD repricing | 🟡 partial | skipped destructive rate change — 1 REAL USD-anchored products would be repriced |
+| Tax on sale | ✅ covered | tax computed into total and tax report loads |
+| Screen: Settings home | ✅ covered | renders (UI load check) |
+| Screen: Users | ✅ covered | renders (UI load check) |
+| Screen: Branches | ✅ covered | renders (UI load check) |
+| Screen: Payment methods | ✅ covered | renders (UI load check) |
+| Screen: Categories | ✅ covered | renders (UI load check) |
+| Screen: Units | ✅ covered | renders (UI load check) |
+| Screen: Notifications | ✅ covered | renders (UI load check) |
+| Screen: Backup | ✅ covered | renders (UI load check) |
+| Screen: Receipt customizer | ✅ covered | renders (UI load check) |
+| Screen: Sync config | ✅ covered | renders (UI load check) |
+| Expiry: expired-only sale blocked (POS + invoice) | ✅ covered |  |
+| Expiry: FEFO skips expired, earliest-valid first | ✅ covered |  |
+| Expiry: past-expiry purchase rejected | ✅ covered |  |
+| Expiry: boundary = today (purchase + sale) | ✅ covered |  |
+| Expiry: dispose + write-off | ✅ covered |  |
+| Expiry: report buckets + low-stock | ✅ covered |  |
+| POS edge: oversell/qty0/neg/discount/below-min/split/credit-boundary/returns | ✅ covered |  |
+| Money edge: same-account, over-transfer, overpayment | ✅ covered |  |
+| Inventory edge: same-loc/over-qty transfer, stocktake discrepancy, opening-stock gating | ✅ covered |  |
+| Validation: duplicate barcode, empty required, soft-delete history | ✅ covered |  |
+| Permissions (cashier/manager roles) | ⚪ not covered | only owner/admin credentials available — needs cashier & manager passwords to assert role gating |
+| Auth lockout after N wrong passwords | ⚪ not covered | would lock a real account; run manually/supervised |
+| License feature gating by plan | 🟡 partial | features usable post-login (unlock-after-login fix); plan-tier gating not exercised |
+| CSV/Excel import with bad rows | ⚪ not covered | xlsx parsing is front-end only; not reachable via the command bridge |
+| Receipt customizer preview (logo pos/size) | 🟡 partial | screen load checked; visual preview not asserted |
+| Backup create + restore (in-app) | 🟡 partial | harness uses its own snapshot backup/restore; in-app backup screen load checked |
+| PWA mirror + Activity page + deletions mirror out | 🟡 partial | covered by the separate read-only e2e:pwa suite; sync-500 can block fresh mirroring |
+| Report CSV exports | ⚪ not covered | export is a browser download (front-end xlsx); reports themselves load-checked |
 
 ## Cleanup status
 
 | Kind | Tag / id | Reversed? | Note |
 | --- | --- | --- | --- |
-| supplier | E2E_TEST_20260705185727_SUP1 | ⚠️ NO |  |
-| supplier | E2E_TEST_20260705185727_SUP2 | ⚠️ NO |  |
-| customer | E2E_TEST_20260705185727_CUST_CASH | ⚠️ NO |  |
-| customer | E2E_TEST_20260705185727_CUST_UNLIM | ⚠️ NO |  |
-| customer | E2E_TEST_20260705185727_CUST_LIMIT | ⚠️ NO |  |
-| product | E2E_TEST_20260705185727_PROD_A | ⚠️ NO |  |
-| product | E2E_TEST_20260705185727_PROD_B | ⚠️ NO |  |
-| product | E2E_TEST_20260705185727_PROD_C | ⚠️ NO |  |
-| purchase_invoice | E2E_TEST_20260705185727_PINV | ⚠️ NO |  |
-| stock_take | E2E_TEST_20260705185727_STK | ⚠️ NO |  |
-| session | E2E_TEST_20260705185727_SESS | ✅ yes | closed |
-| purchase_invoice | E2E_TEST_20260705185727_PINV2 | ⚠️ NO |  |
-| expense | E2E_TEST_20260705185727_EXP | ✅ yes | deleted |
+| supplier | E2E_TEST_20260706105625_SUP | ⚠️ NO |  |
+| customer | E2E_TEST_20260706105625_C_cash | ⚠️ NO |  |
+| customer | E2E_TEST_20260706105625_C_unlim | ⚠️ NO |  |
+| customer | E2E_TEST_20260706105625_C_limit | ⚠️ NO |  |
+| product | E2E_TEST_20260706105625_P_A | ⚠️ NO |  |
+| product | E2E_TEST_20260706105625_P_B | ⚠️ NO |  |
+| product | E2E_TEST_20260706105625_P_X | ⚠️ NO |  |
+| product | E2E_TEST_20260706105625_P_T | ⚠️ NO |  |
+| purchase_invoice | E2E_TEST_20260706105625_PINV | ⚠️ NO |  |
+| session | E2E_TEST_20260706105625_SESS | ✅ yes | closed |
+| purchase_invoice | E2E_TEST_20260706105625_PINV_T | ⚠️ NO |  |
+| stock_take | E2E_TEST_20260706105625_STK | ⚠️ NO |  |
 
 > ⚠️ **11 created entities were not confirmed removed** — see the app and the sweep log.
 
@@ -154,4 +157,4 @@ _Generated 2026-07-05T18:58:28.559Z — driven against the installed `C:\Program
 
 ## Final cleanup (post-run)
 
-✅ **Real data restored to the pre-run snapshot** — `C:\Users\Ammar\AppData\Roaming\com.taj.pharmacy\e2e-safety-backups\backup-2026-07-05T18-57-15-102Z`. All E2E_TEST_ entities and every money-path effect (including balances that `void_sale` could not reverse) were undone by restoring the database. Net residue: **zero**.
+✅ **Real data restored to the pre-run snapshot** — `C:\Users\Ammar\AppData\Roaming\com.taj.pharmacy\e2e-safety-backups\backup-2026-07-06T10-56-15-403Z`. All E2E_TEST_ entities and every money-path effect (including balances that `void_sale` could not reverse) were undone by restoring the database. Net residue: **zero**.

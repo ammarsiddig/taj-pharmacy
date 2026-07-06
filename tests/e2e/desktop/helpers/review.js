@@ -15,8 +15,10 @@ export class Review {
     this.bugs = [];         // { title, expected, actual, repro, screen }
     this.recon = [];        // { name, expected, actual, ok }
     this.created = [];      // { kind, tag, id, reversed } for cleanup tracking
+    this.coverage = [];     // { area, status, note } explicit coverage checklist
     this.phase = '';
     this.money = (p) => (p == null ? 'n/a' : (p / 100).toLocaleString('en-US', { minimumFractionDigits: 2 }) + ' SDG');
+    this.title = 'Day-in-the-Life E2E Review';
   }
 
   setPhase(p) { this.phase = p; console.log(`\n===== PHASE: ${p} =====`); }
@@ -63,6 +65,9 @@ export class Review {
     return ok;
   }
 
+  // Explicit coverage record. status: 'covered' | 'partial' | 'not-covered'.
+  cover(area, status, note = '') { this.coverage.push({ area, status, note }); }
+
   track(kind, tag, id) { this.created.push({ kind, tag, id, reversed: false }); }
   markReversed(id, note = '') {
     const c = this.created.find((x) => x.id === id);
@@ -79,7 +84,7 @@ export class Review {
   writeReport() {
     const s = this.summary();
     const L = [];
-    L.push('# TAJ Pharmacy — Day-in-the-Life E2E Review');
+    L.push(`# TAJ Pharmacy — ${this.title}`);
     L.push('');
     L.push(`_Generated ${new Date().toISOString()} — driven against the installed \`C:\\Program Files\\TAJ Pharmacy\\app.exe\` + Owner PWA._`);
     L.push('');
@@ -131,6 +136,17 @@ export class Review {
       if (b.repro) L.push(`- **Repro:** ${b.repro}`);
       L.push('');
     });
+
+    // Coverage checklist
+    if (this.coverage.length) {
+      L.push('## Coverage checklist');
+      L.push('');
+      L.push('| Area | Status | Note |');
+      L.push('| --- | --- | --- |');
+      const icon = (s) => (s === 'covered' ? '✅ covered' : s === 'partial' ? '🟡 partial' : '⚪ not covered');
+      this.coverage.forEach((c) => L.push(`| ${esc(c.area)} | ${icon(c.status)} | ${esc(c.note)} |`));
+      L.push('');
+    }
 
     // Cleanup status
     L.push('## Cleanup status');
