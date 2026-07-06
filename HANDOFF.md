@@ -3601,6 +3601,15 @@ New keys under `pos.*`: `receiptLogoSection`, `receiptLogoPosition`, `receiptLog
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
+### 2026-07-06 — Claude Code — Release v0.2.29 (merge PR #11 payment methods) + marketing screenshots & redeploy
+- **Status:** DONE. `cargo check` clean (5 pre-existing warnings), `tsc -b`+`vite build` clean.
+- **Release base decision:** `main` was at v0.2.27 and did **not** contain the already-published v0.2.28 fixes (POS qty≤0/below-cost money-path validation + marketing version auto-fill live on `release/v0.2.28`). Basing v0.2.29 on `main` would have regressed v0.2.28 to every auto-updating client. Owner confirmed: **base v0.2.29 on `release/v0.2.28` + PR #11**, then bring `main` up to it.
+- **v0.2.29 = release/v0.2.28 + marketing screenshots + PR #11 (feat/task-941 payment methods).** Cherry-picked PR #11's commit (`1295721`); conflicts were only the stale version trio (0.2.25) + HANDOFF worklog union — resolved to **0.2.29** and both worklog entries kept. PR #11's substantive changes (`seed.rs` seed-only-cash, `Settings.tsx` PaymentSettingsTab, i18n) applied cleanly.
+- **Task 1 (marketing screenshots):** new `npm run e2e:screenshots` suite drives the installed app through its own command layer, seeds clean Arabic demo data, captures `hero/pos/inventory/reports.png` at 1600×1000 (all <500 KB), then restores the DB snapshot — verified pristine (cash 1,527,000, zero residue). Committed the 4 PNGs.
+- **Task 3 (marketing redeploy):** scp `pms-cloud/marketing/` (new screenshots + the `068de2c` version auto-fill `index.html`) to the VPS `/var/www/taj/marketing/`, `systemctl reload nginx`; verified `https://taj.systems/` renders the 4 shots and `#download` shows the live release version from the GitHub API.
+- **Files changed (release commits):** `src-tauri/src/db/seed.rs`, `src/pages/Settings.tsx`, `src/i18n/{ar,en}.json` (PR #11); version trio + `Cargo.lock` → 0.2.29; `pms-cloud/marketing/assets/screenshots/*.png`, `tests/e2e/**` (screenshots harness).
+- **Acceptance test result:** tag `v0.2.29` pushed → `release.yml` (tauri-action) published GitHub release **v0.2.29** with `latest.json` version = 0.2.29. See report below for URLs.
+
 ### 2026-07-06 — Claude Code — POS/invoice sale-validation hardening (v0.2.28) — fix 3 money-path bugs found by the exhaustive E2E run
 - **Status:** DONE. `cargo check` clean, `tsc -b`+`vite build` clean, `tauri build` produced exe+installer (only the updater-signing step failed for lack of `TAURI_SIGNING_PRIVATE_KEY` — irrelevant to the fix).
 - **Source of bugs:** the 2026-07-06 exhaustive E2E findings in §4 (against installed v0.2.27). Backend is authoritative, so all fixes are in Rust.
@@ -3642,6 +3651,17 @@ New keys under `pos.*`: `receiptLogoSection`, `receiptLogoPosition`, `receiptLog
   - Bug A: reproduced the exact error (2 binds → `Incorrect number of bindings`; 1 bind → OK, 2 users). Live full 23-table batch → `success=True`, `totalUpserted=42` incl. `users:2`, `branches:1` (the previously-aborting `?1` tables).
   - Bug B: on a temp DB copy, a session opened today is **excluded** by the old filter and **included** by the fixed `DATE()` filter.
   - Mirror: added a test customer → sync → present in cloud `snapshot_customers`; soft-delete + `deletedIds` sync → removed (cloud count `0`). Test rows cleaned up.
+
+### 2026-07-04 — Claude Code — TASK-941 (v0.2.25) — POS payment methods: stop seeding unused bank brands + expose Payment Methods settings
+- **Status:** DONE (separate PR into main; NOT part of the v0.2.24 release — owner bundles it into a later release)
+- **Problem:** POS renders one bank button per active `bank_transfer` row in `payment_methods` (`src/pages/pos/PaymentPanel.tsx`, fed by `bankMethods` in `src/pages/POS.tsx:470-472`). The seed activated **both** بنكك and فوري (and آجل) as `is_active=1`, so a pharmacy that uses a single (or no) bank account still saw multiple brand buttons it never chose.
+- **Fixes:**
+  - **(a) Seed** (`src-tauri/src/db/seed.rs`): now seeds **only `pm-cash`**. Removed the pre-activated `pm-bankak`, `pm-fawry`, `pm-credit` rows. Cash and Credit are hardcoded POS buttons and need no seeded row; bank wallets are added by the owner. (Affects fresh installs only.)
+  - **(b) Settings screen:** `PaymentSettingsTab.tsx` already existed (add / edit / activate-deactivate via the `is_active` checkbox / delete, wired to `get/create/update/deletePaymentMethod`) but was **never mounted**. Added it as a Settings tab (`src/pages/Settings.tsx`: import, `TabKey` `'payment'`, tab button, render). New i18n key `settings.paymentTab` (ar "طرق الدفع" / en "Payment Methods"); all `settings.payment.*` strings already existed in both locales.
+  - **(c) POS** already shows only **active** bank methods + the hardcoded cash/credit/split buttons — no change needed; verified against `PaymentPanel.tsx` (`bankMethods = paymentMethods.filter(is_active && bank_transfer)`).
+- **Files changed:** `src-tauri/src/db/seed.rs`, `src/pages/Settings.tsx`, `src/i18n/ar.json`, `src/i18n/en.json`; version trio + `Cargo.lock` → 0.2.25.
+- **Acceptance:** `cargo check` clean (only pre-existing permissions.rs warnings, 0 new); `npx tsc --noEmit` 0; `npm run build` clean.
+- **Notes:** No migration auto-deactivates the already-seeded bank brands on **existing** installs (that would risk removing a wallet a pharmacy actually adopted). Existing tenants (incl. the owner's) deactivate بنكك/فوري they don't use via the new **Settings → Payment Methods** tab. Kept fully separate from the v0.2.24 release; not tagged/released.
 
 ### 2026-07-04 — Claude Code — TASK-940 (v0.2.24) — Fix broken desktop→cloud sync + full mirror + clean-slate wipe
 - **Status:** DONE

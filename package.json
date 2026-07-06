@@ -1,7 +1,7 @@
 {
   "name": "pms-pharmacy-v4",
   "private": true,
-  "version": "0.2.28",
+  "version": "0.2.29",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "e2e:write": "npm --prefix tests/e2e run write",
     "e2e:full": "npm --prefix tests/e2e run full",
     "e2e:exhaustive": "npm --prefix tests/e2e run exhaustive",
+    "e2e:screenshots": "npm --prefix tests/e2e run screenshots",
     "e2e:pwa": "npm --prefix tests/e2e run pwa"
   },
   "dependencies": {
