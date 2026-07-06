@@ -10,6 +10,7 @@
     "write": "node scripts/run-desktop.mjs write",
     "full": "node scripts/run-desktop.mjs full",
     "exhaustive": "node scripts/run-desktop.mjs exhaustive",
+    "screenshots": "node scripts/run-desktop.mjs screenshots",
     "pwa": "node scripts/run-pwa.mjs",
     "setup:driver": "node scripts/setup-driver.mjs"
   },

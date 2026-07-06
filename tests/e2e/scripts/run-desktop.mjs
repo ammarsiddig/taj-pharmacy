@@ -25,12 +25,13 @@ const CONFIGS = {
   write: 'config/wdio.write.js',
   full: 'config/wdio.full.js',
   exhaustive: 'config/wdio.exhaustive.js',
+  screenshots: 'config/wdio.screenshots.js',
 };
-// Money-path suites that restore a pre-run snapshot at teardown.
-const RESTORE_SUITES = new Set(['full', 'exhaustive']);
+// Suites that write demo/money data and restore a pre-run snapshot at teardown.
+const RESTORE_SUITES = new Set(['full', 'exhaustive', 'screenshots']);
 
 if (!CONFIGS[suite]) {
-  console.error(`Unknown suite "${suite}". Use: spike | safe | write | full | exhaustive`);
+  console.error(`Unknown suite "${suite}". Use: spike | safe | write | full | exhaustive | screenshots`);
   process.exit(2);
 }
 
@@ -115,7 +116,9 @@ async function main() {
     let restored = false;
     try { restoreBackup(backupDir); restored = true; }
     catch (e) { console.error(`[runner] restore FAILED: ${e.message}\n  Restore manually: node desktop/helpers/db-backup.js restore "${backupDir}"`); }
-    try {
+    if (suite === 'screenshots') {
+      console.log(`[runner] ${restored ? 'DB restored to pre-run snapshot (zero residue).' : 'RESTORE FAILED — restore manually.'}`);
+    } else try {
       const note = `\n---\n\n## Final cleanup (post-run)\n\n` +
         (restored
           ? `✅ **Real data restored to the pre-run snapshot** — \`${backupDir}\`. All E2E_TEST_ entities and every money-path effect (including balances that \`void_sale\` could not reverse) were undone by restoring the database. Net residue: **zero**.\n`
