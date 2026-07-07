@@ -3601,6 +3601,13 @@ New keys under `pos.*`: `receiptLogoSection`, `receiptLogoPosition`, `receiptLog
 
 > Append-only. Newest entries at the top. Never edit prior entries.
 
+### 2026-07-07 — Claude Code — Close opening-stock re-anchor gap + repair `cargo test` (v0.2.31, release-ready)
+- **Status:** DONE. `cargo test` fully green — **10 passed, 0 failed** (4 cloud_sync unit tests + 6 USD integration tests).
+- **Opening-stock gap closed:** `warehouse_opening_stock.rs::find_or_create_product` now calls `products::reanchor_sale_price` (was `reanchor_product`) after creating a product with a sale_price — so opening-stock products added *while a USD rate is active* get a correct anchor and reprice properly on a later rate change. The single-batch `add_opening_stock_batch` uses an existing product_id and writes no product price → no anchor needed. New test `opening_stock_product_created_with_active_rate_scales_on_rate_change` mirrors the real path (INSERT sale_price → reanchor → rate up ×2 → 2000.00, rate down → 800.00). `cargo test --test usd_anchor` → **6/6**.
+- **`cargo test` repaired** (the §7.2 finding from the prior entry): (1) added `use serde_json::json;` to `cloud_sync_tests.rs`; (2) made `CloudSyncSchedulerConfig` (+ its 3 fields) and `run_background_scheduler_once` `pub(crate)` and imported them in the test — no logic change; (3) FK fix — `seed::run` now assigns a random-UUID tenant, but the tests key off `TEST_TENANT_ID="default-tenant"`, so `create_test_database()` now inserts that tenant row (was a `cloud_sync_outbox → tenants` FK violation). The earlier "~70 E0282" count was an artifact of a temporary hand-disable, not a real defect.
+- **Kept v0.2.31**; report `tests/e2e/REPORT-fullshift.md` updated (§2.4/§2.6/§7.2/§9). **Not tagged/released** — owner side pushes + tags v0.2.31 and confirms the build.
+- **Files:** `src-tauri/src/commands/{warehouse_opening_stock.rs, cloud_sync_scheduler.rs, cloud_sync_tests.rs}`, `src-tauri/tests/usd_anchor.rs`, `tests/e2e/REPORT-fullshift.md`, `HANDOFF.md`.
+
 ### 2026-07-07 — Claude Code — USD/SDG purchase-price bug FIX (+ opening stock) + full-shift audit (v0.2.31)
 - **Status:** USD fix DONE + PROVEN. `cargo test --test usd_anchor` → **5/5 PASS**; `cargo check` clean (5 pre-existing warnings).
 - **Reported bug reproduced + fixed:** confirmed purchases wrote `products.sale_price` but never re-derived `price_usd_cents`, so the next USD rate change repriced the product from its stale opening-stock anchor and silently discarded the purchase price (e.g. purchase 1300.00 → snapped to 2000.00 instead of 2600.00 on a 2× rate hike).

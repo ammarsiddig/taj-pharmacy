@@ -1,8 +1,10 @@
 ﻿use super::*;
     use crate::commands::cloud_sync_outbox::*;
     use crate::commands::cloud_sync_outbox_helpers::parse_iso_to_utc;
+    use crate::commands::cloud_sync_scheduler::{run_background_scheduler_once, CloudSyncSchedulerConfig};
     use crate::db::{migrations, seed};
     use rusqlite::{params, Connection};
+    use serde_json::json;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::sync::{Mutex, OnceLock};
@@ -125,6 +127,16 @@
 
         migrations::run(&conn).expect("run test migrations");
         seed::run(&conn).expect("run test seed");
+
+        // seed::run creates a tenant with a random UUID, but these tests key
+        // everything off TEST_TENANT_ID ("default-tenant"). Ensure that tenant row
+        // exists so the cloud_sync_outbox → tenants FK is satisfied.
+        conn.execute(
+            "INSERT OR IGNORE INTO tenants (id, tenant_id, name, name_ar, currency_code, timezone)
+             VALUES (?1, ?1, 'Test Tenant', 'مستأجر اختباري', 'SDG', 'Africa/Khartoum')",
+            params![TEST_TENANT_ID],
+        )
+        .expect("seed test tenant");
 
         Database {
             conn: Arc::new(std::sync::Mutex::new(conn)),

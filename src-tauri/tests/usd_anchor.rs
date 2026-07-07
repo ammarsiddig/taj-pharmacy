@@ -155,6 +155,38 @@ fn reprice_never_writes_a_zero_price_from_a_positive_anchor() {
     assert_eq!(get(&conn, "cheap", "sale_price"), 1, "MAX(1) floor: a positive anchor never yields a 0 price");
 }
 
+/// Mirrors what `warehouse_opening_stock::find_or_create_product` now does: insert
+/// the product with its opening SDG price, then `reanchor_sale_price` (no-op at rate 0).
+fn opening_stock_creates_product(conn: &Connection, id: &str, sale: i64, cost: i64) {
+    conn.execute(
+        "INSERT INTO products (id, tenant_id, trade_name, unit, sale_price, last_purchase_price)
+         VALUES (?1, ?2, ?1, 'box', ?3, ?4)",
+        params![id, T, sale, cost],
+    )
+    .unwrap();
+    reanchor_sale_price(conn, T, id, sale).unwrap();
+}
+
+#[test]
+fn opening_stock_product_created_with_active_rate_scales_on_rate_change() {
+    let conn = fresh_db();
+    // USD feature is already ON before this product is added via opening stock.
+    set_rate(&conn, R1);
+    opening_stock_creates_product(&conn, "os", OPENING, 50_000);
+
+    // The opening-stock create re-anchored it (unlike the pre-fix behavior).
+    assert_eq!(get(&conn, "os", "price_usd_cents"), 200, "opening-stock product anchored at creation");
+
+    // A later rate change reprices it correctly instead of skipping it.
+    set_rate(&conn, R2);
+    assert_eq!(reprice_all_products_to_rate(&conn, T, R2).unwrap(), 1, "opening-stock product is repriced");
+    assert_eq!(get(&conn, "os", "sale_price"), 200_000, "rate up ×2 → 1000.00 scales to 2000.00");
+
+    set_rate(&conn, R3);
+    reprice_all_products_to_rate(&conn, T, R3).unwrap();
+    assert_eq!(get(&conn, "os", "sale_price"), 80_000, "rate down → $2.00 × 400 = 800.00");
+}
+
 #[test]
 fn opening_stock_fix_anchors_products_created_after_the_rate_is_set() {
     let conn = fresh_db();

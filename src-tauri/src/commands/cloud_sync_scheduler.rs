@@ -14,10 +14,10 @@ const DEFAULT_SYNC_INTERVAL_SECONDS: u64 = 120;
 const SNAPSHOT_INTERVAL_SECONDS: u64 = 300; // 5 minutes
 
 #[derive(Debug, Clone, Copy)]
-struct CloudSyncSchedulerConfig {
-    interval: Duration,
-    page_size: i64,
-    max_pages: i64,
+pub(crate) struct CloudSyncSchedulerConfig {
+    pub(crate) interval: Duration,
+    pub(crate) page_size: i64,
+    pub(crate) max_pages: i64,
 }
 
 fn parse_env_u64(name: &str, default_value: u64, min: u64, max: u64) -> u64 {
@@ -59,7 +59,7 @@ fn scheduler_config_from_env() -> CloudSyncSchedulerConfig {
     }
 }
 
-fn run_background_scheduler_once(
+pub(crate) fn run_background_scheduler_once(
     db: &Database,
     runtime: &CloudSyncRuntime,
     config: CloudSyncSchedulerConfig,

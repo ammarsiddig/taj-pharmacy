@@ -6,7 +6,7 @@
 
 ## 0. TL;DR / honesty box (read this first)
 
-This run's headline goal — **reproduce, fix, and re-verify the reported USD/SDG pricing bug** — is **DONE and PROVEN** by an automated test that exercises the *real* production code (`cargo test --test usd_anchor`, **5/5 PASS**). The purchase-price fix ships in the tree and the version is bumped.
+This run's headline goal — **reproduce, fix, and re-verify the reported USD/SDG pricing bug** — is **DONE and PROVEN** by automated tests that exercise the *real* production code (`cargo test --test usd_anchor`, **6/6 PASS**; the whole `cargo test` suite is now green — **10/10**). The purchase-price fix (purchases **and** opening stock) ships in the tree and the version is bumped.
 
 Two things the task asked for could **not** be executed inside this automation environment, and I will not fake them:
 
@@ -18,7 +18,7 @@ What I *did* deliver, all real and verifiable:
 - **Fix also applied to opening-stock and audited across every `sale_price` writer** (§2.4).
 - **A 629-item enriched catalog CSV** built from the supplier price list, ready for the app's importer (§3).
 - **A code-level audit of every dependency chain** the task lists — opening stock vs purchases, FEFO, credit limit, expiry rejection, supplier/customer balances, reconciliation formulas — with PASS / concern per item (§4–§6).
-- **A second real bug found:** the crate's `cargo test` has been broken since a May-15 refactor (§7.2).
+- **A second real bug found and FIXED:** the crate's `cargo test` had been broken since a May-15 refactor — now green (§7.2).
 
 Coverage legend: **[TEST]** proven by an executed automated test · **[CODE]** verified by reading the production source · **[NOT-RUN]** requires the live instance (§8).
 
@@ -70,7 +70,7 @@ Correct result is `1300.00 × (1000/500) = 2600.00`. The buggy path yields `1000
 |---|---|---|
 | `confirm_purchase` | `purchases.rs` | **fixed** — calls `reanchor_sale_price` |
 | `confirm_purchase_with_payment` | `purchases.rs` | **fixed** — calls `reanchor_sale_price` |
-| opening-stock product create | `warehouse_opening_stock.rs::find_or_create_product` | **fixed** — calls `reanchor_product` |
+| opening-stock product create | `warehouse_opening_stock.rs::find_or_create_product` (bulk import path) | **fixed** — calls `reanchor_sale_price` (no-op at rate 0). The single-batch `add_opening_stock_batch` takes an existing product_id and writes no product price, so it needs no anchor. |
 | bulk product import | `products.rs::import_products` | already re-anchored all rows post-import — **no change needed** |
 | stocktake | `warehouse_stocktake.rs` | does **not** write `sale_price` (adjusts quantity only) — **N/A** |
 | `create_product` / `update_product` | `products.rs` | already call `reanchor_product` — **N/A** |
@@ -90,16 +90,17 @@ Correct result is `1300.00 × (1000/500) = 2600.00`. The buggy path yields `1000
 - Purchase price is **preserved and scales correctly** (1300 → 2600 → 1040), never snaps back. ✓
 - `min_sale_price` scales from its own anchor; `sale_price > min` holds throughout (floor interaction OK). ✓
 
-### 2.6 Full USD test suite — **`cargo test --test usd_anchor` → 5 passed; 0 failed**
+### 2.6 Full USD test suite — **`cargo test --test usd_anchor` → 6 passed; 0 failed**
 | test | proves |
 |---|---|
 | `activation_derives_anchors_without_changing_prices` | activation sets anchors, leaves prices/min untouched |
 | `bug_repro_purchase_price_snaps_back_on_rate_change_without_fix` | the reported bug (old path) |
 | `fix_purchase_price_is_preserved_and_scales_both_directions` | fix; rate up **and** down; min floor |
 | `reprice_never_writes_a_zero_price_from_a_positive_anchor` | `MAX(1,…)` floor |
-| `opening_stock_fix_anchors_products_created_after_the_rate_is_set` | opening-stock gap closed |
+| `opening_stock_product_created_with_active_rate_scales_on_rate_change` | opening-stock product added *while a rate is active* is anchored → reprices correctly up/down |
+| `opening_stock_fix_anchors_products_created_after_the_rate_is_set` | unanchored product is skipped; `reanchor` closes the gap |
 
-The test lives in `src-tauri/tests/usd_anchor.rs` and drives the **real** helpers via a hidden `app_lib::test_support` re-export (needed because the in-crate unit-test build is broken — see §7.2).
+The test lives in `src-tauri/tests/usd_anchor.rs` and drives the **real** helpers via a hidden `app_lib::test_support` re-export. The whole `cargo test` suite is now green too (§7.2), so these can also move in-crate later if desired.
 
 ---
 
@@ -170,12 +171,13 @@ Live end-to-end numeric reconciliation for each of these (open a session, ring s
 
 ### 7.1 USD purchase-price snap-back — **FIXED + verified** (§2). Severity: high (silent wrong shelf prices after any rate change following a purchase).
 
-### 7.2 The Rust test suite does not compile (`cargo test`) — **pre-existing, NOT mine**
-`cargo test` fails to build the in-crate unit-test target:
-- `commands/cloud_sync_tests.rs` is **stale** — it uses `json!` without importing it and calls `run_background_scheduler_once` / `CloudSyncSchedulerConfig`, which became **private** in the **2026-05-15** `cloud_sync_scheduler.rs` refactor (the test file dates to 2026-05-10).
-- With that module disabled, the `#[cfg(test)]` builds of `cloud_sync_restore.rs` / `cloud_sync_snapshot.rs` then throw ~70 `E0282` serde_json inference errors.
+### 7.2 The Rust test suite did not compile/run (`cargo test`) — **FIXED**
+`cargo test` had been red since the 2026-05-15 `cloud_sync_scheduler` refactor. Three stale defects in `commands/cloud_sync_tests.rs`, all now fixed:
+1. `json!` used without `use serde_json::json;` → import added.
+2. `run_background_scheduler_once` / `CloudSyncSchedulerConfig` had gone **private** in the scheduler refactor → made `pub(crate)` (config + its 3 fields + the fn) and imported explicitly in the test. No logic change.
+3. At runtime the tests then hit a **FK failure**: `seed::run` now assigns a random-UUID tenant, but the tests key off `TEST_TENANT_ID = "default-tenant"`, so `cloud_sync_outbox.tenant_id → tenants(id)` had no parent row. Fixed by inserting the `default-tenant` row in `create_test_database()`.
 
-Net: the whole unit-test build is red and has been since mid-May. I worked around it by putting the USD test in `tests/` (an integration test links the *normal*, non-`cfg(test)` lib). **Recommend** a dedicated fix pass for `cloud_sync_tests`. Not fixed here (out of scope, and it touches sync internals I shouldn't reshape blind).
+**Result: `cargo test` is green — 10 passed, 0 failed** (4 cloud_sync unit tests + 6 USD integration tests). The earlier "~70 E0282" figure was an artifact of a temporary hand-disable of the module, not a real defect — the real fix was the three items above.
 
 ### 7.3 Only one supplier list present
 `Downloads/` contains a single price-list PDF (Dan Multi Activity, 640-numbered), duplicated as `… (1).pdf`. The **Medical Plus (~400)** list referenced in the task was not found. Catalog work covers the list that exists.
@@ -202,7 +204,8 @@ Once a fresh instance exists, this can be scripted against the same WebDriver br
 
 ## 9. Artifacts delivered in this run
 - **USD fix:** `src-tauri/src/commands/{products.rs, purchases.rs, settings.rs, warehouse_opening_stock.rs}` + `src/lib.rs` (hidden `test_support`).
-- **Test:** `src-tauri/tests/usd_anchor.rs` — `cargo test --test usd_anchor` → **5/5 PASS**.
+- **`cargo test` repair:** `src-tauri/src/commands/{cloud_sync_scheduler.rs, cloud_sync_tests.rs}`.
+- **Tests:** `src-tauri/tests/usd_anchor.rs` — `cargo test --test usd_anchor` → **6/6**; whole suite `cargo test` → **10/10 green**.
 - **Catalog:** `tests/e2e/fixtures/dan-multi-activity-catalog.csv` — 629 enriched rows.
 - **This report.**
-- **Version** bumped 0.2.30 → 0.2.31; WORKLOG updated.
+- **Version** 0.2.30 → 0.2.31; WORKLOG updated. (Release tag handled owner-side.)
