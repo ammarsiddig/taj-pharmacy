@@ -19,6 +19,8 @@ import type { LucideIcon } from 'lucide-react';
 import { useLicense } from '../../hooks/useLicense';
 import { usePermissions } from '../../hooks/usePermissions';
 import { FEATURE_FLAGS } from '../../hooks/usePermission';
+import headerLogoWhite from '../../assets/header-logo-white.svg';
+import tajMarkWhite from '../../assets/taj-mark-white.svg';
 
 interface NavItem {
   key: string;
@@ -71,14 +73,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Logo area */}
       <div className={`${collapsed ? 'px-3 py-4 flex-col gap-3' : 'px-4 py-5'} border-b border-white/8 flex items-center justify-between`}>
         {collapsed ? (
-          <img src="/taj-logo-mark-reversed.svg" alt="TAJ Pharmacy" className="h-9 w-9 object-contain" />
+          <img src={tajMarkWhite} alt="TAJ Pharmacy" className="h-9 w-9 object-contain" />
         ) : (
-          <div className="flex items-center gap-3 min-w-0">
-            <img src="/taj-logo-mark-reversed.svg" alt="TAJ Pharmacy" className="h-11 w-11 shrink-0 object-contain" />
-            <div className="min-w-0">
-              <h1 className="text-white text-lg font-bold leading-tight">TAJ Pharmacy</h1>
-              <p className="text-brand-100/75 text-xs mt-0.5 truncate">{t('app.title')}</p>
-            </div>
+          <div className="flex flex-col gap-1.5 min-w-0">
+            {/* White brand lockup (TAJ + PHARMACY) — the wordmark carries the name,
+                so no separate "TAJ Pharmacy" heading (avoids showing TAJ twice). */}
+            <img src={headerLogoWhite} alt="TAJ Pharmacy" className="h-10 w-auto object-contain object-right" />
+            <p className="text-brand-100/75 text-xs truncate">{t('app.title')}</p>
           </div>
         )}
         <button onClick={onToggle} className="text-brand-100 hover:text-white p-2 rounded-full hover:bg-white/6">
