@@ -41,7 +41,7 @@ export default function Login({ onLogin }: LoginProps) {
     <div className="flex min-h-dvh flex-col items-center justify-center p-6" style={{ background: 'var(--color-ivory-app)' }} dir="rtl">
       <div className="app-card w-full max-w-sm p-8">
         <div className="mb-8 flex flex-col items-center gap-3">
-          <img src="/taj-logo.svg" alt="TAJ Pharmacy" className="h-20 w-20 object-contain" />
+          <img src="/header-logo-color.svg" alt="TAJ Pharmacy" className="h-14 w-auto max-w-[220px] object-contain" />
           <div className="text-center">
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-ink-main)' }}>لوحة المالك</h1>
             <p className="mt-1 text-sm" style={{ color: 'var(--color-ink-muted)' }}>سجّل الدخول للمتابعة</p>
@@ -109,8 +109,6 @@ export default function Login({ onLogin }: LoginProps) {
           <InstallBanner canInstall={canInstall} isIOS={isIOS} onInstall={install} compact />
         </div>
       )}
-
-      <p className="mt-6 text-xs" style={{ color: 'var(--color-ink-muted)' }}>TAJ Pharmacy</p>
     </div>
   );
 }
