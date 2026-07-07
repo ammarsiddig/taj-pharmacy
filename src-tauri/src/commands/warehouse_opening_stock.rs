@@ -283,6 +283,11 @@ fn find_or_create_product(
         ],
     ).map_err(|e| format!("فشل إنشاء المنتج: {}", e))?;
 
+    // TASK-939 fix: anchor the new product's USD reference from its opening SDG
+    // price. Without this a product created during opening stock while a USD rate
+    // is already set keeps a 0 anchor and is skipped by the rate-change reprice.
+    crate::commands::products::reanchor_product(conn, tenant_id, &new_id, sale_price, 0)?;
+
     Ok((new_id, true))
 }
 

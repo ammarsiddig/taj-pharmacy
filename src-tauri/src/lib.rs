@@ -1,6 +1,20 @@
 mod db;
 mod commands;
 
+/// Hidden re-exports so the out-of-crate integration tests (`tests/`) can drive
+/// the real internal helpers. Not part of the app's public surface. This route
+/// is used because the in-crate unit-test build (`cargo test --lib`) currently
+/// fails to compile in the stale `cloud_sync_tests` module; an integration test
+/// links the normal (non-test-cfg) lib and avoids that.
+#[doc(hidden)]
+pub mod test_support {
+    pub use crate::commands::products::{
+        anchor_all_products_at_rate, reanchor_product, reanchor_sale_price,
+        reprice_all_products_to_rate,
+    };
+    pub use crate::db::migrations;
+}
+
 use db::Database;
 use std::fs;
 use tauri::Manager;

@@ -256,6 +256,12 @@ pub fn confirm_purchase(
                      WHERE id = ?2 AND tenant_id = ?1",
                     params![tenant_id, product_id, unit_cost, sale_price],
                 ).map_err(|e| e.to_string())?;
+                // TASK-939 fix: the purchase just changed sale_price, so re-derive
+                // the USD anchor from it — otherwise the next rate change reprices
+                // the product back to its stale (opening-stock) anchor.
+                crate::commands::products::reanchor_sale_price(
+                    &conn, &tenant_id, product_id, *sale_price,
+                )?;
             } else {
                 conn.execute(
                     "UPDATE products SET last_purchase_price = ?3,
@@ -448,6 +454,11 @@ pub fn confirm_purchase_with_payment(
                      WHERE id = ?2 AND tenant_id = ?1",
                     params![tenant_id, product_id, unit_cost, sale_price],
                 ).map_err(|e| e.to_string())?;
+                // TASK-939 fix: re-derive the USD anchor from the purchase price
+                // (see confirm_purchase for the full rationale).
+                crate::commands::products::reanchor_sale_price(
+                    &conn, &tenant_id, product_id, *sale_price,
+                )?;
             } else {
                 conn.execute(
                     "UPDATE products SET last_purchase_price = ?3,

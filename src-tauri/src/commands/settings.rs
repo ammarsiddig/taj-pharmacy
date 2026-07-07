@@ -189,32 +189,14 @@ pub fn set_usd_rate(
         let repriced: i64 = if prev_rate == 0 {
             // First activation: derive USD anchors from current SDG prices.
             // Prices themselves must not change here.
-            //   price_usd_cents = round(sale_price * 100 / rate)
-            conn.execute(
-                "UPDATE products SET
-                    price_usd_cents = (sale_price * 100 + ?2 / 2) / ?2,
-                    min_price_usd_cents = (min_sale_price * 100 + ?2 / 2) / ?2
-                 WHERE tenant_id = ?1 AND deleted_at IS NULL",
-                params![tenant_id, new_rate_piasters],
-            )
-            .map_err(|e| format!("فشل اشتقاق مرجع الدولار: {}", e))? as i64
+            crate::commands::products::anchor_all_products_at_rate(
+                &conn, &tenant_id, new_rate_piasters,
+            )?
         } else {
             // Rate change: recompute SDG prices from anchors at the new rate.
-            //   sale_price = round(price_usd_cents * rate / 100)
-            // MAX(...,1) guards the rule "never write a zero/negative price from a
-            // positive anchor". A zero min anchor legitimately stays a zero min price.
-            conn.execute(
-                "UPDATE products SET
-                    sale_price = MAX(1, (price_usd_cents * ?2 + 50) / 100),
-                    min_sale_price = CASE
-                        WHEN min_price_usd_cents > 0
-                        THEN MAX(1, (min_price_usd_cents * ?2 + 50) / 100)
-                        ELSE 0 END,
-                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-                 WHERE tenant_id = ?1 AND deleted_at IS NULL AND price_usd_cents > 0",
-                params![tenant_id, new_rate_piasters],
-            )
-            .map_err(|e| format!("فشل إعادة تسعير المنتجات: {}", e))? as i64
+            crate::commands::products::reprice_all_products_to_rate(
+                &conn, &tenant_id, new_rate_piasters,
+            )?
         };
 
         conn.execute(

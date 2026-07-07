@@ -49,7 +49,7 @@ pub(crate) fn tenant_usd_rate(conn: &rusqlite::Connection, tenant_id: &str) -> i
 /// After an owner writes a product's SDG price, re-derive its USD anchors at the
 /// current rate. No-op when the feature is off (rate 0). Editing SDG re-anchors —
 /// there are no manual USD overrides to preserve.
-fn reanchor_product(
+pub fn reanchor_product(
     conn: &rusqlite::Connection,
     tenant_id: &str,
     product_id: &str,
@@ -72,6 +72,76 @@ fn reanchor_product(
     )
     .map_err(|e| format!("فشل اشتقاق مرجع الدولار: {}", e))?;
     Ok(())
+}
+
+/// TASK-939 fix: re-derive ONLY the sale-price USD anchor after a non-owner-edit
+/// path writes `products.sale_price` (a confirmed purchase, opening stock). The
+/// min-price anchor is left untouched because those paths never change
+/// `min_sale_price`. Without this, `price_usd_cents` keeps the stale anchor from
+/// product creation / opening stock, so the next USD rate change reprices the
+/// product back to that old price and silently discards the purchase price.
+/// No-op when the USD feature is off (rate 0).
+pub fn reanchor_sale_price(
+    conn: &rusqlite::Connection,
+    tenant_id: &str,
+    product_id: &str,
+    sale_price: i64,
+) -> Result<(), String> {
+    let rate = tenant_usd_rate(conn, tenant_id);
+    if rate <= 0 {
+        return Ok(());
+    }
+    conn.execute(
+        "UPDATE products SET price_usd_cents = ?3
+         WHERE tenant_id = ?1 AND id = ?2",
+        params![tenant_id, product_id, sdg_to_usd_cents(sale_price, rate)],
+    )
+    .map_err(|e| format!("فشل اشتقاق مرجع الدولار: {}", e))?;
+    Ok(())
+}
+
+/// USD activation (previous rate 0): derive every product's USD anchors from its
+/// current SDG price. Prices themselves do not change. Returns rows anchored.
+pub fn anchor_all_products_at_rate(
+    conn: &rusqlite::Connection,
+    tenant_id: &str,
+    rate: i64,
+) -> Result<i64, String> {
+    let n = conn
+        .execute(
+            "UPDATE products SET
+                price_usd_cents = (sale_price * 100 + ?2 / 2) / ?2,
+                min_price_usd_cents = (min_sale_price * 100 + ?2 / 2) / ?2
+             WHERE tenant_id = ?1 AND deleted_at IS NULL",
+            params![tenant_id, rate],
+        )
+        .map_err(|e| format!("فشل اشتقاق مرجع الدولار: {}", e))?;
+    Ok(n as i64)
+}
+
+/// USD rate change (previous rate > 0): recompute each anchored product's SDG
+/// sale_price/min_sale_price from its USD anchors at the new rate. A positive
+/// anchor never yields a zero/negative price (MAX 1 floor); a zero min anchor
+/// legitimately stays a zero min price. Returns rows repriced.
+pub fn reprice_all_products_to_rate(
+    conn: &rusqlite::Connection,
+    tenant_id: &str,
+    rate: i64,
+) -> Result<i64, String> {
+    let n = conn
+        .execute(
+            "UPDATE products SET
+                sale_price = MAX(1, (price_usd_cents * ?2 + 50) / 100),
+                min_sale_price = CASE
+                    WHEN min_price_usd_cents > 0
+                    THEN MAX(1, (min_price_usd_cents * ?2 + 50) / 100)
+                    ELSE 0 END,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE tenant_id = ?1 AND deleted_at IS NULL AND price_usd_cents > 0",
+            params![tenant_id, rate],
+        )
+        .map_err(|e| format!("فشل إعادة تسعير المنتجات: {}", e))?;
+    Ok(n as i64)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
