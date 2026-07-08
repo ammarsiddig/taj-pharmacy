@@ -4,8 +4,6 @@ import * as api from '../../api';
 import type { BalanceSheetSummary, AccountBalance } from '../../types';
 import { Loading, Empty } from './ReportShared';
 
-const BRANCH = api.getBranchId();
-
 export default function BalanceSheetTab({ onError }: { onError: (e: string) => void }) {
   const { t } = useTranslation();
   const [data, setData] = useState<BalanceSheetSummary | null>(null);
@@ -14,7 +12,7 @@ export default function BalanceSheetTab({ onError }: { onError: (e: string) => v
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.getBalanceSheetSummary(BRANCH);
+        const res = await api.getBalanceSheetSummary(api.getBranchId());
         setData(res);
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));

@@ -71,7 +71,11 @@ export function clearAuthState() {
 }
 
 export function formatMoney(piasters: number): string {
-  return (piasters / 100).toFixed(2);
+  // Piaster → SDG (÷100) with grouped thousands and exactly 2 decimals, e.g. 3,005,700.00
+  return (piasters / 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 // Credit limit uses sentinel semantics: -1 = unlimited, 0 = cash-only, >0 = a real

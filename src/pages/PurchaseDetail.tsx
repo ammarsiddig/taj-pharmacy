@@ -364,7 +364,7 @@ export default function PurchaseDetail() {
       </div>
 
       {/* Info Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 p-4 bg-ivory-muted rounded-sm border border-ivory-border">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 p-4 bg-ivory-muted rounded-xl border border-ivory-border shadow-[var(--shadow-soft)]">
         <div>
           <div className="text-xs text-ink-muted mb-1">{t('purchases.supplier')}</div>
           <div className="text-ink-main font-medium">{invoice.supplier_name}</div>
@@ -395,7 +395,7 @@ export default function PurchaseDetail() {
       </div>
 
       {/* Items Table */}
-      <div className="overflow-x-auto border border-ivory-border rounded-sm">
+      <div className="overflow-x-auto border border-ivory-border rounded-xl shadow-[var(--shadow-soft)]">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-ivory-muted border-b border-ivory-border">
@@ -433,7 +433,7 @@ export default function PurchaseDetail() {
       </div>
 
       {invoice.notes && (
-        <div className="mt-4 p-3 bg-ivory-muted rounded-sm border border-ivory-border">
+        <div className="mt-4 p-3 bg-ivory-muted rounded-xl border border-ivory-border shadow-[var(--shadow-soft)]">
           <div className="text-xs text-ink-muted mb-1">{t('purchases.notes')}</div>
           <div className="text-ink-main text-sm">{invoice.notes}</div>
         </div>
@@ -556,6 +556,7 @@ export default function PurchaseDetail() {
         discount={invoice.discount}
         taxAmount={invoice.tax_amount}
         total={invoice.total}
+        amountPaid={invoice.amount_paid}
         notes={invoice.notes}
         status={invoice.status}
       />

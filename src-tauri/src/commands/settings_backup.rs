@@ -878,13 +878,16 @@ pub fn get_auto_backup_status(
     tenant_id: String,
 ) -> Result<Option<BackupLogRow>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Reflect the latest ACTUAL backup regardless of type (auto scheduler OR manual/local)
+    // and prefer completed ones — a pharmacy that only ran manual backups must not see
+    // "no backup" on the dashboard while Settings → Backup lists them.
     let row = conn
         .query_row(
             "SELECT id, backup_type, file_path, file_size, status, sync_status, remote_id,
                     error_message, started_at, completed_at, created_by
              FROM backup_log
-             WHERE tenant_id = ?1 AND backup_type = 'auto'
-             ORDER BY started_at DESC LIMIT 1",
+             WHERE tenant_id = ?1 AND status = 'completed'
+             ORDER BY COALESCE(completed_at, started_at) DESC LIMIT 1",
             rusqlite::params![tenant_id],
             |row| {
                 Ok(BackupLogRow {

@@ -300,13 +300,16 @@ function KpiCard({ label, value, sub, change, changeLabel, accent, trendValues, 
 }
 
 function AlertItem({ label, count, variant }: { label: string; count: number; variant: 'warning' | 'danger' }) {
+  // Out-of-stock (danger) = solid strong red #DC2626; low-stock (warning) = solid amber #D97706.
+  // Solid, high-contrast fills so the two states are unmistakable at a glance.
   const cls = variant === 'danger'
-    ? 'bg-status-danger/10 border-status-danger/25 text-status-danger'
-    : 'bg-status-warning-bg border-status-warning/25 text-status-warning';
+    ? 'bg-[#DC2626] border-[#DC2626] text-white'
+    : 'bg-[#D97706] border-[#D97706] text-white';
+  const chipText = variant === 'danger' ? 'text-[#DC2626]' : 'text-[#D97706]';
   return (
     <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 ${cls}`}>
       <span className="text-xs font-semibold">{label}</span>
-      <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-xs font-bold tabular-nums">{count}</span>
+      <span className={`rounded-full bg-white px-1.5 py-0.5 text-xs font-bold tabular-nums ${chipText}`}>{count}</span>
     </span>
   );
 }

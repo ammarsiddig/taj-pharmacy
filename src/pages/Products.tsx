@@ -319,7 +319,8 @@ export default function Products() {
                 {paginatedProducts.map((p) => (
                   <tr
                     key={p.id}
-                    className="group border-b border-ivory-border bg-white transition-colors"
+                    className="group cursor-pointer border-b border-ivory-border bg-white transition-colors hover:bg-ivory-muted/50"
+                    onClick={() => handleEdit(p)}
                   >
                     <td className="px-4 py-2.5 tabular-nums text-ink-muted">{p.barcode || '—'}</td>
                     <td className="px-4 py-2.5">

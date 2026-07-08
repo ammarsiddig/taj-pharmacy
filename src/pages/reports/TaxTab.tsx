@@ -6,8 +6,6 @@ import Badge from '../../components/ui/Badge';
 import { exportToCsv, moneyRaw } from '../../utils/csv';
 import { SummaryCard, Th, Td, todayStr, monthStartStr } from './ReportShared';
 
-const BRANCH = api.getBranchId();
-
 export default function TaxTab({ onError }: { onError: (e: string) => void }) {
   const { t } = useTranslation();
   const [data, setData] = useState<TaxReport | null>(null);
@@ -18,7 +16,7 @@ export default function TaxTab({ onError }: { onError: (e: string) => void }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await api.getTaxReport(BRANCH, dateFrom, dateTo));
+      setData(await api.getTaxReport(api.getBranchId(), dateFrom, dateTo));
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {

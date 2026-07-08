@@ -170,6 +170,7 @@ pub fn run() {
             commands::accounts::get_all_accounts,
             commands::accounts::create_account,
             commands::accounts::update_account,
+            commands::accounts::delete_account,
             commands::accounts::get_account_ledger,
             commands::accounts::get_accounts_summary,
             commands::accounts::get_transfer_fee_preview,

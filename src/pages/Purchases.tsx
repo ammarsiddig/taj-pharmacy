@@ -336,7 +336,7 @@ export default function Purchases() {
             </thead>
             <tbody>
               {paginatedInvoices.map(inv => (
-                <tr key={inv.id} className="group border-b border-ivory-border bg-white transition-colors">
+                <tr key={inv.id} className="group cursor-pointer border-b border-ivory-border bg-white transition-colors hover:bg-ivory-muted/50" onClick={() => navigate(`/purchases/${inv.id}`)}>
                   <td className="px-4 py-2.5 tabular-nums font-medium text-ink-main">
                     <span className="inline-flex items-center gap-1.5">
                       {inv.invoice_number}
@@ -354,17 +354,17 @@ export default function Purchases() {
                   <td className="px-4 py-2.5">{payBadge(inv.payment_status)}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button onClick={() => navigate(`/purchases/${inv.id}`)}
+                      <button onClick={(e) => { e.stopPropagation(); navigate(`/purchases/${inv.id}`); }}
                         className="rounded-xl border border-transparent p-2 text-ink-muted hover:border-ivory-border hover:bg-white hover:text-primary-600" title={t('common.view')}>
                         <Eye size={16} />
                       </button>
                       {inv.status === 'draft' && (
                         <>
-                          <button onClick={() => setModal({ type: 'confirm', id: inv.id })}
+                          <button onClick={(e) => { e.stopPropagation(); setModal({ type: 'confirm', id: inv.id }); }}
                             className="rounded-xl border border-transparent p-2 text-ink-muted hover:border-ivory-border hover:bg-white hover:text-status-success" title={t('common.confirm')}>
                             <Check size={16} />
                           </button>
-                          <button onClick={() => setModal({ type: 'deleteDraft', id: inv.id })}
+                          <button onClick={(e) => { e.stopPropagation(); setModal({ type: 'deleteDraft', id: inv.id }); }}
                             className="rounded-xl border border-transparent p-2 text-ink-muted hover:border-ivory-border hover:bg-white hover:text-status-danger" title={t('purchases.deleteDraft')}>
                             <Trash2 size={16} />
                           </button>

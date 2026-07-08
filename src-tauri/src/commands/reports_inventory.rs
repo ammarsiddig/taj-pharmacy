@@ -35,6 +35,14 @@ pub struct InventoryReport {
     pub total_stock_value: i64,
     pub total_stock_cost: i64,
     pub total_potential_revenue: i64,
+    /// Products that currently hold stock (qty > 0) — the meaningful denominator, excludes catalog.
+    pub stocked_products: i64,
+    /// Catalog products that have never been stocked in this branch (no batch history, qty 0).
+    pub never_stocked_count: i64,
+    /// Actionable reorder count = genuinely low + genuinely out (were stocked before).
+    pub reorder_count: i64,
+    /// Distinct in-stock products whose unit_cost is 0 (opening stock with cost omitted) — value is understated.
+    pub zero_cost_items: i64,
     pub low_stock_items: Vec<InventoryStockItem>,
     pub out_of_stock_items: Vec<InventoryStockItem>,
     pub dead_stock_items: Vec<DeadStockItem>,
@@ -163,7 +171,7 @@ pub fn get_inventory_report(
          ORDER BY current_qty ASC, p.trade_name ASC";
 
     let mut low_stock_stmt = conn.prepare(low_stock_sql).map_err(|e| e.to_string())?;
-    let low_stock_items = low_stock_stmt.query_map(params![tenant_id, branch_id], |row| {
+    let low_stock_items: Vec<InventoryStockItem> = low_stock_stmt.query_map(params![tenant_id, branch_id], |row| {
         Ok(InventoryStockItem {
             product_name: row.get(0)?,
             current_qty: row.get(1)?,
@@ -172,6 +180,9 @@ pub fn get_inventory_report(
         })
     }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
 
+    // Only genuinely-depleted items: current qty 0 BUT the product has batch history in this branch
+    // (was stocked at some point). This excludes the never-stocked catalog imports that made this
+    // report useless (hundreds of items showing as "out of stock" with 0 value).
     let out_of_stock_sql =
         "SELECT COALESCE(p.trade_name_ar, p.trade_name) AS product_name,
                 0 AS current_qty,
@@ -189,10 +200,18 @@ pub fn get_inventory_report(
                   AND sl.deleted_at IS NULL
                   AND sl.branch_id = ?2
            ), 0) = 0
+           AND EXISTS (
+                SELECT 1 FROM batches b2
+                JOIN storage_locations sl2 ON b2.location_id = sl2.id
+                WHERE b2.product_id = p.id
+                  AND b2.deleted_at IS NULL
+                  AND sl2.deleted_at IS NULL
+                  AND sl2.branch_id = ?2
+           )
          ORDER BY p.trade_name ASC";
 
     let mut out_stmt = conn.prepare(out_of_stock_sql).map_err(|e| e.to_string())?;
-    let out_of_stock_items = out_stmt.query_map(params![tenant_id, branch_id], |row| {
+    let out_of_stock_items: Vec<InventoryStockItem> = out_stmt.query_map(params![tenant_id, branch_id], |row| {
         Ok(InventoryStockItem {
             product_name: row.get(0)?,
             current_qty: row.get(1)?,
@@ -254,11 +273,58 @@ pub fn get_inventory_report(
         })
     }).map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
 
+    // Distinct products currently holding stock in this branch.
+    let stocked_products: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT b.product_id)
+         FROM batches b
+         JOIN storage_locations sl ON b.location_id = sl.id
+         WHERE b.tenant_id = ?1 AND sl.branch_id = ?2
+           AND b.deleted_at IS NULL AND sl.deleted_at IS NULL
+           AND b.status = 'active' AND b.quantity_current > 0",
+        params![tenant_id, branch_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+
+    // Active products that have never been stocked in this branch (no batch history at all).
+    let never_stocked_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM products p
+         WHERE p.tenant_id = ?1 AND p.is_active = 1 AND p.deleted_at IS NULL
+           AND NOT EXISTS (
+                SELECT 1 FROM batches b
+                JOIN storage_locations sl ON b.location_id = sl.id
+                WHERE b.product_id = p.id
+                  AND b.deleted_at IS NULL AND sl.deleted_at IS NULL
+                  AND sl.branch_id = ?2
+           )",
+        params![tenant_id, branch_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+
+    // In-stock products whose stock value is understated because unit_cost is 0.
+    let zero_cost_items: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT b.product_id)
+         FROM batches b
+         JOIN storage_locations sl ON b.location_id = sl.id
+         WHERE b.tenant_id = ?1 AND sl.branch_id = ?2
+           AND b.deleted_at IS NULL AND sl.deleted_at IS NULL
+           AND b.status = 'active' AND b.quantity_current > 0
+           AND COALESCE(b.unit_cost, 0) = 0",
+        params![tenant_id, branch_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+
+    let reorder_count = (low_stock_items.len() + out_of_stock_items.len()) as i64;
+
     Ok(InventoryReport {
         total_products,
         total_stock_value: total_stock_cost,
         total_stock_cost,
         total_potential_revenue,
+        stocked_products,
+        never_stocked_count,
+        reorder_count,
+        zero_cost_items,
         low_stock_items,
         out_of_stock_items,
         dead_stock_items,

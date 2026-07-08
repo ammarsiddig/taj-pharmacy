@@ -41,10 +41,19 @@ export default function PaymentSettingsTab() {
   const save = async () => {
     try {
       if (!form.name?.trim()) return;
-      if (editingId) { await api.updatePaymentMethod(editingId, form); }
-      else { await api.createPaymentMethod(form); }
+      // Bank-transfer methods MUST carry a bank account (POS routes the money there); cash/credit never do.
+      const payload: PaymentMethodData = {
+        ...form,
+        account_id: form.method_type === 'bank_transfer' ? form.account_id : '',
+      };
+      if (payload.method_type === 'bank_transfer' && !payload.account_id) {
+        setToast({ msg: t('settings.payment.accountRequired'), type: 'danger' });
+        return;
+      }
+      if (editingId) { await api.updatePaymentMethod(editingId, payload); }
+      else { await api.createPaymentMethod(payload); }
       resetForm();
-      setToast({ msg: 'Saved', type: 'success' });
+      setToast({ msg: t('settings.payment.saved'), type: 'success' });
       load();
     } catch (e: unknown) { setToast({ msg: String(e), type: 'danger' }); }
   };
@@ -72,15 +81,21 @@ export default function PaymentSettingsTab() {
       <div className="grid grid-cols-2 gap-3">
         <input className={inp} placeholder={t('settings.payment.name')} value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
         <input className={inp} placeholder={t('settings.payment.nameAr')} value={form.name_ar || ''} onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))} />
-        <select className={inp} value={form.method_type} onChange={e => setForm(f => ({ ...f, method_type: e.target.value as PaymentMethodData['method_type'] }))}>
+        <select className={inp} value={form.method_type} onChange={e => {
+          const method_type = e.target.value as PaymentMethodData['method_type'];
+          // Cash/credit never carry an account — clear it when switching away from bank transfer.
+          setForm(f => ({ ...f, method_type, account_id: method_type === 'bank_transfer' ? f.account_id : '' }));
+        }}>
           <option value="cash">{t('settings.payment.cash')}</option>
           <option value="bank_transfer">{t('settings.payment.bankWallet')}</option>
           <option value="credit">{t('settings.payment.credit')}</option>
         </select>
-        <select className={inp} value={form.account_id || ''} onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))}>
-          <option value="">{t('settings.payment.accountOptional')}</option>
-          {accounts.map(a => <option key={a.id} value={a.id}>{a.name_ar || a.name}</option>)}
-        </select>
+        {form.method_type === 'bank_transfer' ? (
+          <select className={inp} value={form.account_id || ''} onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))}>
+            <option value="">{t('settings.payment.selectBankAccount')}</option>
+            {accounts.filter(a => a.account_type === 'bank' && a.is_active).map(a => <option key={a.id} value={a.id}>{a.name_ar || a.name}</option>)}
+          </select>
+        ) : <div />}
       </div>
       <div className="flex gap-3">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.is_default} onChange={e => setForm(f => ({ ...f, is_default: e.target.checked }))} />{t('settings.payment.default')}</label>

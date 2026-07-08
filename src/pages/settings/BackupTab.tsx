@@ -162,7 +162,7 @@ export default function BackupTab() {
             autoBackup.sync_status === 'failed' ? 'bg-status-danger' :
             'bg-amber-400'
           }`} />
-          <span className="text-ink-muted">آخر نسخ احتياطي تلقائي:</span>
+          <span className="text-ink-muted">آخر نسخة احتياطية:</span>
           <span className="font-medium text-ink-main">{fmtDateTime(autoBackup.started_at)}</span>
           {autoBackup.sync_status === 'synced' && (
             <span className="ms-auto rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">مرفوعة</span>

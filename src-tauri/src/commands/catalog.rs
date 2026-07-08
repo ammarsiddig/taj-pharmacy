@@ -1,4 +1,4 @@
-use rusqlite::params;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use uuid::Uuid;
@@ -187,6 +187,54 @@ fn validate_method_type(method_type: &str) -> bool {
     matches!(method_type, "cash" | "bank_transfer" | "credit")
 }
 
+/// Enforces the payment-method → account model and returns the account_id to persist:
+/// - `bank_transfer`: account_id is REQUIRED and must reference an active `bank` account of this tenant
+///   (POS routes the money into it, so a missing/inactive/wrong-type account would break the sale).
+/// - `cash`/`credit`: the method never carries an account (cash lands in the session drawer, credit in the
+///   customer receivable), so any passed account is dropped to keep the model unambiguous.
+fn resolve_method_account(
+    conn: &Connection,
+    tenant_id: &str,
+    method_type: &str,
+    account_id: Option<&str>,
+) -> Result<Option<String>, String> {
+    let raw = account_id.map(|s| s.trim()).filter(|s| !s.is_empty());
+    if method_type != "bank_transfer" {
+        return Ok(None);
+    }
+    let acc = raw.ok_or_else(|| "يجب اختيار حساب بنكي لطريقة الدفع البنكية".to_string())?;
+    let (acc_type, is_active): (String, bool) = conn
+        .query_row(
+            "SELECT account_type, is_active FROM accounts WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",
+            params![acc, tenant_id],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, bool>(1)?)),
+        )
+        .map_err(|_| "الحساب المحدد غير موجود".to_string())?;
+    if acc_type != "bank" {
+        return Err("طريقة الدفع البنكية يجب أن ترتبط بحساب بنكي".into());
+    }
+    if !is_active {
+        return Err("لا يمكن ربط طريقة الدفع بحساب معطّل".into());
+    }
+    Ok(Some(acc.to_string()))
+}
+
+/// At most one default per method_type — clears the flag on every other method of the same type.
+fn clear_default_for_type(
+    conn: &Connection,
+    tenant_id: &str,
+    method_type: &str,
+    except_id: Option<&str>,
+) -> Result<(), String> {
+    conn.execute(
+        "UPDATE payment_methods SET is_default = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE tenant_id = ?1 AND method_type = ?2 AND deleted_at IS NULL AND id != COALESCE(?3, '')",
+        params![tenant_id, method_type, except_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_payment_methods(
     db: State<'_, Database>,
@@ -240,7 +288,13 @@ pub fn create_payment_method(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     license_guard::require_active(&conn, &tenant_id)?;
 
+    let account_id = resolve_method_account(&conn, &tenant_id, &data.method_type, data.account_id.as_deref())?;
+    let is_default = data.is_default.unwrap_or(false);
+
     let id = Uuid::new_v4().to_string();
+    if is_default {
+        clear_default_for_type(&conn, &tenant_id, &data.method_type, None)?;
+    }
     conn.execute(
         "INSERT INTO payment_methods (id, tenant_id, name, name_ar, method_type, account_id, is_default, is_active, sort_order)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -250,8 +304,8 @@ pub fn create_payment_method(
             data.name.trim(),
             data.name_ar.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()),
             data.method_type,
-            data.account_id,
-            data.is_default.unwrap_or(false) as i32,
+            account_id,
+            is_default as i32,
             data.is_active.unwrap_or(true) as i32,
             data.sort_order.unwrap_or(0),
         ],
@@ -295,6 +349,11 @@ pub fn update_payment_method(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     license_guard::require_active(&conn, &tenant_id)?;
 
+    let account_id = resolve_method_account(&conn, &tenant_id, &data.method_type, data.account_id.as_deref())?;
+    if data.is_default == Some(true) {
+        clear_default_for_type(&conn, &tenant_id, &data.method_type, Some(&payment_method_id))?;
+    }
+
     conn.execute(
         "UPDATE payment_methods
          SET name = ?3,
@@ -312,7 +371,7 @@ pub fn update_payment_method(
             data.name.trim(),
             data.name_ar.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()),
             data.method_type,
-            data.account_id,
+            account_id,
             data.is_default.map(|v| v as i32),
             data.is_active.map(|v| v as i32),
             data.sort_order,

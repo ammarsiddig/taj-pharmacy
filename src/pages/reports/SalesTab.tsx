@@ -5,8 +5,6 @@ import type { SalesReport, SalesReportFilters } from '../../types';
 import { exportToCsv, moneyRaw } from '../../utils/csv';
 import { Loading, Empty, Field, SummaryCard, Th, Td, todayStr, monthStartStr } from './ReportShared';
 
-const BRANCH = api.getBranchId();
-
 export default function SalesTab({ onError }: { onError: (e: string) => void }) {
   const { t } = useTranslation();
   const [data, setData] = useState<SalesReport | null>(null);
@@ -18,7 +16,7 @@ export default function SalesTab({ onError }: { onError: (e: string) => void }) 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.getSalesReport(BRANCH, { date_from: dateFrom, date_to: dateTo, group_by: groupBy });
+      const res = await api.getSalesReport(api.getBranchId(), { date_from: dateFrom, date_to: dateTo, group_by: groupBy });
       setData(res);
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : String(e));

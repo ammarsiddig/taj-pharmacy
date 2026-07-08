@@ -333,6 +333,78 @@ pub fn update_account(
 }
 
 #[tauri::command]
+pub fn delete_account(
+    db: State<'_, Database>,
+    tenant_id: String,
+    user_id: String,
+    account_id: String,
+    auth_session: State<'_, AuthSessionState>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (_tid, _uid, _bid) = resolve_identity(&auth_session, &tenant_id, &user_id, "")?;
+    license_guard::require_active(&conn, &tenant_id)?;
+    license_guard::require_feature(&conn, &tenant_id, FLAG_ACCOUNTS)?;
+
+    let balance: i64 = conn.query_row(
+        "SELECT current_balance FROM accounts WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL",
+        params![account_id, tenant_id],
+        |r| r.get(0),
+    ).map_err(|_| "الحساب غير موجود".to_string())?;
+
+    // Never orphan money: an account with a live balance cannot be deleted.
+    if balance != 0 {
+        return Err("لا يمكن حذف حساب يحتوي على رصيد. حوّل الرصيد أولاً ثم عطّل الحساب.".into());
+    }
+
+    // Never break the ledger: an account that ever moved money keeps its history.
+    let has_tx: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM account_transactions WHERE account_id = ?1 AND tenant_id = ?2)",
+        params![account_id, tenant_id],
+        |r| r.get(0),
+    ).map_err(|e| e.to_string())?;
+    if has_tx {
+        return Err("لا يمكن حذف حساب له حركات مالية. عطّل الحساب بدلاً من حذفه للحفاظ على السجل.".into());
+    }
+
+    // A cash account still bound to a POS session must not be deleted.
+    let in_use_session: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pos_sessions WHERE account_id = ?1 AND tenant_id = ?2)",
+        params![account_id, tenant_id],
+        |r| r.get(0),
+    ).map_err(|e| e.to_string())?;
+    if in_use_session {
+        return Err("لا يمكن حذف حساب مرتبط بجلسة نقطة بيع.".into());
+    }
+
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+    let res = (|| -> Result<(), String> {
+        // Remove any auto-created POS payment methods pointing at this account.
+        conn.execute(
+            "UPDATE payment_methods SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE tenant_id = ?1 AND account_id = ?2 AND deleted_at IS NULL",
+            params![tenant_id, account_id],
+        ).map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE accounts SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), is_active = 0,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?1 AND tenant_id = ?2",
+            params![account_id, tenant_id],
+        ).map_err(|e| e.to_string())?;
+        Ok(())
+    })();
+
+    match res {
+        Ok(_) => { conn.execute_batch("COMMIT").map_err(|e| e.to_string())?; }
+        Err(e) => { let _ = conn.execute_batch("ROLLBACK"); return Err(e); }
+    }
+
+    if let Err(e) = cloud_sync::enqueue_owner_refresh_request(&conn, &tenant_id, "account_deleted") {
+        log::warn!("cloud sync enqueue failed after delete_account: {}", e);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_account_ledger(
     db: State<'_, Database>,
     tenant_id: String,
@@ -391,13 +463,15 @@ pub fn get_accounts_summary(
     branch_id: String,
 ) -> Result<AccountsSummary, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let sql = format!("{} WHERE tenant_id = ?1 AND branch_id = ?2 AND deleted_at IS NULL AND is_active = 1 ORDER BY is_default DESC, account_type ASC, name ASC", ACCOUNT_SELECT);
+    // Return inactive accounts too so they stay visible (greyed) with a reactivate action —
+    // hiding them made deactivated accounts look deleted. Totals below count active only.
+    let sql = format!("{} WHERE tenant_id = ?1 AND branch_id = ?2 AND deleted_at IS NULL ORDER BY is_active DESC, is_default DESC, account_type ASC, name ASC", ACCOUNT_SELECT);
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let accounts: Vec<AccountRow> = stmt.query_map(params![tenant_id, branch_id], |row| read_account_row(row))
         .map_err(|e| e.to_string())?.filter_map(|r| r.ok()).collect();
 
-    let total_cash: i64 = accounts.iter().filter(|a| a.account_type == "cash").map(|a| a.current_balance).sum();
-    let total_bank: i64 = accounts.iter().filter(|a| a.account_type == "bank").map(|a| a.current_balance).sum();
+    let total_cash: i64 = accounts.iter().filter(|a| a.account_type == "cash" && a.is_active).map(|a| a.current_balance).sum();
+    let total_bank: i64 = accounts.iter().filter(|a| a.account_type == "bank" && a.is_active).map(|a| a.current_balance).sum();
 
     Ok(AccountsSummary { total_cash, total_bank, total_assets: total_cash + total_bank, accounts })
 }

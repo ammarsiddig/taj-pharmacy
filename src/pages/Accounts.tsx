@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Landmark, ArrowLeftRight, Plus, Wallet, CalendarDays, Pencil, Power } from 'lucide-react';
+import { Landmark, ArrowLeftRight, Plus, Wallet, CalendarDays, Pencil, Power, Trash2 } from 'lucide-react';
 import * as api from '../api';
 import type { AccountRow, AccountData, AccountLedger, AccountsSummary, TransferData, TransferFeePreview, UpdateAccountData } from '../types';
 import Button from '../components/ui/Button';
@@ -9,6 +9,7 @@ import Select from '../components/ui/Select';
 import NumericInput from '../components/ui/NumericInput';
 import Badge from '../components/ui/Badge';
 import Toast from '../components/ui/Toast';
+import Modal from '../components/ui/Modal';
 import { useLicense } from '../hooks/useLicense';
 
 export default function Accounts() {
@@ -24,6 +25,7 @@ export default function Accounts() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountRow | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState<AccountRow | null>(null);
   const [quickUpdatingId, setQuickUpdatingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'danger' } | null>(null);
   const showToast = (type: 'success' | 'danger', msg: string) => setToast({ msg, type });
@@ -87,10 +89,29 @@ export default function Accounts() {
     setQuickUpdatingId(account.id);
     try {
       const auth = api.getAuthState();
-      await api.updateAccount(auth.user!.id, account.id, { is_active: !account.is_active });
-      showToast('success', t('accounts.accountSaved'));
+      const nextActive = !account.is_active;
+      await api.updateAccount(auth.user!.id, account.id, { is_active: nextActive });
+      showToast('success', nextActive ? t('accounts.accountActivated') : t('accounts.accountDeactivated'));
       await loadSummary();
       if (selectedAccount === account.id) await loadLedger(account.id);
+    } catch (err) {
+      showToast('danger', String(err));
+    } finally {
+      setQuickUpdatingId(null);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletingAccount) return;
+    const target = deletingAccount;
+    setDeletingAccount(null);
+    setQuickUpdatingId(target.id);
+    try {
+      const auth = api.getAuthState();
+      await api.deleteAccount(auth.user!.id, target.id);
+      showToast('success', t('accounts.accountDeleted'));
+      if (selectedAccount === target.id) { setSelectedAccount(null); setLedger(null); }
+      await loadSummary();
     } catch (err) {
       showToast('danger', String(err));
     } finally {
@@ -155,7 +176,7 @@ export default function Accounts() {
                 <tr
                   key={a.id}
                   className={`cursor-pointer border-b border-ivory-border transition-colors ${
-                    selectedAccount === a.id ? 'bg-primary-100/80' : 'bg-white'
+                    selectedAccount === a.id ? 'bg-primary-100/80' : a.is_active ? 'bg-white' : 'bg-ivory-muted/60 text-ink-muted opacity-70'
                   }`}
                   onClick={() => handleAccountClick(a.id)}
                 >
@@ -202,9 +223,19 @@ export default function Accounts() {
                         size="sm"
                         onClick={() => handleToggleActive(a)}
                         disabled={isBlocked || quickUpdatingId === a.id}
-                        title={a.is_active ? t('suppliers.inactive') : t('suppliers.active')}
+                        title={a.is_active ? t('accounts.accountDeactivated') : t('accounts.reactivate')}
                       >
                         <Power size={15} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="icon"
+                        size="sm"
+                        onClick={() => setDeletingAccount(a)}
+                        disabled={isBlocked || quickUpdatingId === a.id}
+                        title={t('accounts.deleteAccount')}
+                      >
+                        <Trash2 size={15} className="text-status-danger" />
                       </Button>
                     </div>
                   </td>
@@ -329,6 +360,15 @@ export default function Accounts() {
           onError={(msg) => showToast('danger', msg)}
         />
       )}
+
+      <Modal
+        open={!!deletingAccount}
+        title={t('accounts.confirmDeleteAccountTitle')}
+        message={t('accounts.confirmDeleteAccount')}
+        variant="danger"
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setDeletingAccount(null)}
+      />
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>

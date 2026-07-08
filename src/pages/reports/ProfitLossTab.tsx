@@ -4,8 +4,6 @@ import * as api from '../../api';
 import type { ProfitLossReport, BalanceSheetSummary } from '../../types';
 import { Loading, Empty, Field, todayStr, monthStartStr } from './ReportShared';
 
-const BRANCH = api.getBranchId();
-
 export default function ProfitLossTab({ onError }: { onError: (e: string) => void }) {
   const { t } = useTranslation();
   const [data, setData] = useState<ProfitLossReport | null>(null);
@@ -18,8 +16,8 @@ export default function ProfitLossTab({ onError }: { onError: (e: string) => voi
     try {
       setLoading(true);
       const [plRes, bsRes] = await Promise.all([
-        api.getProfitLossReport(BRANCH, dateFrom, dateTo),
-        api.getBalanceSheetSummary(BRANCH),
+        api.getProfitLossReport(api.getBranchId(), dateFrom, dateTo),
+        api.getBalanceSheetSummary(api.getBranchId()),
       ]);
       setData(plRes);
       setBalanceSheet(bsRes);

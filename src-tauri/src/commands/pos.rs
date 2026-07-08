@@ -50,17 +50,28 @@ pub(crate) fn resolve_bank_payment_info(
     payment_method_id: &str,
 ) -> Result<(String, Option<String>), String> {
     let (account_id, name): (Option<String>, Option<String>) = conn.query_row(
-        "SELECT account_id, name
-         FROM payment_methods
-         WHERE id = ?1 AND tenant_id = ?2 AND deleted_at IS NULL AND is_active = 1",
+        "SELECT pm.account_id, pm.name
+         FROM payment_methods pm
+         WHERE pm.id = ?1 AND pm.tenant_id = ?2 AND pm.deleted_at IS NULL AND pm.is_active = 1",
         params![payment_method_id, tenant_id],
         |row| Ok((row.get(0)?, row.get(1)?)),
     ).map_err(|_| "طريقة الدفع البنكية المختارة غير موجودة".to_string())?;
 
-    account_id
+    let account_id = account_id
         .filter(|value| !value.is_empty())
-        .map(|value| (value, name))
-        .ok_or_else(|| "طريقة الدفع البنكية لا تملك حساباً محدداً — يُرجى تعيين حساب بنكي لطريقة الدفع هذه".to_string())
+        .ok_or_else(|| "طريقة الدفع البنكية لا تملك حساباً محدداً — يُرجى تعيين حساب بنكي لطريقة الدفع هذه".to_string())?;
+
+    // The linked account must still be active — never route sale income into a deactivated account.
+    let account_ok: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM accounts WHERE id = ?1 AND tenant_id = ?2 AND is_active = 1 AND deleted_at IS NULL)",
+        params![account_id, tenant_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if !account_ok {
+        return Err("حساب طريقة الدفع البنكية معطّل — يُرجى تفعيله أو اختيار طريقة دفع أخرى".to_string());
+    }
+
+    Ok((account_id, name))
 }
 
 fn load_sale_items(conn: &Connection, sale_id: &str) -> Result<Vec<SaleItemOut>, String> {

@@ -4,8 +4,6 @@ import * as api from '../../api';
 import type { ExpiryReport, ExpiryItem } from '../../types';
 import { Loading, Empty, SummaryCard, Section, Th, Td } from './ReportShared';
 
-const BRANCH = api.getBranchId();
-
 export default function ExpiryTab({ onError }: { onError: (e: string) => void }) {
   const { t } = useTranslation();
   const [data, setData] = useState<ExpiryReport | null>(null);
@@ -14,7 +12,7 @@ export default function ExpiryTab({ onError }: { onError: (e: string) => void })
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.getExpiryReport(BRANCH);
+        const res = await api.getExpiryReport(api.getBranchId());
         setData(res);
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : String(e));

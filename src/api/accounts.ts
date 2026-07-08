@@ -14,6 +14,10 @@ export async function updateAccount(userId: string, accountId: string, data: Upd
   return invoke('update_account', { tenantId: getTenantId(), userId, accountId, data });
 }
 
+export async function deleteAccount(userId: string, accountId: string): Promise<void> {
+  return invoke('delete_account', { tenantId: getTenantId(), userId, accountId });
+}
+
 export async function getAccountLedger(
   accountId: string,
   dateFrom?: string,

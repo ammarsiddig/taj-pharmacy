@@ -118,6 +118,10 @@ export interface InventoryReport {
   total_stock_value: number;
   total_stock_cost: number;
   total_potential_revenue: number;
+  stocked_products: number;
+  never_stocked_count: number;
+  reorder_count: number;
+  zero_cost_items: number;
   low_stock_items: InventoryStockItem[];
   out_of_stock_items: InventoryStockItem[];
   dead_stock_items: DeadStockItem[];
