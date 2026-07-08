@@ -1,0 +1,232 @@
+[
+  {
+    "phase": "setup.locations",
+    "pass": true,
+    "detail": "Fridge, Products Shelf, Warehouse"
+  },
+  {
+    "phase": "setup.units",
+    "pass": true,
+    "detail": "unit=unit-piece"
+  },
+  {
+    "phase": "setup.fund_cash",
+    "pass": true,
+    "detail": "cash funded 3,000,000.00 (21b15312-0992-4464-9a48-b6c2b0e3f90b)"
+  },
+  {
+    "phase": "setup.fund_bank",
+    "pass": true,
+    "detail": "bank funded 3,000,000.00 (2cfca41c-58d9-4166-9c5c-2b40e5b20319)"
+  },
+  {
+    "phase": "setup.bank_payment_method",
+    "pass": true,
+    "detail": "bank PM 232134a4-53b2-4d9d-94bd-6c5ec4e194f3"
+  },
+  {
+    "phase": "supplier.create",
+    "pass": true,
+    "detail": "d506124b-d3e1-4659-a3f3-24ea979df0b8"
+  },
+  {
+    "phase": "customer.credit",
+    "pass": true,
+    "detail": "68aec26b-6653-4535-a72d-781f16e178a4 limit=5000.00"
+  },
+  {
+    "phase": "customer.unlimited",
+    "pass": true,
+    "detail": "f02b623a-14cb-425a-b5c0-89701785fc9d"
+  },
+  {
+    "phase": "customer.cashonly",
+    "pass": true,
+    "detail": "f14d1727-3171-4618-8f54-52af3e864baf"
+  },
+  {
+    "phase": "catalog.csv_import",
+    "pass": true,
+    "detail": "parsed=627 {\"errors\":0,\"imported\":627,\"skipped\":0,\"updated\":0}"
+  },
+  {
+    "phase": "catalog.manual",
+    "pass": true,
+    "detail": "H1..H4 created"
+  },
+  {
+    "phase": "opening.setupmode_on",
+    "pass": true,
+    "detail": "ON"
+  },
+  {
+    "phase": "opening.H1",
+    "pass": true,
+    "detail": "100@300 shelf"
+  },
+  {
+    "phase": "opening.H2a",
+    "pass": true,
+    "detail": "60@500 shelf (near-exp)"
+  },
+  {
+    "phase": "opening.H2b",
+    "pass": true,
+    "detail": "40@500 store"
+  },
+  {
+    "phase": "opening.H3",
+    "pass": true,
+    "detail": "20@2000 fridge"
+  },
+  {
+    "phase": "opening.H4",
+    "pass": true,
+    "detail": "200@150 shelf"
+  },
+  {
+    "phase": "usd.activate_no_price_change",
+    "pass": true,
+    "detail": "unchanged at 500 after activation @500/$"
+  },
+  {
+    "phase": "usd.purchase_sets_price",
+    "pass": true,
+    "detail": "H1 = 650 (purchase)"
+  },
+  {
+    "phase": "usd.rate_up_preserves_purchase_price",
+    "pass": true,
+    "detail": "rate up 2x -> H1 = 1300 (purchase price preserved & scaled — v0.2.31 FIX CONFIRMED)"
+  },
+  {
+    "phase": "usd.rate_down_scales",
+    "pass": true,
+    "detail": "rate down -> H1 = 520"
+  },
+  {
+    "phase": "usd.openingstock_price_scales",
+    "pass": true,
+    "detail": "opening-stock H4 -> 240"
+  },
+  {
+    "phase": "usd.reset_baseline",
+    "pass": true,
+    "detail": "rate back to 500/$"
+  },
+  {
+    "phase": "setup.finalize",
+    "pass": true,
+    "detail": "finalized"
+  },
+  {
+    "phase": "opening.blocked_after_finalize",
+    "pass": true,
+    "detail": "rejected: وضع الإعداد منتهي — لا يمكن إدخال كمية افتتاحية بعد بدء البيع"
+  },
+  {
+    "phase": "purchase.multiline_partial",
+    "pass": true,
+    "detail": "total=100000.00 paid=50000.00 owed=50000.00"
+  },
+  {
+    "phase": "purchase.past_expiry_rejected",
+    "pass": true,
+    "detail": "rejected: لا يمكن استلام صنف منتهي الصلاحية: Amoxicillin 500mg CAP (تاريخ الانتهاء 2020-01-01)"
+  },
+  {
+    "phase": "purchase.supplier_payment",
+    "pass": true,
+    "detail": "paid 20000.00 -> owed 30000.00"
+  },
+  {
+    "phase": "pos.open_session",
+    "pass": true,
+    "detail": "session=31d4d410-0c28-47af-823a-c7cb8b148fa1"
+  },
+  {
+    "phase": "pos.cash_sale_FEFO_rx",
+    "pass": true,
+    "detail": "cash H2x70 (rx override) total=57400.00"
+  },
+  {
+    "phase": "pos.bank_sale",
+    "pass": true,
+    "detail": "bank_transfer H4x20"
+  },
+  {
+    "phase": "pos.credit_sale",
+    "pass": true,
+    "detail": "credit H1x5 = 3250.00 to أحمد (under 5000 limit)"
+  },
+  {
+    "phase": "pos.split_sale",
+    "pass": true,
+    "detail": "split cash2000+bank1250"
+  },
+  {
+    "phase": "pos.credit_limit_enforced",
+    "pass": true,
+    "detail": "over-limit rejected: تجاوز حد الائتمان المسموح به: الرصيد 325000 + المبلغ 325000 > الحد 500000"
+  },
+  {
+    "phase": "pos.cashonly_credit_rejected",
+    "pass": true,
+    "detail": "cash-only credit rejected"
+  },
+  {
+    "phase": "customer.payment",
+    "pass": true,
+    "detail": "customer paid 2000.00 (balance 1250.00)"
+  },
+  {
+    "phase": "customer.statement",
+    "pass": true,
+    "detail": "rows=2"
+  },
+  {
+    "phase": "supplier.statement",
+    "pass": true,
+    "detail": "rows=5"
+  },
+  {
+    "phase": "inventory.transfer",
+    "pass": true,
+    "detail": "H4 x30 shelf->store"
+  },
+  {
+    "phase": "inventory.stocktake",
+    "pass": true,
+    "detail": "stocktake confirmed (8 items, 1 discrepancy)"
+  },
+  {
+    "phase": "inventory.dispose_expired",
+    "pass": true,
+    "detail": "disposed H3 fridge batch x20"
+  },
+  {
+    "phase": "money.transfer",
+    "pass": true,
+    "detail": "5000.00 cash->bank"
+  },
+  {
+    "phase": "money.expense",
+    "pass": true,
+    "detail": "expense 3000.00 (rent)"
+  },
+  {
+    "phase": "pos.return",
+    "pass": true,
+    "detail": "returned H2 x5 (cash refund)"
+  },
+  {
+    "phase": "pos.void",
+    "pass": true,
+    "detail": "voided split sale (refund + restock)"
+  },
+  {
+    "phase": "sync.run",
+    "pass": true,
+    "detail": "sync_all_tables_now upserted=747, cycle failed=0"
+  }
+]

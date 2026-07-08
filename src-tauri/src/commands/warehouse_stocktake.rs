@@ -287,8 +287,11 @@ pub fn confirm_stock_take(
             |row| Ok((row.get(0)?, row.get(1)?)),
         ).map_err(|e| e.to_string())?;
 
-        let movement_type = if difference > 0 { "adjust" } else { "adjust" };
-        let qty_change = difference.abs();
+        let movement_type = "adjust";
+        // Keep the sign: `difference` is actual-expected, so a shrinkage must record a
+        // NEGATIVE quantity_change. Using .abs() logged a positive change for losses,
+        // making SUM(stock_movements.quantity_change) drift above real on-hand.
+        let qty_change = difference;
         let movement_id = Uuid::new_v4().to_string();
 
         conn.execute(

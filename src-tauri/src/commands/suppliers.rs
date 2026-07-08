@@ -153,12 +153,18 @@ pub(crate) fn do_supplier_payment(
     let payment_id = Uuid::new_v4().to_string();
     let tx_id = Uuid::new_v4().to_string();
 
+    // A general (non-invoice) payment must store invoice_id = NULL, not "" — the
+    // empty string is not a valid supplier_invoices.id and violates the FK, which
+    // made every payment-off-balance (no invoice) fail with "FOREIGN KEY constraint
+    // failed". Bind NULL when no invoice is targeted.
+    let invoice_ref: Option<&str> = if invoice_id.is_empty() { None } else { Some(invoice_id) };
+
     // 1. Insert supplier payment
     conn.execute(
         "INSERT INTO supplier_payments (id, tenant_id, supplier_id, invoice_id, amount,
                 payment_method, account_id, payment_date, notes, created_by)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![payment_id, tenant_id, supplier_id, invoice_id, amount,
+        params![payment_id, tenant_id, supplier_id, invoice_ref, amount,
                 payment_method, account_id, payment_date, notes, user_id],
     ).map_err(|e| e.to_string())?;
 

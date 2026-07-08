@@ -476,14 +476,19 @@ pub fn confirm_purchase_with_payment(
             _ => "unpaid",
         };
 
-        // 3. Update invoice: confirmed + amount_paid + payment_status
+        // 3. Confirm the invoice. Do NOT set amount_paid here: when paying,
+        // do_supplier_payment (step 4) already adds pay_amount to amount_paid and
+        // derives payment_status. Setting it here too double-counted the payment
+        // (a 50,000 partial on a 100,000 invoice became amount_paid=100,000 / "paid").
+        // Leave amount_paid at 0; do_supplier_payment corrects it for paying invoices,
+        // and unpaid invoices are correctly left at 0 / "unpaid".
         conn.execute(
             "UPDATE supplier_invoices
              SET status = 'confirmed', confirmed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
-                 confirmed_by = ?3, amount_paid = ?4, payment_status = ?5,
+                 confirmed_by = ?3, amount_paid = 0, payment_status = ?4,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
              WHERE id = ?1 AND tenant_id = ?2",
-            params![invoice_id, tenant_id, user_id, pay_amount, payment_status],
+            params![invoice_id, tenant_id, user_id, payment_status],
         ).map_err(|e| e.to_string())?;
 
         // 4. If paying, create supplier payment + account transaction
